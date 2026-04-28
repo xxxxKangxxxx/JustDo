@@ -38,3 +38,15 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - `npm audit` still reports two moderate findings from Next's nested PostCSS dependency; `npm audit fix --force` recommends a breaking downgrade and was not applied.
 - Supabase, IndexedDB, tests, and production data sync are not implemented yet.
+
+## 2026-04-28 Claude Code Handoff
+
+### Codex
+
+- Added `docs/claude_handoff.md` for the next Claude Code session.
+- Summarized repository state, completed Codex work, verification results, known notes, and recommended next tasks.
+
+### Notes
+
+- Claude Code should treat `apps/web/` as the active implementation and `reference/proto/` as the primary behavioral reference.
+- Continue recording cross-check decisions in this worklog.
