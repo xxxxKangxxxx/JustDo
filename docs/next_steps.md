@@ -20,12 +20,12 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Phase 2: Web App Bootstrap
 
-- [ ] Create `apps/web/` using Next.js, TypeScript, and Tailwind CSS.
-- [ ] Define shared domain types for Task, Habit, Category, Tag, Subtask, and HabitLog.
-- [ ] Port the core design tokens from `reference/styles/tokens.jsx`.
-- [ ] Rebuild the app shell with Home, Stats, and Settings tabs.
-- [ ] Port the interactive calendar behavior from `reference/proto/home.jsx`.
-- [ ] Port Task/Habit add and edit flows from `reference/proto/sheet-detail.jsx`.
+- [x] Create `apps/web/` using Next.js, TypeScript, and Tailwind CSS.
+- [x] Define initial domain types for Task, Habit, Category, and HabitLog-style logs.
+- [x] Port the core design tokens from `reference/styles/tokens.jsx`.
+- [x] Rebuild the app shell with Home, Stats, and Settings tabs.
+- [x] Port the interactive calendar behavior from `reference/proto/home.jsx`.
+- [x] Port basic Task/Habit add and edit flows from `reference/proto/sheet-detail.jsx`.
 
 ## Phase 3: Local Data Layer
 

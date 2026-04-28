@@ -24,3 +24,12 @@ reference/
 ```
 
 Use `reference/proto/` as the main behavior and UI reference. Use `reference/screens/` only as static design support.
+
+## Web App
+
+The first implementation target lives in `apps/web/`.
+
+```bash
+npm install
+npm run dev:web
+```
