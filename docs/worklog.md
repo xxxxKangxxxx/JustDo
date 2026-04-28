@@ -14,6 +14,7 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Initialized local Git repository on `main`.
 - Connected Git remote `origin` to `https://github.com/xxxxKangxxxx/JustDo.git`.
 - Added `.gitignore` and `docs/next_steps.md`.
+- Created and pushed the baseline commit to `origin/main`.
 
 ### Notes
 

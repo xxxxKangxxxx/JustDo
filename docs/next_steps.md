@@ -16,7 +16,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Add README files explaining the project structure.
 - [x] Add worklog for Codex/Claude Code coordination.
 - [x] Connect local directory to the GitHub repository.
-- [ ] Make the first baseline commit and push to GitHub.
+- [x] Make the first baseline commit and push to GitHub.
 
 ## Phase 2: Web App Bootstrap
 
