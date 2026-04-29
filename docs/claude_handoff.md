@@ -91,6 +91,21 @@ supabase start
   - default categories `나` / `외부`
   - `user_subscriptions` trial row
 
+### Supabase Cloud Link
+
+- Hosted Supabase project was created and linked:
+  - name: `JustDo`
+  - ref: `cohkxnwsbhrsfmsjqdpa`
+  - URL: `https://cohkxnwsbhrsfmsjqdpa.supabase.co`
+- `supabase db push` applied all three migrations to the hosted DB.
+- Hosted DB was checked for public tables and Realtime publication entries.
+- `apps/web/src/lib/supabase/database.types.ts` was regenerated from the linked hosted project.
+- Setup notes live in `docs/supabase_cloud_setup.md`.
+- Remaining cloud setup:
+  - Configure Google provider in Supabase Console.
+  - Put hosted URL + anon/public key into local env when testing cloud.
+  - Verify hosted Google login and signup fanout.
+
 ### Local Dev Reset Procedure
 
 - Added `supabase/scripts/reset_local_app_data.sql`.
@@ -157,6 +172,7 @@ docs/backend_strategy.md
 docs/next_steps.md
 docs/worklog.md
 docs/local_dev.md
+docs/supabase_cloud_setup.md
 docs/widget_sync_strategy.md
 docs/just_do_prd.md
 docs/just_do_planning.md

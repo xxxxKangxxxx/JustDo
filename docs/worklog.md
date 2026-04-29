@@ -346,3 +346,35 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web run lint` → pass.
 - `npm --prefix apps/web test` → 55 tests pass.
 - `npm --prefix apps/web run build` → pass.
+
+## 2026-04-29 Supabase Cloud 연결
+
+### Codex
+
+- Supabase CLI 로그인 확인.
+- Hosted Supabase project 확인:
+  - name: `JustDo`
+  - ref: `cohkxnwsbhrsfmsjqdpa`
+  - URL: `https://cohkxnwsbhrsfmsjqdpa.supabase.co`
+  - region: Northeast Asia (Seoul)
+- 로컬 workspace 를 hosted project 에 link:
+  - `supabase link --project-ref cohkxnwsbhrsfmsjqdpa`
+- Hosted DB 에 migrations push:
+  - `20260429014750_init_schema.sql`
+  - `20260429021447_add_habit_emoji.sql`
+  - `20260429052000_enable_realtime.sql`
+- Hosted DB 확인:
+  - public 테이블 12개 생성 확인.
+  - `supabase_realtime` publication 에 `tasks`, `tags`, `task_tags`, `habits`, `habit_logs` 등록 확인.
+- Hosted DB 기준으로 `apps/web/src/lib/supabase/database.types.ts` 재생성.
+- `docs/supabase_cloud_setup.md` 추가:
+  - cloud/local env 전환 방법.
+  - Google OAuth hosted redirect URI.
+  - hosted signup fanout 검증 SQL.
+  - 새 머신에서 link/typegen 하는 방법.
+
+### Notes
+
+- `supabase/.temp/` 는 gitignored 이므로 link metadata 는 커밋되지 않는다.
+- `apps/web/.env.local` 은 아직 gitignored local file 이다. cloud 테스트 시 콘솔의 anon/public key 로 교체해야 한다.
+- Hosted Google OAuth provider 는 Supabase Console 에서 별도로 활성화/설정해야 한다.
