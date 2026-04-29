@@ -46,16 +46,26 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
     }
   }, [editTask, initDate, open]);
 
+  const updateStartDate = (value: string) => {
+    setStartDate(value);
+    setEndDate((current) => (current < value ? value : current));
+  };
+
+  const updateEndDate = (value: string) => {
+    setEndDate(value < startDate ? startDate : value);
+  };
+
   const submit = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
+    const safeEndDate = endDate < startDate ? startDate : endDate;
     if (type === "habit") {
       s.addHabit({ title: trimmed, emoji });
     } else if (editTask) {
       s.updateTask(editTask.id, {
         title: trimmed,
         startDate,
-        endDate,
+        endDate: safeEndDate,
         scheduledTime: scheduledTime || null,
         category,
         priority,
@@ -64,7 +74,7 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
       s.addTask({
         title: trimmed,
         startDate,
-        endDate,
+        endDate: safeEndDate,
         scheduledTime: scheduledTime || null,
         category,
         priority,
@@ -123,10 +133,10 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
         {type === "task" ? (
           <>
             <Field label="시작" mode={mode}>
-              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="bg-transparent text-[13px] font-medium outline-none" style={{ color: t.text }} />
+              <input type="date" value={startDate} onChange={(event) => updateStartDate(event.target.value)} className="bg-transparent text-[13px] font-medium outline-none" style={{ color: t.text }} />
             </Field>
             <Field label="종료" mode={mode}>
-              <input type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} className="bg-transparent text-[13px] font-medium outline-none" style={{ color: t.text }} />
+              <input type="date" min={startDate} value={endDate} onChange={(event) => updateEndDate(event.target.value)} className="bg-transparent text-[13px] font-medium outline-none" style={{ color: t.text }} />
             </Field>
             <Field label="시간" mode={mode}>
               <input type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} className="bg-transparent text-[13px] font-medium outline-none" style={{ color: t.text }} />

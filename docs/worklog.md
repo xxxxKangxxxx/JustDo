@@ -404,3 +404,20 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Build output scan:
   - 실제 `.env.local` 의 `SUPABASE_SERVICE_ROLE_KEY` 값이 `apps/web/.next` 안에 없음.
   - `SUPABASE_SERVICE_ROLE_KEY` / `service-role` 문자열이 `.next/static` 및 `.next/server/app` JS 산출물에 없음.
+
+## 2026-04-29 UX Fix: Habit Calendar / Task Date Range
+
+### Codex
+
+- Habit calendar dot 기준을 `habit.log[date]` 에서 `habit.startedAt <= date` 로 변경.
+  - 매일 반복 습관은 체크 여부와 관계없이 시작일 이후 모든 날짜에 habit dot 표시.
+  - 선택한 날짜의 habit 목록도 시작일 이후 habit만 표시.
+- Task 추가/수정 시 시작일을 종료일 이후로 변경하면 종료일을 시작일로 자동 보정.
+- Submit 직전에도 `endDate >= startDate` 를 보장하도록 저장 payload 보정.
+- `habitsOnDate` selector 및 단위 테스트 추가.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 57 tests pass.
+- `npm --prefix apps/web run build` → pass.

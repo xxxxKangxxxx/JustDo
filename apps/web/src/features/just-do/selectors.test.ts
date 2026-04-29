@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Habit, Task } from "@/types/domain";
-import { habitStreak, tasksInRange, tasksOnDate } from "./selectors";
+import { habitsOnDate, habitStreak, tasksInRange, tasksOnDate } from "./selectors";
 
 const makeTask = (over: Partial<Task> = {}): Task => ({
   id: "t",
@@ -57,6 +57,43 @@ describe("tasksInRange", () => {
     ];
     const ids = tasksInRange(tasksAt, "2026-04-01", "2026-04-30").map((task) => task.id);
     expect(ids).toEqual(["endOnly", "startOnly"]);
+  });
+});
+
+describe("habitsOnDate", () => {
+  const habits: Habit[] = [
+    {
+      id: "before",
+      title: "water",
+      emoji: "💧",
+      category: "habit",
+      startedAt: "2026-04-01",
+      log: {},
+    },
+    {
+      id: "today",
+      title: "read",
+      emoji: "📖",
+      category: "habit",
+      startedAt: "2026-04-10",
+      log: {},
+    },
+    {
+      id: "future",
+      title: "run",
+      emoji: "🏃",
+      category: "habit",
+      startedAt: "2026-04-11",
+      log: {},
+    },
+  ];
+
+  it("includes daily habits from their start date onward", () => {
+    expect(habitsOnDate(habits, "2026-04-10").map((habit) => habit.id)).toEqual(["before", "today"]);
+  });
+
+  it("does not require a completion log for the date", () => {
+    expect(habitsOnDate(habits, "2026-04-02").map((habit) => habit.id)).toEqual(["before"]);
   });
 });
 

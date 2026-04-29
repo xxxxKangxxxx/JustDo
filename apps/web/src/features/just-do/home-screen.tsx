@@ -11,7 +11,7 @@ import {
 } from "@/lib/date";
 import type { Task, TaskCategory } from "@/types/domain";
 import { CatDot, CircleCheck, IconButton } from "./primitives";
-import { tasksInRange, tasksOnDate, habitStreak } from "./selectors";
+import { habitsOnDate, habitStreak, tasksInRange, tasksOnDate } from "./selectors";
 import { useJustDo } from "./store";
 import { categoryLabel, tokens, type ThemeMode } from "./tokens";
 
@@ -23,7 +23,7 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
   const { year, month, selectedDate } = s.state.view;
   const selected = parseISO(selectedDate);
   const selectedTasks = tasksOnDate(s.state.tasks, selectedDate);
-  const habitsForDay = s.state.habits.map((habit) => ({
+  const habitsForDay = habitsOnDate(s.state.habits, selectedDate).map((habit) => ({
     ...habit,
     doneToday: Boolean(habit.log[selectedDate]),
   }));
@@ -189,7 +189,7 @@ function Calendar({ mode }: { mode: ThemeMode }) {
             {week.map((cell, index) => {
               const selected = cell.iso === selectedDate;
               const dots = cell.iso ? tasksOnDate(s.state.tasks, cell.iso).filter((task) => task.startDate === task.endDate) : [];
-              const hasHabit = cell.iso ? s.state.habits.some((habit) => habit.log[cell.iso]) : false;
+              const hasHabit = cell.iso ? habitsOnDate(s.state.habits, cell.iso).length > 0 : false;
               return (
                 <button
                   key={`${weekIndex}-${index}`}
