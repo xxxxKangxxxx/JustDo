@@ -83,7 +83,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Phase 5: Offline Sync
 
-- [ ] Add IndexedDB storage for the web app.
+- [x] Add IndexedDB storage for the web app.
 - [ ] Track local mutations with `updated_at` timestamps.
 - [ ] Implement Last Write Wins sync against Supabase.
 - [ ] Add an offline status indicator in the UI.

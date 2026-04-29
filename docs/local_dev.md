@@ -19,6 +19,7 @@ After running it:
 
 ```js
 localStorage.removeItem("just-do/web/v1");
+indexedDB.deleteDatabase("just-do-web");
 ```
 
 Do not run `supabase/scripts/reset_local_app_data.sql` against hosted Supabase

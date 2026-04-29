@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AppState, Habit, Task } from "@/types/domain";
 import {
+  createIndexedDBStorage,
   createMemoryStorage,
+  createSnapshotStorage,
   mergePersisted,
   toPersisted,
   type Persisted,
@@ -177,5 +179,49 @@ describe("createMemoryStorage", () => {
       },
     };
     expect(mergePersisted(initial, saved).view.tab).toBe("settings");
+  });
+});
+
+describe("createSnapshotStorage", () => {
+  it("persists entity mutations through an async snapshot store", async () => {
+    let snapshot: Persisted | null = null;
+    const storage = createSnapshotStorage({
+      async read() {
+        return snapshot;
+      },
+      async write(next) {
+        snapshot = next;
+      },
+    });
+
+    await storage.upsertTask(sampleTask({ id: "a", title: "A" }));
+    await storage.upsertHabit(sampleHabit({ id: "h", log: { "2026-04-28": 1 } }));
+    await storage.setHabitLog("h", "2026-04-29", 1);
+    await storage.saveView({
+      tab: "habit",
+      year: 2026,
+      month: 4,
+      selectedDate: "2026-04-29",
+      dark: true,
+    });
+
+    const loaded = await storage.load();
+    expect(loaded?.tasks.map((task) => task.id)).toEqual(["a"]);
+    expect(loaded?.habits[0].log).toEqual({ "2026-04-28": 1, "2026-04-29": 1 });
+    expect(loaded?.view.tab).toBe("habit");
+    expect(loaded?.view.dark).toBe(true);
+  });
+});
+
+describe("createIndexedDBStorage", () => {
+  it("falls back when IndexedDB is unavailable", async () => {
+    const fallback = createMemoryStorage();
+    const storage = createIndexedDBStorage({
+      indexedDBFactory: null,
+      fallback,
+    });
+
+    await storage.upsertTask(sampleTask({ id: "fallback" }));
+    expect((await fallback.load())?.tasks.map((task) => task.id)).toEqual(["fallback"]);
   });
 });

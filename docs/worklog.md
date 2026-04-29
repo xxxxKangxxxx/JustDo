@@ -250,6 +250,29 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` → 56 tests pass.
 - `npm --prefix apps/web run build` → pass.
 
+## 2026-04-29 Phase 5-1: IndexedDB Web Storage
+
+### Codex
+
+- `createIndexedDBStorage` 추가.
+  - DB: `just-do-web`
+  - store: `snapshots`
+  - record key: `state`
+  - 저장 형태는 기존 `Persisted` snapshot 그대로 유지.
+- `createSnapshotStorage` 추가.
+  - async snapshot read/write backend 를 `JustDoStorage` mutation API 로 감싸는 공통 adapter.
+  - IndexedDB 외에도 향후 cache/migration 테스트에 재사용 가능.
+- 게스트/로컬 기본 저장소를 IndexedDB 우선으로 변경.
+  - IndexedDB 사용 불가 환경에서는 기존 `localStorage` adapter 로 fallback.
+- IndexedDB reset 절차를 `docs/local_dev.md` 에 추가.
+- `docs/next_steps.md`, `docs/claude_handoff.md` Phase 5 상태 갱신.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 58 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
 ## 2026-04-29 Phase 4-3: 저장 오류 표시
 
 ### Codex

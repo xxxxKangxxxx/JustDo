@@ -22,6 +22,7 @@ import type {
   Task,
 } from "@/types/domain";
 import {
+  createIndexedDBStorage,
   createLocalStorageStorage,
   mergePersisted,
   type JustDoStorage,
@@ -32,7 +33,9 @@ import { createInitialState } from "./sample-data";
 import { createSupabaseStorage } from "./supabase-storage";
 
 const defaultStorageKey = "just-do/web/v1";
-const defaultStorage = createLocalStorageStorage(defaultStorageKey);
+const defaultStorage = createIndexedDBStorage({
+  fallback: createLocalStorageStorage(defaultStorageKey),
+});
 
 type StoreValue = {
   state: AppState;

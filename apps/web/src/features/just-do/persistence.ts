@@ -239,3 +239,136 @@ export const createLocalStorageStorage = (
     subscribe: () => () => undefined,
   };
 };
+
+type SnapshotStore = {
+  read(): Promise<Persisted | null>;
+  write(snapshot: Persisted): Promise<void>;
+};
+
+export const createSnapshotStorage = (store: SnapshotStore): JustDoStorage => {
+  const ref: MemoryStateRef = { current: null };
+
+  const loadSnapshot = async () => {
+    if (ref.current) return ref.current;
+    ref.current = await store.read();
+    return ensureSnapshot(ref);
+  };
+
+  const mutate = async (fn: (snapshot: Persisted) => Persisted) => {
+    const current = await loadSnapshot();
+    const next = fn(current);
+    ref.current = next;
+    await store.write(next);
+  };
+
+  return {
+    async load() {
+      ref.current = await store.read();
+      return ref.current;
+    },
+
+    saveSettings: (settings) => mutate((snap) => ({ ...snap, settings })),
+    saveView: (view) => mutate((snap) => ({ ...snap, view })),
+    upsertTask: (task) =>
+      mutate((snap) => ({ ...snap, tasks: upsertById(snap.tasks, task) })),
+    deleteTask: (id) =>
+      mutate((snap) => ({ ...snap, tasks: snap.tasks.filter((task) => task.id !== id) })),
+    upsertHabit: (habit) =>
+      mutate((snap) => ({ ...snap, habits: upsertById(snap.habits, habit) })),
+    setHabitLog: (habitId, iso, value) =>
+      mutate((snap) => ({
+        ...snap,
+        habits: snap.habits.map((habit) =>
+          habit.id === habitId
+            ? { ...habit, log: { ...habit.log, [iso]: value } }
+            : habit,
+        ),
+      })),
+    subscribe: () => () => undefined,
+  };
+};
+
+type IndexedDBStorageOptions = {
+  dbName?: string;
+  storeName?: string;
+  recordKey?: string;
+  indexedDBFactory?: IDBFactory | null;
+  fallback?: JustDoStorage;
+};
+
+const requestResult = <T>(request: IDBRequest<T>): Promise<T> =>
+  new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed"));
+  });
+
+const transactionDone = (transaction: IDBTransaction): Promise<void> =>
+  new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB transaction failed"));
+    transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB transaction aborted"));
+  });
+
+const openIndexedDB = (
+  factory: IDBFactory,
+  dbName: string,
+  storeName: string,
+): Promise<IDBDatabase> =>
+  new Promise((resolve, reject) => {
+    const request = factory.open(dbName, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: "key" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed"));
+  });
+
+export const createIndexedDBStorage = (
+  options: IndexedDBStorageOptions = {},
+): JustDoStorage => {
+  const dbName = options.dbName ?? "just-do-web";
+  const storeName = options.storeName ?? "snapshots";
+  const recordKey = options.recordKey ?? "state";
+  const fallback = options.fallback ?? createLocalStorageStorage("just-do/web/v1");
+  const factory =
+    options.indexedDBFactory === undefined
+      ? typeof indexedDB === "undefined"
+        ? null
+        : indexedDB
+      : options.indexedDBFactory;
+
+  if (!factory) return fallback;
+
+  const store: SnapshotStore = {
+    async read() {
+      const db = await openIndexedDB(factory, dbName, storeName);
+      try {
+        const transaction = db.transaction(storeName, "readonly");
+        const objectStore = transaction.objectStore(storeName);
+        const record = await requestResult<{ key: string; value: Persisted } | undefined>(
+          objectStore.get(recordKey),
+        );
+        return record?.value ?? null;
+      } finally {
+        db.close();
+      }
+    },
+
+    async write(snapshot) {
+      const db = await openIndexedDB(factory, dbName, storeName);
+      try {
+        const transaction = db.transaction(storeName, "readwrite");
+        const objectStore = transaction.objectStore(storeName);
+        objectStore.put({ key: recordKey, value: snapshot });
+        await transactionDone(transaction);
+      } finally {
+        db.close();
+      }
+    },
+  };
+
+  return createSnapshotStorage(store);
+};
