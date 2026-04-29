@@ -22,5 +22,12 @@ localStorage.removeItem("just-do/web/v1");
 indexedDB.deleteDatabase("just-do-web");
 ```
 
+Logged-in cloud/local accounts use a user-scoped IndexedDB database:
+
+```js
+indexedDB.deleteDatabase("just-do-web-<user-id>");
+localStorage.removeItem("just-do/web/v1/<user-id>");
+```
+
 Do not run `supabase/scripts/reset_local_app_data.sql` against hosted Supabase
 or any shared database.
