@@ -370,4 +370,125 @@ describe("createSyncedStorage", () => {
     expect((await local.load())?.tasks.map((task) => task.id)).toEqual(["offline-task"]);
     expect((await synced.listQueuedMutations?.())?.map((mutation) => mutation.id)).toEqual(["pending"]);
   });
+
+  it("drains accumulated offline mutations after the remote recovers", async () => {
+    let snapshot: Persisted | null = null;
+    let nextId = 0;
+    const queue = createMemoryMutationQueue();
+    const local = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      {
+        queue,
+        now: () => `2026-04-29T00:00:0${nextId}.000Z`,
+        createId: () => `m${++nextId}`,
+      },
+    );
+
+    let remoteOnline = false;
+    const remoteBackend = createMemoryStorage();
+    const remote: JustDoStorage = {
+      async load() {
+        if (!remoteOnline) throw new Error("offline");
+        return remoteBackend.load();
+      },
+      async saveSettings(settings) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.saveSettings(settings);
+      },
+      async saveView(view) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.saveView(view);
+      },
+      async upsertTask(task) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.upsertTask(task);
+      },
+      async deleteTask(id) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.deleteTask(id);
+      },
+      async upsertHabit(habit) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.upsertHabit(habit);
+      },
+      async setHabitLog(habitId, iso, value) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.setHabitLog(habitId, iso, value);
+      },
+    };
+    const synced = createSyncedStorage(local, remote);
+
+    // Offline: writes succeed locally but the auto-flush rejects.
+    await expect(synced.upsertTask(sampleTask({ id: "offline-1", title: "first" }))).rejects.toThrow("offline");
+    await expect(synced.upsertHabit(sampleHabit({ id: "offline-habit" }))).rejects.toThrow("offline");
+    await expect(synced.setHabitLog("offline-habit", "2026-04-29", 1)).rejects.toThrow("offline");
+
+    expect(await synced.listQueuedMutations?.()).toHaveLength(3);
+    expect((await local.load())?.tasks.map((task) => task.id)).toEqual(["offline-1"]);
+    expect(await remoteBackend.load()).toBeNull();
+
+    // Recover: load() should detect the queue and trigger an async flush.
+    remoteOnline = true;
+    await synced.load();
+    await flushQueuedMutations(local, remote);
+
+    expect(await synced.listQueuedMutations?.()).toEqual([]);
+    const remoteSnapshot = await remoteBackend.load();
+    expect(remoteSnapshot?.tasks.map((task) => task.id)).toEqual(["offline-1"]);
+    expect(remoteSnapshot?.habits[0].log).toEqual({ "2026-04-29": 1 });
+  });
+
+  it("flushes queued mutations in updatedAt order", async () => {
+    let snapshot: Persisted | null = null;
+    let counter = 0;
+    const queue = createMemoryMutationQueue();
+    const local = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      {
+        queue,
+        now: () => `2026-04-29T00:00:0${counter}.000Z`,
+        createId: () => `m${++counter}`,
+      },
+    );
+
+    const calls: string[] = [];
+    const remote: JustDoStorage = {
+      async load() {
+        return null;
+      },
+      async saveSettings() {},
+      async saveView() {},
+      async upsertTask(task) {
+        calls.push(`upsert:${task.id}`);
+      },
+      async deleteTask(id) {
+        calls.push(`delete:${id}`);
+      },
+      async upsertHabit() {},
+      async setHabitLog() {},
+    };
+
+    await local.upsertTask(sampleTask({ id: "a" }));
+    await local.upsertTask(sampleTask({ id: "b" }));
+    await local.deleteTask("a");
+
+    await flushQueuedMutations(local, remote);
+
+    expect(calls).toEqual(["upsert:a", "upsert:b", "delete:a"]);
+    expect(await local.listQueuedMutations?.()).toEqual([]);
+  });
 });
