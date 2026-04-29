@@ -532,3 +532,263 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web run lint` → pass.
 - `npm --prefix apps/web test` → 55 tests pass.
 - `npm --prefix apps/web run build` → pass.
+
+## 2026-04-29 Habit.recur_type 도메인 정식화 결정
+
+### Claude Code (with user)
+
+- 결정: **옵션 B — v1 에 daily + weekly 구현, monthly 는 v2** (Phase 5.7).
+- 도메인 추가:
+  - `Habit.recurType: 'daily' | 'weekly'`
+  - `Habit.recurDays?: number[]` (weekly 시 활성 요일, 0=일~6=토)
+- v1 미포함 (v2):
+  - `'monthly'` recur 타입 (매월 1일 / 매월 마지막 일 / 매월 첫째 X요일
+    등 변형 복잡도 높음).
+  - `recur_end_date` 도메인 노출 (DB 컬럼은 schema 에 이미 존재).
+- 근거:
+  - PRD/planning 명시: Habit 반복 주기는 *필수* 필드 (`prd.md:91`,
+    `planning.md:64`).
+  - 한국 시장에서 weekly 빈도 매우 높음 (운동 월/수/금, 주말 산책 등).
+    v1 부재 시 경쟁 (Todomate / Habitify) 대비 critical gap.
+  - monthly 는 흔하지 않음. 복잡도 대비 ROI 낮음. v2 로 미루는 게 자연스러움.
+  - 카테고리 (Phase 5.5) 와 인접한 도메인 모델 변경이라 함께 집행 시
+    iOS mirror 한 번에 안정화.
+- 어댑터 빚 정리:
+  - `habitDomainToInsert` 의 hardcoded `'daily'` 제거.
+  - `habitRowToDomain` 이 recur 정보 보존.
+  - `'monthly'` row 진입 시 'daily' 폴백 + 경고 (방어적, v1 에선 일어날
+    수 없는 케이스).
+- UI 변경 핵심:
+  - Add Sheet habit 모드: 매일/매주 segment + 요일 picker (weekly 시
+    최소 1개 선택 필수).
+  - Habit 화면 `LAST 7 DAYS` grid: 비활성 요일 셀 disabled.
+  - `DAILY CHECK` 분모: 선택 날짜에 활성인 habit 만 카운트.
+  - `habitStreak`: 비활성 요일 skip (break 가 아닌 skip 으로 처리).
+- 비용: 2~3일.
+
+### Notes
+
+- Add Sheet 가 현재 habit 의 *edit 모드* 를 지원 안 함 (task edit 만
+  지원). 5.7 작업 시 habit edit 모드 추가 여부 함께 결정.
+- v2 진입 시 enum 확장 (`| 'monthly'`) 만으로 도메인 깨짐 없음. iOS
+  mirror 도 enum 확장만 하면 됨.
+
+## 2026-04-29 settings/view 원격 영속화 결정
+
+### Claude Code (with user)
+
+- 결정: **옵션 C — `public.users.preferences jsonb` 컬럼 추가** (Phase 5.6).
+- 동기화 필드 분류:
+  - **원격 (preferences jsonb)**: `weekStart` (v1 단 하나).
+  - **영구 device-local**: `notify`, `notifyTime`, `dark`, `view.tab`,
+    `view.year`, `view.month`, `view.selectedDate`. 기기 컨텍스트마다
+    다른 게 자연스러움.
+  - **기존 원격**: `plan` 은 `public.user_subscriptions` 그대로 사용.
+- 인프라 선택 근거:
+  - 별 테이블 (`public.user_settings`) 은 1:1 관계라 over-normalization.
+  - JSONB 컬럼 1개면 향후 cross-device 필드 추가 시 *migration 없이*
+    JSONB 키만 늘리면 됨.
+- 동작 정책:
+  - Realtime 미포함. 다음 load 시 반영으로 충분.
+  - 게스트 → 로그인 전이 시 localStorage 의 `weekStart` 를 1회 원격에
+    push (서버 값이 default 일 때만). 이후 원격 우선.
+  - 어댑터의 `saveSettings(settings)` 가 cross-device 필드만 추출해
+    preferences 로 라우팅, 나머지는 device-local 유지.
+- 비용: 0.5~1일 (Phase 5.5 와 독립).
+- 진입 시점: Phase 5.5 완료 후 Phase 6 iOS 시작 전.
+
+### Notes
+
+- 향후 multi-device UX 에서 *왜 이 필드는 동기화 안 되지?* 라는 사용자
+  피드백이 나오면 그 시점에 jsonb 키 추가로 대응. 가설은 `weekStart`
+  외에 동기화 요구가 거의 없다는 것.
+
+## 2026-04-29 카테고리 사용자 변경 결정
+
+### Claude Code (with user)
+
+- 결정: **v1 에 풀 카테고리 CRUD 도입, Pro 게이팅 없음**.
+- 새 phase 분리: **Phase 5.5 Category Management**. Phase 6 iOS 시작
+  전 완료 필수 (도메인 모델 변경이 iOS mirror 보다 먼저 확정돼야 함).
+- 색상 입력 방식: **v1 부터 custom hex picker 지원** (preset 8색 +
+  hex 입력 동시 제공). 사용자가 자유롭게 색을 고르되 light/dark 모드별
+  (solid, soft, ink) 자동 보정 로직이 필요.
+- 카테고리 개수: **무제한**. 검색은 v1 에 미포함. 정렬은 사용자가 직접
+  reorder 만 가능.
+- Habit: 별개 트랙 유지. `Habit.category = "habit"` 그대로. 시각적
+  정체성도 사용자 카테고리와 분리.
+- 도메인 모델 변경 핵심:
+  - `TaskCategory = "me" | "ext"` enum 폐기.
+  - `Task.category` → `Task.categoryId: string | null` (FK to
+    categories.id, on delete set null).
+  - `AppState` 에 `categories: Category[]` 추가.
+- 디자인 토큰 재설계:
+  - 현 `tokens[mode].me/ext` 직접 참조 (수십 곳) 를 `categoryStyle(
+    category, mode)` 헬퍼로 통일.
+  - hex picker 출력 → HSL 기반 light/dark (solid, soft, ink) 자동 계산.
+- 마이그레이션 / 데이터 호환성:
+  - 호스티드 supabase 시드 row 에 `is_default = true` 백필.
+  - signup trigger 수정으로 신규 가입자도 동일 마킹.
+  - 게스트 localStorage 데이터 hydration 정책은 5.5-5 에서 결정.
+- PRD / planning / schema 문서 me/ext 서술 갱신은 Phase 5.5 작업의
+  일부로 포함.
+
+### 비용 추정
+
+솔로 개발 기준 약 6~7일 (custom hex picker 의 contrast 자동 계산 +
+토큰 시스템 마이그레이션이 가장 큰 비중).
+
+### Notes
+
+- 카테고리 자유 편집은 한국 시장 경쟁자 (Todomate / TickTick 등) 의
+  기본 기대치. 차별점이 아니라 "기본 기능" 으로 포지셔닝.
+- v1 출시 후 사용자 피드백 보고 v1.x 에 카테고리 그룹화 / 아이콘 등
+  추가 기능 검토.
+
+## 2026-04-29 Task Dependency 시각화 v1 포함 여부 결정
+
+### Claude Code (with user)
+
+- 결정: **v1 미포함, v2 로 유지** (PRD/planning 의 기존 결정 재확인).
+- 근거:
+  - `docs/just_do_prd.md:214,281` 과 `docs/just_do_planning.md:150,323`
+    이 이미 v2 + Pro 전용으로 명시.
+  - 시각화 (간트차트 / 플로우차트) 가 진짜 비용. react-flow 등 라이브러리
+    도입 + 모바일 viewport 디자인 + Pro 게이팅 UI 합치면 1~2주.
+  - v1 의 차별점은 "위젯 + 오프라인 sync + iOS-first". dependency
+    시각화는 이 차별점에 보탬 안 됨.
+  - Todomate 등 경쟁자도 dependency 시각화 미제공 — 시장 합의상 v1 필수
+    기능 아님.
+- 현재 상태:
+  - `task_dependencies` 테이블은 `20260429014750_init_schema.sql` 에서
+    이미 생성, RLS 활성화. v1 동안 idle 상태로 둠.
+  - 도메인 모델 / 어댑터 / UI 는 v2 작업 시 함께 추가.
+- v2 진입 전 점검 항목:
+  - `task_dependencies` 테이블 컬럼 확장 필요 여부 (예: `kind:
+    'blocks' | 'related'`). 현재는 prev/next 단순 구조라 확장 시 추가
+    migration 가능.
+
+## 2026-04-29 Web/iOS 타입 공유 방식 결정
+
+### Claude Code (with user)
+
+- v1 전략: **각 플랫폼이 로컬에서 mirror**.
+  - Web: `supabase gen types typescript --local` 로 `database.types.ts`
+    자동 생성 (이미 사용 중).
+  - iOS: Swift Codable struct 를 손으로 작성. 위치는 Phase 6 시작 시
+    결정 (예: `apps/ios/Sources/Models/Database.swift`).
+- iOS 손-mirror 보조 장치:
+  - migration PR 체크리스트에 Swift struct 동시 수정 항목 추가.
+  - drift 감지 unit test — Supabase REST `/rest/v1/` 메타 또는
+    `database.types.ts` 와 Swift struct 의 컬럼명/타입 비교.
+- 자동화 도입 트리거:
+  - migration 10회 이상 누적, 또는
+  - schema drift 로 인한 iOS 런타임 버그 2회 이상 발생.
+- 자동화 시 우선 접근법: `database.types.ts` AST 파싱 → Swift emit
+  (web 빌드와 source of truth 일치, single pipeline 유지).
+- 근거:
+  - Supabase 가 공식 Swift codegen 을 제공하지 않음.
+  - 우리 schema (12 테이블) 기준 손-mirror 초기 비용 ~1시간, migration
+    당 5~10분. 자동화 break-even 약 15~20회 migration.
+  - WidgetKit / App Intents 가 Swift only 이므로 iOS 본체도 Swift/
+    SwiftUI. 따라서 "공유" 는 코드 공유가 아닌 *schema mirror* 의 문제.
+
+### Notes
+
+- iOS 자체는 v1 부터 Swift. "추후 Swift 로 전환" 의 실제 의미는 손-
+  mirror → 자동 codegen 전환.
+- 자동화가 이루어지더라도 도메인 타입 (`Task`, `Habit` 등) 은 두
+  플랫폼이 각자 자신의 언어로 직접 작성하는 정책 유지.
+
+## 2026-04-29 Pricing 결정
+
+### Claude Code (with user)
+
+- v1 구독 가격 결정: **월 ₩1,900 / 연 ₩9,900**.
+- 근거:
+  - Todomate 의 월 ₩1,500 / 연 ₩7,500 대비 살짝 상위 포지션. "위젯 +
+    오프라인 sync + iOS-first" 차별점으로 ₩400/월 프리미엄 정당화.
+  - Apple Tier 2 (₩1,900) 표준 티어 사용해 운영 단순화. 연간은 커스텀
+    가격.
+  - 연 환산 월 ₩825 — 충동구매 영역 유지.
+  - Apple 30% 수수료 후 월 ₩1,330 / 연 ₩6,930. 마진 안전선 확보.
+- `next_steps.md` Open Decisions 에서 가격 항목 닫음.
+
+### Notes
+
+- 한국 마켓이 1차 타깃이라 환율/지역별 가격은 v1 단계에서 고려하지 않음.
+- 출시 후 conversion / churn 보고 6개월 시점에 인상/프로모션 재검토.
+
+## 2026-04-29 Phase 5 후속: Offline Sync 검증 + Task Tag UI
+
+### Claude Code
+
+- Offline → online 사이클 회귀 테스트 추가
+  - `apps/web/src/features/just-do/persistence.test.ts` 에 두 케이스 보강:
+    - `drains accumulated offline mutations after the remote recovers`:
+      remote 가 일시적으로 fail 하다가 회복되면 큐가 비워지고 remote
+      snapshot 에 누적 mutation 이 모두 적용되는지 확인.
+    - `flushes queued mutations in updatedAt order`: upsert/delete 가
+      삽입 순서대로 remote 에 적용됨을 검증.
+- 수동 검증 절차 문서화
+  - `docs/local_dev.md` 에 Chrome DevTools 기반 오프라인→온라인
+    체크리스트 추가 (IndexedDB 큐, Settings → 동기화, Supabase Console
+    확인 포함).
+- Task tag UI 추가 (`apps/web/src/features/just-do/add-sheet.tsx`):
+  - 새 chip 입력 필드. Enter / 콤마로 commit, blur 시에도 commit, 빈
+    상태에서 Backspace 시 마지막 칩 삭제, 칩 클릭 시 제거.
+  - 카테고리 색을 따라가는 chip 스타일 (`t[category].soft` /
+    `t[category].ink`).
+  - editTask 인 경우 기존 `task.tags` 로 초기화. submit 시 미커밋된
+    draft 도 함께 반영.
+- 순수 헬퍼 분리 + 테스트
+  - `apps/web/src/features/just-do/tags.ts`: `parseTagInput`,
+    `mergeTags` (insertion-order 보존, dedup).
+  - `apps/web/src/features/just-do/tags.test.ts`: trim/empty/dedup/
+    immutable 케이스.
+- `NewTaskInput.tags?: string[]` 추가, `addTask` 가 spread 후
+  `tags: input.tags ?? []` 로 명시 보강 (이전 로직은 spread 가
+  `undefined` 를 덮어쓸 위험이 있었음).
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 70 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
+### Notes
+
+- Tag UI 는 Supabase 어댑터의 기존 `replaceTaskTags` round-trip 위에서
+  작동. 별도 백엔드 변경 없음.
+- 수동 오프라인 검증은 cloud Supabase 환경에서 사용자가 직접 실행하는
+  체크리스트로 남겨둠 (`docs/local_dev.md`).
+
+## 2026-04-29 세션 종료 / 다음 세션 핸드오프
+
+### Claude Code (with user)
+
+- 오늘 세션 범위:
+  1. Phase 5 후속 — Task Tag UI + offline sync 회귀 테스트 + manual
+     verification 문서.
+  2. v1 의 6개 open decision 모두 결정 (가격, 타입 공유, dependency,
+     카테고리, settings 영속화, habit recur).
+  3. Phase 5.5 / 5.6 / 5.7 작업 스펙을 `next_steps.md` 에 추가.
+- 작업 마무리 상태:
+  - 워킹트리 *uncommitted*. 다음 세션이 분리해서 커밋할 수 있도록
+    grouping 안을 `claude_handoff.md` "Working Tree State" 에 남겨둠.
+  - `npm --prefix apps/web run lint` / `test` (70 pass) / `build`
+    모두 pass.
+- 다음 세션 진입 권장 순서:
+  1. (필요 시) 워킹트리 커밋 — `claude_handoff.md` 의 grouping 안 참조.
+  2. Phase 5.5 부터 구현 시작. 도메인 모델 변경이 가장 크므로 5.5 →
+     5.6 → 5.7 순서 유지.
+  3. 세 sub-phase 완료 후 Phase 6 iOS 진입.
+- 핸드오프 시 가장 주의할 부분:
+  - Phase 5.5 가 `TaskCategory = "me" | "ext"` enum 을 폐기. 그 위에
+    카테고리 색상 토큰 시스템 재설계 (custom hex picker + HSL 보정) 가
+    가장 큰 비중. UI 사용처가 수십 곳이라 일괄 마이그레이션 필요.
+  - Phase 5.5 / 5.6 / 5.7 각각 IndexedDB 스키마 / mutation queue 확장이
+    필요할 수 있음. 셋이 합쳐서 IndexedDB version `2 → 3` 한 번만
+    bump 하도록 조율할 것.
+  - 모든 v1 결정 매트릭스는 `claude_handoff.md` 의 "v1 Open Decisions —
+    all closed" 표 한 장에 압축. 오늘 chat 을 replay 할 필요 없음.

@@ -1,14 +1,48 @@
-# Handoff (Codex -> Claude Code)
+# Handoff (next session — Codex or Claude Code)
 
 Date: 2026-04-29
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
-Current app implementation commit before this documentation handoff:
-`6ca542e feat(web): show sync status`
 
-This handoff is written so Claude Code can continue without replaying the chat.
-Chronological detail lives in `docs/worklog.md`; planned work lives in
+This handoff is written so the next session can continue without replaying the
+chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 `docs/next_steps.md`.
+
+## Working Tree State (uncommitted)
+
+Last upstream commit: `e33c907 docs: refresh Claude handoff`.
+
+Today's session left changes uncommitted. Decision summary lives in this file
+and `docs/worklog.md`; review before committing so the messages reflect intent.
+
+Modified:
+
+```text
+apps/web/src/features/just-do/add-sheet.tsx        # Task tag chip input
+apps/web/src/features/just-do/persistence.test.ts  # offline→online + ordered flush regression tests
+apps/web/src/features/just-do/store.tsx            # NewTaskInput.tags default normalization
+apps/web/src/types/domain.ts                       # NewTaskInput.tags?: string[]
+docs/claude_handoff.md
+docs/local_dev.md                                  # manual offline verification checklist
+docs/next_steps.md                                 # Phase 5.5 / 5.6 / 5.7 added; open decisions closed
+docs/worklog.md                                    # decision rationale logged
+```
+
+Untracked:
+
+```text
+apps/web/src/features/just-do/tags.ts              # parseTagInput / mergeTags helpers
+apps/web/src/features/just-do/tags.test.ts
+```
+
+Suggested commit grouping (next session may split or combine):
+
+1. `feat(web): add task tag chip input` — `add-sheet.tsx`, `tags.ts`,
+   `tags.test.ts`, `domain.ts`, `store.tsx`.
+2. `test(web): cover offline→online sync recovery` —
+   `persistence.test.ts`.
+3. `docs: log v1 decisions and add Phase 5.5/5.6/5.7` —
+   `local_dev.md`, `next_steps.md`, `worklog.md`, `claude_handoff.md`.
 
 ## Current Status
 
@@ -16,17 +50,34 @@ Chronological detail lives in `docs/worklog.md`; planned work lives in
 - Phase 2 Web App Bootstrap — done.
 - Phase 3 Local Data Layer — done.
 - Phase 4 Supabase Integration — done.
-  - Schema/migrations, RLS, hosted cloud link, auth, storage adapter, realtime,
-    service-role boundary, and production bundle key scan are complete.
 - Phase 5 Offline Sync — done.
-  - IndexedDB local cache, mutation queue, Supabase queue flush, and sync status
-    UI are complete.
-- Phase 6 iOS / Widget Planning — strategy docs exist; implementation has not
-  started.
+  - Plus follow-up: Task tag chip UI in Add/Edit sheet, automated
+    offline→online sync regression tests, manual cloud verification
+    checklist in `docs/local_dev.md`.
+- Phase 5.5 Category Management — **not started, planned in `next_steps.md`.**
+- Phase 5.6 User Preferences Sync — **not started, planned in `next_steps.md`.**
+- Phase 5.7 Habit Recurrence (daily + weekly) — **not started, planned in
+  `next_steps.md`.**
+- Phase 6 iOS / Widget — strategy docs exist; blocked on 5.5 / 5.6 / 5.7
+  because the Swift mirror should not be re-done as the domain shifts.
 
-## Latest Implementation Commit Trail
+## v1 Open Decisions — all closed
+
+See `docs/worklog.md` 2026-04-29 entries for full rationale.
+
+| # | Topic | Decision |
+|---|-------|----------|
+| 1 | Subscription pricing | 월 ₩1,900 / 연 ₩9,900. Apple Tier 2. |
+| 2 | Web ↔ iOS type sharing | Each platform mirrors locally. Web auto via `supabase gen types typescript`; iOS hand-written Swift Codable + drift unit test. Auto codegen deferred until 10+ migrations or 2+ drift bugs. |
+| 3 | Task Dependency visualization | v2. `task_dependencies` table stays idle in v1. |
+| 4 | User-customizable categories | v1 full CRUD, no Pro gating (Phase 5.5). Replace `me`/`ext` enum with `Task.categoryId: string \| null`. Custom hex picker + 8-color preset palette in v1. Habit category stays separate. |
+| 5 | settings/view remote persistence | `public.users.preferences jsonb` column (Phase 5.6). Sync `weekStart` only. `notify` / `notifyTime` / `dark` / `view.*` stay device-local permanently. `plan` keeps using `user_subscriptions`. |
+| 6 | `Habit.recur_type` | v1 = daily + weekly (Phase 5.7). monthly + `recur_end_date` go to v2. Domain gains `Habit.recurType: 'daily' \| 'weekly'`, `Habit.recurDays?: number[]`. |
+
+## Latest Implementation Commit Trail (pre-uncommitted work)
 
 ```text
+e33c907 docs: refresh Claude handoff
 6ca542e feat(web): show sync status
 6f2a24c feat(web): flush offline queue to supabase
 8b993c5 feat(web): add local mutation queue
@@ -53,6 +104,11 @@ e879ce6 docs: add Supabase cloud setup notes
   - It is now Settings -> `리포트` -> `활동 요약`.
 - Add/Edit Task date range guard is implemented:
   - if start date moves after end date, end date is clamped to start date.
+- Add/Edit Task sheet has a tag chip input:
+  - Enter / comma / blur commits the draft tag.
+  - Backspace on empty input removes the trailing chip.
+  - Clicking a chip removes it.
+  - Chip color follows the selected category (`me` / `ext`).
 
 ## Supabase / Cloud State
 
@@ -174,6 +230,9 @@ apps/web/src/features/just-do/habit-screen.tsx
 apps/web/src/features/just-do/settings-screen.tsx
 apps/web/src/features/just-do/stats-screen.tsx
 apps/web/src/features/just-do/add-sheet.tsx
+apps/web/src/features/just-do/tags.ts
+apps/web/src/features/just-do/tags.test.ts
+apps/web/src/features/just-do/persistence.test.ts
 
 apps/web/src/lib/auth/useAuth.tsx
 apps/web/src/lib/auth/providers.ts
@@ -191,11 +250,11 @@ supabase/scripts/reset_local_app_data.sql
 
 ## Verification Status
 
-Latest checks run by Codex:
+Latest checks (post Tag UI + offline regression tests):
 
 ```bash
 npm --prefix apps/web run lint     # pass
-npm --prefix apps/web test         # 62 tests pass
+npm --prefix apps/web test         # 70 tests pass
 npm --prefix apps/web run build    # pass
 git diff --check                   # pass
 ```
@@ -228,30 +287,91 @@ Cloud manual checks already performed by the user/Codex:
   behavior is local-first sequential flush.
 - `npm audit` previously reported moderate findings from framework-related deps;
   no forced downgrade was applied.
+- Tag UI commits draft tags on Enter / comma / blur. Submit also harvests any
+  uncommitted draft so the user does not lose a half-typed tag — keep this
+  behavior in mind when iterating on the picker.
+- Phase 5.5 will rip out `TaskCategory = "me" | "ext"`. Any new code that
+  reads `task.category` should be aware that this property is *renamed* to
+  `task.categoryId` and the value becomes a UUID. Avoid adding new sites
+  that read the enum.
+- `Habit.recur_type` is still `'daily'` hardcoded in the adapter until 5.7
+  lands. Do not introduce new code paths that depend on weekly behavior
+  before the Phase 5.7 domain change ships.
+- IndexedDB schema is at version `2`. Phase 5.5 / 5.6 / 5.7 likely require
+  bumping to `3` to add new object stores (`categories`) or extending the
+  mutation queue with new mutation types — plan a single coordinated bump
+  rather than three.
 
 ## Recommended Next Work
 
-1. **Manual Offline Sync Verification**
-   - In Chrome DevTools, set Network to Offline.
-   - While signed in, create/complete a Task and check a Habit.
-   - Confirm Settings -> 동기화 shows offline / pending changes.
-   - Restore network.
-   - Confirm pending count returns to 0 and Supabase Console shows rows.
+The v1 sequence is fixed: 5.5 → 5.6 → 5.7 → Phase 6. Each phase has its
+own checklist in `docs/next_steps.md`. Highlights below.
 
-2. **Task Tag UI**
-   - Add tag input/editing to Add/Edit Task sheet.
-   - Verify tags round-trip through `tags` / `task_tags`.
-   - Verify two-tab realtime for tag name/removal behavior.
+1. **Phase 5.5 — Category Management (~6d, biggest)**
+   - Drop `TaskCategory = "me" | "ext"` enum.
+   - Replace `Task.category` with `Task.categoryId: string | null`.
+   - Add `Category` domain type, `AppState.categories: Category[]`.
+   - Migration: `categories.position int default 0`,
+     `is_default boolean default false`. Backfill `is_default = true`
+     for existing seed rows.
+   - Settings → 카테고리 management UI: list, drag reorder, rename,
+     color, delete. Last category cannot be deleted; deleting a
+     category with attached tasks shifts those tasks to
+     `category_id = null` (DB already does `on delete set null`).
+   - Color input: 8-color preset palette + custom hex picker. Picker
+     output must produce light/dark `(solid, soft, ink)` triples — plan
+     an HSL-based helper rather than baking colors into tokens.
+   - Replace direct `tokens[mode].me` / `tokens[mode].ext` reads (many
+     sites) with a `categoryStyle(category, mode)` helper.
+   - Realtime: add `categories` channel.
+   - Offline queue: add `category_upsert`, `category_delete`.
+   - Habit visual identity stays on `tokens.habit.*`. Habit is **not**
+     a user-managed category.
+   - Update `just_do_prd.md` / `just_do_planning.md` /
+     `just_do_db_schema.md` to drop me/ext enum language.
 
-3. **Date / Time Input Polish**
-   - Current MVP still uses browser-native `input type="date"` and
-     `input type="time"`.
-   - If product direction wants a branded mobile picker, design it as a
-     focused UX task.
+2. **Phase 5.6 — User Preferences Sync (~1d)**
+   - Migration: add `public.users.preferences jsonb not null default
+     '{}'::jsonb`. Reuse existing `users_select_self` / `_update_self`
+     RLS.
+   - Adapter: `loadPreferences()` / `savePreferences(patch)` partial
+     JSONB merge.
+   - Storage routing: `saveSettings` extracts `weekStart` to
+     preferences; the rest stays device-local.
+   - Offline queue: `preferences_set { key, value }`.
+   - No realtime.
+   - Guest → signed-in transition: push local `weekStart` once if the
+     server value is still default.
 
-4. **Phase 6 iOS / Widget**
-   - Create `apps/ios/` when ready.
+3. **Phase 5.7 — Habit Recurrence (daily + weekly, ~2-3d)**
+   - Domain: `Habit.recurType: 'daily' | 'weekly'`,
+     `Habit.recurDays?: number[]` (0=Sun … 6=Sat).
+   - Adapter: drop the hardcoded `'daily'` insert. Persist
+     `recur_type` + `recur_days`. Defensive fallback if `'monthly'`
+     ever shows up (shouldn't in v1).
+   - Add Sheet (habit mode): `매일` / `매주` segment, plus a 7-day
+     toggle row when weekly. Require ≥1 day selected.
+   - Selectors: `isActiveOn(habit, iso)`. `habitStreak` skips inactive
+     weekdays (skip, not break).
+   - Habit Screen: `LAST 7 DAYS` grid disables inactive weekday cells.
+     `DAILY CHECK` denominator counts only habits active on the
+     selected date.
+   - Decide whether Add Sheet supports habit *edit* mode (currently
+     only task edit). Treat that as a sub-task here.
+   - Update PRD / planning to mark monthly + `recur_end_date` as v2.
+
+4. **Manual Offline Sync Verification (cloud, one-time)**
+   - Steps live in `docs/local_dev.md` → "Manual Offline Sync
+     Verification". Run once on hosted Supabase before declaring v1
+     ready.
+
+5. **Phase 6 — iOS / Widget (after 5.5/5.6/5.7)**
+   - Create `apps/ios/`.
+   - Hand-write Swift Codable mirrors of the (post-5.5/5.6/5.7) schema
+     in something like `apps/ios/Sources/Models/Database.swift`.
+   - Add a drift unit test that compares the Swift mirror against
+     `database.types.ts` (or the live REST schema).
    - Mirror queue event names from `docs/widget_sync_strategy.md`.
-   - Decide App Group cache shape and Core Data/App Group split.
-   - Implement WidgetKit small/medium/large widgets from
+   - Decide App Group cache shape and Core Data / App Group split.
+   - Implement WidgetKit small / medium / large widgets from
      `reference/screens/widgets.jsx`.
