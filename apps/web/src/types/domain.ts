@@ -56,6 +56,7 @@ export type NewTaskInput = {
   endDate: string;
   priority: Priority;
   scheduledTime?: string | null;
+  tags?: string[];
 };
 
 export type NewHabitInput = {

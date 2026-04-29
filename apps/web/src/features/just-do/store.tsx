@@ -355,9 +355,9 @@ export function JustDoProvider({
       addTask: (input) => {
         const created: Task = {
           id: crypto.randomUUID(),
-          tags: [],
           isCompleted: false,
           ...input,
+          tags: input.tags ?? [],
         };
         setState((s) => ({ ...s, tasks: [...s.tasks, created] }));
         persistTask(created);

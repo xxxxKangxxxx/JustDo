@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Priority, TaskCategory } from "@/types/domain";
 import { useJustDo } from "./store";
+import { mergeTags, parseTagInput } from "./tags";
 import { tokens, type ThemeMode } from "./tokens";
 
 export function AddSheet({ mode }: { mode: ThemeMode }) {
@@ -20,6 +21,8 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
   const [scheduledTime, setScheduledTime] = useState("");
   const [category, setCategory] = useState<TaskCategory>("me");
   const [priority, setPriority] = useState<Priority>("medium");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagDraft, setTagDraft] = useState("");
   const [emoji, setEmoji] = useState("🌱");
 
   useEffect(() => {
@@ -35,6 +38,8 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
       setScheduledTime(editTask.scheduledTime ?? "");
       setCategory(editTask.category);
       setPriority(editTask.priority ?? "medium");
+      setTags(editTask.tags ?? []);
+      setTagDraft("");
     } else {
       setType(initialType);
       setTitle("");
@@ -43,6 +48,8 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
       setScheduledTime("");
       setCategory("me");
       setPriority("medium");
+      setTags([]);
+      setTagDraft("");
       setEmoji("🌱");
     }
   }, [editTask, initDate, initialType, open]);
@@ -56,10 +63,37 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
     setEndDate(value < startDate ? startDate : value);
   };
 
+  const commitTagDraft = (raw: string) => {
+    const next = parseTagInput(raw);
+    if (!next.length) {
+      setTagDraft("");
+      return;
+    }
+    setTags((current) => mergeTags(current, next));
+    setTagDraft("");
+  };
+
+  const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      commitTagDraft(tagDraft);
+      return;
+    }
+    if (event.key === "Backspace" && tagDraft.length === 0 && tags.length > 0) {
+      event.preventDefault();
+      setTags((current) => current.slice(0, -1));
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    setTags((current) => current.filter((existing) => existing !== tag));
+  };
+
   const submit = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
     const safeEndDate = endDate < startDate ? startDate : endDate;
+    const finalTags = mergeTags(tags, parseTagInput(tagDraft));
     if (type === "habit") {
       s.addHabit({ title: trimmed, emoji });
     } else if (editTask) {
@@ -70,6 +104,7 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
         scheduledTime: scheduledTime || null,
         category,
         priority,
+        tags: finalTags,
       });
     } else {
       s.addTask({
@@ -79,6 +114,7 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
         scheduledTime: scheduledTime || null,
         category,
         priority,
+        tags: finalTags,
       });
     }
     s.closeSheet();
@@ -145,8 +181,34 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
             <Field label="카테고리" mode={mode}>
               <Segment options={[["me", "나"], ["ext", "외부"]]} value={category} onChange={(v) => setCategory(v as TaskCategory)} mode={mode} />
             </Field>
-            <Field label="우선순위" mode={mode} noBorder>
+            <Field label="우선순위" mode={mode}>
               <Segment options={[["high", "높음"], ["medium", "중간"], ["low", "낮음"]]} value={priority} onChange={(v) => setPriority(v as Priority)} mode={mode} category={category} />
+            </Field>
+            <Field label="태그" mode={mode} noBorder align="start">
+              <div className="flex w-full flex-wrap items-center gap-1.5">
+                {tags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    aria-label={`태그 ${tag} 삭제`}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium"
+                    style={{ background: t[category].soft, color: t[category].ink }}
+                  >
+                    <span>{tag}</span>
+                    <span aria-hidden style={{ color: t[category].ink, opacity: 0.7 }}>×</span>
+                  </button>
+                ))}
+                <input
+                  value={tagDraft}
+                  onChange={(event) => setTagDraft(event.target.value)}
+                  onKeyDown={onTagKeyDown}
+                  onBlur={() => commitTagDraft(tagDraft)}
+                  placeholder={tags.length ? "" : "태그 추가"}
+                  className="min-w-[80px] flex-1 bg-transparent py-1 text-[13px] font-medium outline-none"
+                  style={{ color: t.text }}
+                />
+              </div>
             </Field>
           </>
         ) : (
@@ -190,11 +252,29 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
   );
 }
 
-function Field({ label, children, mode, noBorder = false }: { label: string; children: React.ReactNode; mode: ThemeMode; noBorder?: boolean }) {
+function Field({
+  label,
+  children,
+  mode,
+  noBorder = false,
+  align = "center",
+}: {
+  label: string;
+  children: React.ReactNode;
+  mode: ThemeMode;
+  noBorder?: boolean;
+  align?: "center" | "start";
+}) {
   const t = tokens[mode];
   return (
-    <div className="flex items-center py-[13px]" style={{ borderBottom: noBorder ? "none" : `0.5px solid ${t.divider}` }}>
-      <div className="w-[72px] text-xs font-medium tracking-[0.1px]" style={{ color: t.textTertiary }}>
+    <div
+      className={`flex py-[13px] ${align === "start" ? "items-start" : "items-center"}`}
+      style={{ borderBottom: noBorder ? "none" : `0.5px solid ${t.divider}` }}
+    >
+      <div
+        className={`w-[72px] text-xs font-medium tracking-[0.1px] ${align === "start" ? "pt-1.5" : ""}`}
+        style={{ color: t.textTertiary }}
+      >
         {label}
       </div>
       <div className="flex flex-1 items-center text-[13px]">{children}</div>
