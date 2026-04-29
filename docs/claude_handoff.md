@@ -8,6 +8,103 @@ This handoff is written so the next session can continue without replaying the
 chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 `docs/next_steps.md`.
 
+## Resume Work — cold-start checklist
+
+The previous session stopped the local Supabase stack and committed all
+work. To pick up "let's start working":
+
+### 0. Tooling sanity (versions known to work as of 2026-04-29)
+
+- Node `v24.6.0`
+- npm `11.5.1`
+- Supabase CLI `2.95.4`
+- Docker Desktop running (only required if you choose the local stack
+  in step 2).
+
+### 1. Repo state
+
+```bash
+cd /Users/kang-yeongmo/justdo
+git pull --ff-only origin main
+npm install                    # safe to rerun; idempotent
+```
+
+`apps/web/.env.local` is gitignored. If missing, copy from the template
+and fill values:
+
+```bash
+cp apps/web/.env.local.example apps/web/.env.local
+# then edit:
+# - NEXT_PUBLIC_SUPABASE_URL
+# - NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+
+For hosted (cloud) Supabase the values come from
+`https://supabase.com/dashboard/project/cohkxnwsbhrsfmsjqdpa/settings/api`.
+For local Supabase the values come from `supabase status -o env` after
+step 2.
+
+### 2. Choose cloud OR local Supabase
+
+**Cloud (default for this project)** — no extra startup. `apps/web/.env.local`
+points at the hosted project (`cohkxnwsbhrsfmsjqdpa.supabase.co`). Skip to
+step 3.
+
+**Local stack** — starts a Docker-backed Postgres / Studio / Realtime stack.
+Use this only when you need to run un-pushed migrations or test offline.
+
+```bash
+supabase start                 # spawns supabase_*_justdo containers
+supabase status -o env         # copy API_URL/ANON_KEY into apps/web/.env.local
+```
+
+The current session **stopped the local stack** before commit, so containers
+will not be running at session start. Local Postgres data is preserved in a
+docker volume (`docker volume ls --filter label=com.supabase.cli.project=justdo`).
+
+### 3. Run the web dev server
+
+```bash
+npm run dev:web                # → http://localhost:3000
+```
+
+Sign-in flow uses Google OAuth. Hosted callback is already configured at
+`https://cohkxnwsbhrsfmsjqdpa.supabase.co/auth/v1/callback`. Local
+callback is `http://127.0.0.1:3000/callback`.
+
+### 4. Verify before changing anything
+
+```bash
+npm --prefix apps/web run lint     # expect: pass
+npm --prefix apps/web test         # expect: 70 tests pass
+npm --prefix apps/web run build    # expect: pass
+git diff --check                   # expect: clean
+```
+
+If any step fails, stop and investigate before starting new work — the
+last commit (`fbb8589`) was green.
+
+### 5. End-of-session cleanup
+
+When wrapping up, mirror what this session did:
+
+```bash
+# stop local supabase if you started it
+supabase stop --workdir /Users/kang-yeongmo/justdo
+
+# kill any dev servers you started (npm run dev:web, vitest --watch, etc.)
+# one-shot commands (lint, test, build) leave nothing behind.
+
+# verify ports are released
+lsof -i -P -n | grep -E "5432[1-7]|3000" || echo "(clean)"
+
+# verify only this project's containers are gone (others stay up)
+docker ps --format '{{.Names}}'
+```
+
+Do not stop the unrelated containers (`freshbox-*`, `field-*`, etc.) —
+they belong to other projects on this machine.
+
 ## Working Tree State (uncommitted)
 
 Last upstream commit: `e33c907 docs: refresh Claude handoff`.
