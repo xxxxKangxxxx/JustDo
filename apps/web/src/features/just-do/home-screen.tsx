@@ -1,13 +1,21 @@
 "use client";
 
-import { daysInMonth, firstWeekday, formatTime, isoOf, parseISO, weekdayOfISO } from "@/lib/date";
+import {
+  daysInMonth,
+  formatTime,
+  isoOf,
+  monthCalendar,
+  parseISO,
+  weekdayLabels,
+  weekdayOfISO,
+} from "@/lib/date";
 import type { Task, TaskCategory } from "@/types/domain";
 import { CatDot, CircleCheck, IconButton } from "./primitives";
 import { tasksInRange, tasksOnDate, habitStreak } from "./selectors";
 import { useJustDo } from "./store";
 import { categoryLabel, tokens, type ThemeMode } from "./tokens";
 
-const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"];
+const baseWeekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
 export function HomeScreen({ mode }: { mode: ThemeMode }) {
   const s = useJustDo();
@@ -88,7 +96,7 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
             {selected.month}월 {selected.day}일
           </h2>
           <p className="text-xs font-medium" style={{ color: t.textSecondary }}>
-            {weekdayLabels[weekdayOfISO(selectedDate)]}요일
+            {baseWeekdayLabels[weekdayOfISO(selectedDate)]}요일
           </p>
           <span className="flex-1" />
           <span className="text-[11px] font-medium" style={{ color: t.textTertiary }}>
@@ -139,15 +147,10 @@ function Calendar({ mode }: { mode: ThemeMode }) {
   const s = useJustDo();
   const t = tokens[mode];
   const { year, month, selectedDate } = s.state.view;
-  const offset = firstWeekday(year, month);
+  const { weekStart } = s.state.settings;
+  const cells = monthCalendar(year, month, weekStart);
   const days = daysInMonth(year, month);
-  const cells = Array.from({ length: offset }, (_, i) => ({ day: i + 1, iso: "", muted: true })).concat(
-    Array.from({ length: days }, (_, i) => {
-      const day = i + 1;
-      return { day, iso: isoOf(year, month, day), muted: false };
-    }),
-  );
-  while (cells.length % 7) cells.push({ day: cells.length, iso: "", muted: true });
+  const labels = weekdayLabels(weekStart);
   const monthStart = isoOf(year, month, 1);
   const monthEnd = isoOf(year, month, days);
   const bars = tasksInRange(s.state.tasks, monthStart, monthEnd).filter((task) => task.startDate !== task.endDate);
@@ -156,11 +159,11 @@ function Calendar({ mode }: { mode: ThemeMode }) {
   return (
     <div className="px-3.5">
       <div className="mb-1 grid grid-cols-7">
-        {weekdayLabels.map((label, index) => (
+        {labels.map((label) => (
           <div
             key={label}
             className="pb-1.5 text-center text-[11px] font-medium tracking-[0.2px]"
-            style={{ color: index === 0 ? t.ext.solid : index === 6 ? t.me.solid : t.textTertiary }}
+            style={{ color: label === "일" ? t.ext.solid : label === "토" ? t.me.solid : t.textTertiary }}
           >
             {label}
           </div>

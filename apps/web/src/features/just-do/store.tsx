@@ -6,14 +6,22 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { addMonths, todayISO } from "@/lib/date";
 import type { AppState, NewHabitInput, NewTaskInput, TabId } from "@/types/domain";
+import {
+  createLocalStorageStorage,
+  mergePersisted,
+  toPersisted,
+  type JustDoStorage,
+} from "./persistence";
 import { createInitialState } from "./sample-data";
 
-const storageKey = "just-do/web/v1";
+const defaultStorageKey = "just-do/web/v1";
+const defaultStorage = createLocalStorageStorage(defaultStorageKey);
 
 type StoreValue = {
   state: AppState;
@@ -41,32 +49,37 @@ type StoreValue = {
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-const loadState = () => {
-  if (typeof window === "undefined") return createInitialState();
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return createInitialState();
-    const saved = JSON.parse(raw) as AppState;
-    const init = createInitialState();
-    return {
-      ...init,
-      ...saved,
-      view: { ...init.view, ...saved.view, sheet: null, detailTaskId: null },
-    };
-  } catch {
-    return createInitialState();
-  }
-};
-
-export function JustDoProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(loadState);
+export function JustDoProvider({
+  children,
+  storage = defaultStorage,
+}: {
+  children: ReactNode;
+  storage?: JustDoStorage;
+}) {
+  const [state, setState] = useState<AppState>(createInitialState);
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
+    storage.load().then((saved) => {
+      if (cancelled) return;
+      if (saved) {
+        setState((current) => mergePersisted(current, saved));
+      }
+      hydratedRef.current = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storage]);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
     const timer = window.setTimeout(() => {
-      window.localStorage.setItem(storageKey, JSON.stringify(state));
+      void storage.save(toPersisted(state));
     }, 150);
     return () => window.clearTimeout(timer);
-  }, [state]);
+  }, [state, storage]);
 
   const update = useCallback((fn: (state: AppState) => AppState) => {
     setState((current) => fn(current));
