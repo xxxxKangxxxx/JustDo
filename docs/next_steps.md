@@ -84,7 +84,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 ## Phase 5: Offline Sync
 
 - [x] Add IndexedDB storage for the web app.
-- [ ] Track local mutations with `updated_at` timestamps.
+- [x] Track local mutations with `updated_at` timestamps.
 - [ ] Implement Last Write Wins sync against Supabase.
 - [ ] Add an offline status indicator in the UI.
 
@@ -106,8 +106,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 ## Sync / Widget Backlog
 
 - [x] Widget sync strategy documented in `docs/widget_sync_strategy.md`.
-- [ ] Define shared mutation event names that both web and iOS can implement.
-- [ ] Design iOS mutation queue schema for widget/offline writes.
+- [x] Define shared mutation event names that both web and iOS can implement.
+- [x] Design iOS mutation queue schema for widget/offline writes.
 
 ## Open Decisions
 

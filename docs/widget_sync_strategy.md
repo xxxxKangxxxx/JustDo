@@ -85,17 +85,40 @@ alive. V1 should handle this without losing the tap:
 
 1. Optimistically update the App Group cache so the widget can refresh quickly.
 2. Enqueue a local mutation with:
-   - entity type
-   - entity id
-   - operation
-   - payload
-   - client timestamp
+   - `id`
+   - `updatedAt`
+   - mutation type
+   - mutation payload
 3. Attempt immediate upload if network/session is available.
 4. If upload fails, leave the mutation queued.
 5. The main iOS app drains the queue on foreground/background refresh.
 
 Conflict policy for v1: Last Write Wins using updated timestamps. This should
 be revisited if collaborative/shared tasks ship later.
+
+Shared mutation names:
+
+- `task_upsert`
+- `task_delete`
+- `habit_upsert`
+- `habit_log_set`
+
+Web queue entries use this shape:
+
+```ts
+type QueuedMutation = {
+  id: string;
+  updatedAt: string;
+  mutation:
+    | { type: "task_upsert"; task: Task }
+    | { type: "task_delete"; id: string }
+    | { type: "habit_upsert"; habit: Habit }
+    | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 };
+};
+```
+
+iOS/App Group should mirror the same semantic event names and timestamp field
+even if the native payload types differ.
 
 ## Widget Refresh
 

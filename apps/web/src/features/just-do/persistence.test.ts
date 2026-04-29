@@ -3,6 +3,7 @@ import type { AppState, Habit, Task } from "@/types/domain";
 import {
   createIndexedDBStorage,
   createMemoryStorage,
+  createMemoryMutationQueue,
   createSnapshotStorage,
   mergePersisted,
   toPersisted,
@@ -210,6 +211,49 @@ describe("createSnapshotStorage", () => {
     expect(loaded?.habits[0].log).toEqual({ "2026-04-28": 1, "2026-04-29": 1 });
     expect(loaded?.view.tab).toBe("habit");
     expect(loaded?.view.dark).toBe(true);
+  });
+
+  it("records queued mutations with updatedAt timestamps", async () => {
+    let snapshot: Persisted | null = null;
+    let id = 0;
+    const queue = createMemoryMutationQueue();
+    const storage = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      {
+        queue,
+        now: () => `2026-04-29T00:00:0${id}.000Z`,
+        createId: () => `m${++id}`,
+      },
+    );
+
+    await storage.upsertTask(sampleTask({ id: "t2" }));
+    await storage.setHabitLog("h1", "2026-04-29", 1);
+    const mutations = await storage.listQueuedMutations?.();
+
+    expect(mutations).toEqual([
+      {
+        id: "m1",
+        updatedAt: "2026-04-29T00:00:01.000Z",
+        mutation: { type: "task_upsert", task: sampleTask({ id: "t2" }) },
+      },
+      {
+        id: "m2",
+        updatedAt: "2026-04-29T00:00:02.000Z",
+        mutation: { type: "habit_log_set", habitId: "h1", iso: "2026-04-29", value: 1 },
+      },
+    ]);
+
+    await storage.removeQueuedMutation?.("m1");
+    expect((await storage.listQueuedMutations?.())?.map((mutation) => mutation.id)).toEqual(["m2"]);
+    await storage.clearQueuedMutations?.();
+    expect(await storage.listQueuedMutations?.()).toEqual([]);
   });
 });
 

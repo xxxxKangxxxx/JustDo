@@ -253,5 +253,6 @@ Note: because `20260429052000_enable_realtime.sql` was edited after its first lo
    - Decide whether App Intent directly attempts network writes or queue-first.
 4. **Phase 5 Offline Sync**
    - IndexedDB adapter for web is implemented as the guest/local storage default with localStorage fallback.
-   - Local mutation queue.
+   - Local mutation queue is implemented for IndexedDB snapshot storage.
+   - Shared mutation names: `task_upsert`, `task_delete`, `habit_upsert`, `habit_log_set`.
    - Last Write Wins sync policy based on timestamps.

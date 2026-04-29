@@ -273,6 +273,28 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` → 58 tests pass.
 - `npm --prefix apps/web run build` → pass.
 
+## 2026-04-29 Phase 5-2: Local Mutation Queue
+
+### Codex
+
+- Local mutation queue 타입 추가:
+  - `QueuedMutation = { id, updatedAt, mutation }`
+  - mutation names: `task_upsert`, `task_delete`, `habit_upsert`, `habit_log_set`
+- `JustDoStorage` 에 optional queue API 추가:
+  - `listQueuedMutations`
+  - `removeQueuedMutation`
+  - `clearQueuedMutations`
+- `createSnapshotStorage` 가 task/habit write 후 pending mutation 을 함께 기록하도록 확장.
+- IndexedDB schema version 을 2로 올리고 `mutations` object store 추가.
+- `docs/widget_sync_strategy.md` 에 web/iOS 공통 mutation event name 과 queue shape 기록.
+- `docs/next_steps.md`, `docs/claude_handoff.md` Phase 5 상태 갱신.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 59 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
 ## 2026-04-29 Phase 4-3: 저장 오류 표시
 
 ### Codex

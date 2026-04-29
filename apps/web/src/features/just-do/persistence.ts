@@ -12,6 +12,18 @@ export type Persisted = {
   settings: AppState["settings"];
 };
 
+export type LocalMutation =
+  | { type: "task_upsert"; task: Task }
+  | { type: "task_delete"; id: string }
+  | { type: "habit_upsert"; habit: Habit }
+  | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 };
+
+export type QueuedMutation = {
+  id: string;
+  updatedAt: string;
+  mutation: LocalMutation;
+};
+
 export type RemoteChange =
   | { type: "task_upserted"; task: Task }
   | { type: "task_deleted"; id: string }
@@ -43,6 +55,10 @@ export interface JustDoStorage {
 
   upsertHabit(habit: Habit): Promise<void>;
   setHabitLog(habitId: string, iso: string, value: 0 | 1): Promise<void>;
+
+  listQueuedMutations?(): Promise<QueuedMutation[]>;
+  removeQueuedMutation?(id: string): Promise<void>;
+  clearQueuedMutations?(): Promise<void>;
 
   subscribe?(callback: (change: RemoteChange) => void): () => void;
 }
@@ -245,8 +261,54 @@ type SnapshotStore = {
   write(snapshot: Persisted): Promise<void>;
 };
 
-export const createSnapshotStorage = (store: SnapshotStore): JustDoStorage => {
+type MutationQueueStore = {
+  enqueue(mutation: QueuedMutation): Promise<void>;
+  list(): Promise<QueuedMutation[]>;
+  remove(id: string): Promise<void>;
+  clear(): Promise<void>;
+};
+
+type SnapshotStorageOptions = {
+  queue?: MutationQueueStore;
+  now?: () => string;
+  createId?: () => string;
+};
+
+export const createMemoryMutationQueue = (): MutationQueueStore => {
+  const queue: QueuedMutation[] = [];
+  return {
+    async enqueue(mutation) {
+      queue.push(mutation);
+    },
+    async list() {
+      return [...queue].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    },
+    async remove(id) {
+      const index = queue.findIndex((mutation) => mutation.id === id);
+      if (index !== -1) queue.splice(index, 1);
+    },
+    async clear() {
+      queue.splice(0);
+    },
+  };
+};
+
+export const createSnapshotStorage = (
+  store: SnapshotStore,
+  options: SnapshotStorageOptions = {},
+): JustDoStorage => {
   const ref: MemoryStateRef = { current: null };
+  const now = options.now ?? (() => new Date().toISOString());
+  const createId = options.createId ?? (() => crypto.randomUUID());
+
+  const enqueue = async (mutation: LocalMutation) => {
+    if (!options.queue) return;
+    await options.queue.enqueue({
+      id: createId(),
+      updatedAt: now(),
+      mutation,
+    });
+  };
 
   const loadSnapshot = async () => {
     if (ref.current) return ref.current;
@@ -269,21 +331,32 @@ export const createSnapshotStorage = (store: SnapshotStore): JustDoStorage => {
 
     saveSettings: (settings) => mutate((snap) => ({ ...snap, settings })),
     saveView: (view) => mutate((snap) => ({ ...snap, view })),
-    upsertTask: (task) =>
-      mutate((snap) => ({ ...snap, tasks: upsertById(snap.tasks, task) })),
-    deleteTask: (id) =>
-      mutate((snap) => ({ ...snap, tasks: snap.tasks.filter((task) => task.id !== id) })),
-    upsertHabit: (habit) =>
-      mutate((snap) => ({ ...snap, habits: upsertById(snap.habits, habit) })),
-    setHabitLog: (habitId, iso, value) =>
-      mutate((snap) => ({
+    upsertTask: async (task) => {
+      await mutate((snap) => ({ ...snap, tasks: upsertById(snap.tasks, task) }));
+      await enqueue({ type: "task_upsert", task });
+    },
+    deleteTask: async (id) => {
+      await mutate((snap) => ({ ...snap, tasks: snap.tasks.filter((task) => task.id !== id) }));
+      await enqueue({ type: "task_delete", id });
+    },
+    upsertHabit: async (habit) => {
+      await mutate((snap) => ({ ...snap, habits: upsertById(snap.habits, habit) }));
+      await enqueue({ type: "habit_upsert", habit });
+    },
+    setHabitLog: async (habitId, iso, value) => {
+      await mutate((snap) => ({
         ...snap,
         habits: snap.habits.map((habit) =>
           habit.id === habitId
             ? { ...habit, log: { ...habit.log, [iso]: value } }
             : habit,
         ),
-      })),
+      }));
+      await enqueue({ type: "habit_log_set", habitId, iso, value });
+    },
+    listQueuedMutations: options.queue ? () => options.queue?.list() ?? Promise.resolve([]) : undefined,
+    removeQueuedMutation: options.queue ? (id) => options.queue?.remove(id) ?? Promise.resolve() : undefined,
+    clearQueuedMutations: options.queue ? () => options.queue?.clear() ?? Promise.resolve() : undefined,
     subscribe: () => () => undefined,
   };
 };
@@ -312,14 +385,17 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> =>
 const openIndexedDB = (
   factory: IDBFactory,
   dbName: string,
-  storeName: string,
+  storeNames: { snapshots: string; mutations: string },
 ): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {
-    const request = factory.open(dbName, 1);
+    const request = factory.open(dbName, 2);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName, { keyPath: "key" });
+      if (!db.objectStoreNames.contains(storeNames.snapshots)) {
+        db.createObjectStore(storeNames.snapshots, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(storeNames.mutations)) {
+        db.createObjectStore(storeNames.mutations, { keyPath: "id" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -331,6 +407,7 @@ export const createIndexedDBStorage = (
 ): JustDoStorage => {
   const dbName = options.dbName ?? "just-do-web";
   const storeName = options.storeName ?? "snapshots";
+  const mutationStoreName = "mutations";
   const recordKey = options.recordKey ?? "state";
   const fallback = options.fallback ?? createLocalStorageStorage("just-do/web/v1");
   const factory =
@@ -344,7 +421,10 @@ export const createIndexedDBStorage = (
 
   const store: SnapshotStore = {
     async read() {
-      const db = await openIndexedDB(factory, dbName, storeName);
+      const db = await openIndexedDB(factory, dbName, {
+        snapshots: storeName,
+        mutations: mutationStoreName,
+      });
       try {
         const transaction = db.transaction(storeName, "readonly");
         const objectStore = transaction.objectStore(storeName);
@@ -358,7 +438,10 @@ export const createIndexedDBStorage = (
     },
 
     async write(snapshot) {
-      const db = await openIndexedDB(factory, dbName, storeName);
+      const db = await openIndexedDB(factory, dbName, {
+        snapshots: storeName,
+        mutations: mutationStoreName,
+      });
       try {
         const transaction = db.transaction(storeName, "readwrite");
         const objectStore = transaction.objectStore(storeName);
@@ -370,5 +453,65 @@ export const createIndexedDBStorage = (
     },
   };
 
-  return createSnapshotStorage(store);
+  const queue: MutationQueueStore = {
+    async enqueue(mutation) {
+      const db = await openIndexedDB(factory, dbName, {
+        snapshots: storeName,
+        mutations: mutationStoreName,
+      });
+      try {
+        const transaction = db.transaction(mutationStoreName, "readwrite");
+        transaction.objectStore(mutationStoreName).put(mutation);
+        await transactionDone(transaction);
+      } finally {
+        db.close();
+      }
+    },
+
+    async list() {
+      const db = await openIndexedDB(factory, dbName, {
+        snapshots: storeName,
+        mutations: mutationStoreName,
+      });
+      try {
+        const transaction = db.transaction(mutationStoreName, "readonly");
+        const all = await requestResult<QueuedMutation[]>(
+          transaction.objectStore(mutationStoreName).getAll(),
+        );
+        return all.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+      } finally {
+        db.close();
+      }
+    },
+
+    async remove(id) {
+      const db = await openIndexedDB(factory, dbName, {
+        snapshots: storeName,
+        mutations: mutationStoreName,
+      });
+      try {
+        const transaction = db.transaction(mutationStoreName, "readwrite");
+        transaction.objectStore(mutationStoreName).delete(id);
+        await transactionDone(transaction);
+      } finally {
+        db.close();
+      }
+    },
+
+    async clear() {
+      const db = await openIndexedDB(factory, dbName, {
+        snapshots: storeName,
+        mutations: mutationStoreName,
+      });
+      try {
+        const transaction = db.transaction(mutationStoreName, "readwrite");
+        transaction.objectStore(mutationStoreName).clear();
+        await transactionDone(transaction);
+      } finally {
+        db.close();
+      }
+    },
+  };
+
+  return createSnapshotStorage(store, { queue });
 };
