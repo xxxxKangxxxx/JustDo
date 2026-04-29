@@ -12,7 +12,7 @@
 | 앱 이름 | Just Do |
 | 컨셉 | 할일과 일정을 하나의 항목(Task)으로 통합 관리하는 캘린더 기반 To-Do 앱 |
 | 플랫폼 | iOS (Swift + SwiftUI), 웹앱 (Next.js + TypeScript) |
-| 백엔드 | Supabase (Auth, PostgreSQL, Realtime, Edge Functions) |
+| 백엔드 (v1) | Supabase (Auth, PostgreSQL, Realtime, Edge Functions) — 추후 자체 백엔드로 이전 가능성 열어둠. 자세한 운영 원칙은 `backend_strategy.md` 참고 |
 | 개발 우선순위 | iOS + 웹앱 동시 개발 (v1), Android (v3) |
 
 ---
@@ -293,4 +293,5 @@
 
 - `just_do_planning.md` — 전체 기획 문서
 - `just_do_db_schema.md` — DB 스키마 설계
+- `backend_strategy.md` — Supabase 우선/자체 백엔드 이전 가능성 운영 원칙
 - `just_do_claude_design_prompt.md` — UI 디자인 프롬프트

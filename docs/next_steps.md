@@ -29,19 +29,43 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Phase 3: Local Data Layer
 
-- [ ] Replace prototype `localStorage` state with a typed local data layer.
-- [ ] Use runtime dates instead of the fixed `2026-04-21` sample date.
-- [ ] Normalize enum naming, especially `priority`: use `high`, `medium`, `low`.
-- [ ] Implement calendar start weekday behavior from settings.
-- [ ] Add focused tests for date range and calendar rendering helpers.
+- [x] Replace prototype `localStorage` state with a typed local data layer.
+- [x] Use runtime dates instead of the fixed `2026-04-21` sample date.
+- [x] Normalize enum naming, especially `priority`: use `high`, `medium`, `low`.
+- [x] Implement calendar start weekday behavior from settings.
+- [x] Add focused tests for date range and calendar rendering helpers.
 
 ## Phase 4: Supabase Integration
 
-- [ ] Create Supabase project configuration and environment variable documentation.
-- [ ] Convert `docs/just_do_db_schema.md` into executable migrations.
-- [ ] Enable RLS policies for all user-owned tables.
-- [ ] Implement Supabase Auth with Apple and Google.
-- [ ] Implement Realtime subscriptions for tasks, habits, and habit logs.
+> 운영 원칙은 `backend_strategy.md` 참고. 모든 Supabase 의존 코드는 어댑터 뒤에 격리한다.
+
+### 4-1. 스키마 / 마이그레이션
+- [ ] `docs/just_do_db_schema.md` 검토 — `auth.users` 직접 FK 제거, `public.users` 경유 구조 확인.
+- [ ] `supabase/` 워크스페이스 셋업 (`supabase init`).
+- [ ] raw SQL 마이그레이션 작성 (`supabase/migrations/0001_init.sql` 등).
+- [ ] 모든 user-owned 테이블 RLS 정책 작성.
+- [ ] `supabase start` 로컬 검증.
+
+### 4-2. 클라이언트 / 어댑터
+- [ ] `apps/web`에 `@supabase/supabase-js` 설치.
+- [ ] `lib/supabase/` 클라이언트 (브라우저/서버 분리).
+- [ ] `supabase gen types typescript` 로 생성 타입 → 도메인 타입 매핑 레이어.
+- [ ] `JustDoStorage`를 구현하는 Supabase 어댑터.
+- [ ] 어댑터 단위 테스트 (Memory storage 패턴 확장).
+
+### 4-3. 인증
+- [ ] `useAuth()` 훅 추상화 — Supabase Auth는 구현 디테일.
+- [ ] Apple / Google OAuth 콜백 라우트.
+- [ ] 로그인 시 `public.users` upsert + `user_subscriptions` Trial 레코드 생성.
+
+### 4-4. Realtime
+- [ ] `JustDoStorage.subscribe(callback)` 인터페이스 확장.
+- [ ] tasks / habits / habit_logs 테이블 구독.
+- [ ] Realtime 페이로드를 도메인 이벤트 타입으로 매핑.
+
+### 4-5. 환경변수 / 보안
+- [ ] `.env.local.example` 작성, `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` 분리 명시.
+- [ ] service_role 키가 클라이언트 번들에 들어가지 않도록 import 경로 검증.
 
 ## Phase 5: Offline Sync
 
