@@ -50,6 +50,11 @@ const storageForUser = (userId: string) => {
 type StoreValue = {
   state: AppState;
   syncError: string | null;
+  syncStatus: {
+    isOnline: boolean;
+    isSyncing: boolean;
+    pendingCount: number;
+  };
   clearSyncError: () => void;
   setTab: (tab: TabId) => void;
   setDark: (dark: boolean) => void;
@@ -71,6 +76,9 @@ type StoreValue = {
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
+
+const browserOnline = () =>
+  typeof navigator === "undefined" ? true : navigator.onLine;
 
 const viewOf = (state: AppState): PersistedView => ({
   tab: state.view.tab,
@@ -104,6 +112,11 @@ export function JustDoProvider({
   }, [storage, userId]);
   const [state, setState] = useState<AppState>(createInitialState);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState({
+    isOnline: browserOnline(),
+    isSyncing: false,
+    pendingCount: 0,
+  });
   const hydratedRef = useRef(false);
 
   const reportSyncError = useCallback((err: unknown) => {
@@ -118,11 +131,28 @@ export function JustDoProvider({
 
   const clearSyncError = useCallback(() => setSyncError(null), []);
 
+  const refreshPendingCount = useCallback(() => {
+    void (async () => {
+      const queued = await activeStorage.listQueuedMutations?.();
+      setSyncStatus((current) => ({
+        ...current,
+        pendingCount: queued?.length ?? 0,
+      }));
+    })().catch(reportSyncError);
+  }, [activeStorage, reportSyncError]);
+
   const persist = useCallback(
     (operation: Promise<void>) => {
-      operation.then(clearSyncError).catch(reportSyncError);
+      setSyncStatus((current) => ({ ...current, isSyncing: true }));
+      operation
+        .then(clearSyncError)
+        .catch(reportSyncError)
+        .finally(() => {
+          setSyncStatus((current) => ({ ...current, isSyncing: false }));
+          refreshPendingCount();
+        });
     },
-    [clearSyncError, reportSyncError],
+    [clearSyncError, refreshPendingCount, reportSyncError],
   );
 
   useEffect(() => {
@@ -137,6 +167,7 @@ export function JustDoProvider({
         }
         hydratedRef.current = true;
         clearSyncError();
+        refreshPendingCount();
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -146,7 +177,34 @@ export function JustDoProvider({
     return () => {
       cancelled = true;
     };
-  }, [activeStorage, clearSyncError, reportSyncError]);
+  }, [activeStorage, clearSyncError, refreshPendingCount, reportSyncError]);
+
+  useEffect(() => {
+    const setOnline = () => {
+      setSyncStatus((current) => ({ ...current, isOnline: true, isSyncing: true }));
+      void activeStorage
+        .load()
+        .then(() => {
+          clearSyncError();
+          refreshPendingCount();
+          window.setTimeout(refreshPendingCount, 500);
+        })
+        .catch(reportSyncError)
+        .finally(() => setSyncStatus((current) => ({ ...current, isSyncing: false })));
+    };
+    const setOffline = () => {
+      setSyncStatus((current) => ({ ...current, isOnline: false }));
+      refreshPendingCount();
+    };
+
+    if (typeof window === "undefined") return;
+    window.addEventListener("online", setOnline);
+    window.addEventListener("offline", setOffline);
+    return () => {
+      window.removeEventListener("online", setOnline);
+      window.removeEventListener("offline", setOffline);
+    };
+  }, [activeStorage, clearSyncError, refreshPendingCount, reportSyncError]);
 
   const applyRemoteChange = useCallback(
     (change: RemoteChange) => {
@@ -263,6 +321,7 @@ export function JustDoProvider({
     () => ({
       state,
       syncError,
+      syncStatus,
       clearSyncError,
       setTab: (tab) => updateView((view) => ({ ...view, tab, detailTaskId: null })),
       setDark: (dark) => updateView((view) => ({ ...view, dark })),
@@ -366,6 +425,7 @@ export function JustDoProvider({
       persistHabitLog,
       persistSettings,
       syncError,
+      syncStatus,
       clearSyncError,
     ],
   );

@@ -23,6 +23,18 @@ export function SettingsScreen({ mode }: { mode: ThemeMode }) {
     auth.status === "loading"
       ? "확인 중"
       : auth.user?.displayName ?? auth.user?.email ?? "게스트";
+  const syncDetail = s.syncError
+    ? "확인 필요"
+    : !s.syncStatus.isOnline
+      ? "오프라인"
+      : s.syncStatus.isSyncing
+        ? "동기화 중"
+        : s.syncStatus.pendingCount > 0
+          ? "대기 중"
+          : "정상";
+  const pendingDetail = s.syncStatus.pendingCount > 0
+    ? `${s.syncStatus.pendingCount}개`
+    : "없음";
 
   if (panel === "activity") {
     return <StatsScreen mode={mode} onBack={() => setPanel("main")} />;
@@ -76,11 +88,12 @@ export function SettingsScreen({ mode }: { mode: ThemeMode }) {
       </Group>
       <Group title="동기화" mode={mode}>
         <Row
-          title="저장 상태"
-          detail={s.syncError ? "확인 필요" : "정상"}
+          title="연결 상태"
+          detail={s.syncStatus.isOnline ? "온라인" : "오프라인"}
           mode={mode}
-          last={!s.syncError}
         />
+        <Row title="저장 상태" detail={syncDetail} mode={mode} />
+        <Row title="대기 중인 변경" detail={pendingDetail} mode={mode} last={!s.syncError} />
         {s.syncError ? <Notice message={s.syncError} mode={mode} /> : null}
         {s.syncError ? (
           <Row title="오류 지우기" mode={mode} onClick={s.clearSyncError} last />

@@ -318,6 +318,29 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` → 62 tests pass.
 - `npm --prefix apps/web run build` → pass.
 
+## 2026-04-29 Phase 5-4: Sync Status UI
+
+### Codex
+
+- Store-level sync status 추가:
+  - `isOnline`
+  - `isSyncing`
+  - `pendingCount`
+- 브라우저 `online` / `offline` 이벤트를 구독해 연결 상태 반영.
+- persistence 작업 완료 후 queue length 를 다시 읽어 pending count 갱신.
+- 온라인 복귀 시 storage load 를 트리거해 queued mutation flush 를 재시도하고 pending count 갱신.
+- Settings > 동기화 섹션을 확장:
+  - 연결 상태: `온라인` / `오프라인`
+  - 저장 상태: `정상` / `동기화 중` / `대기 중` / `오프라인` / `확인 필요`
+  - 대기 중인 변경 수
+- `docs/next_steps.md` Phase 5 완료 항목 갱신.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 62 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
 ## 2026-04-29 Phase 4-3: 저장 오류 표시
 
 ### Codex
