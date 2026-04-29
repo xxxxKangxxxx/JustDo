@@ -1,4 +1,4 @@
-import type { AppState } from "@/types/domain";
+import type { AppState, Habit, Settings, Task } from "@/types/domain";
 
 export type PersistedView = Pick<
   AppState["view"],
@@ -12,9 +12,29 @@ export type Persisted = {
   settings: AppState["settings"];
 };
 
+/**
+ * Persistence boundary used by the store.
+ *
+ * The interface is per-entity rather than a single `save(state)` call so
+ * remote adapters (Supabase, future self-hosted backend) can map each
+ * mutation to a targeted query instead of upserting the whole world.
+ *
+ * Every mutation is fire-and-forget from the store's perspective —
+ * adapters MUST NOT throw on the happy path. Failures should be surfaced
+ * through `subscribe` (Phase 4-4) or a separate error channel rather than
+ * rejecting these promises.
+ */
 export interface JustDoStorage {
   load(): Promise<Persisted | null>;
-  save(value: Persisted): Promise<void>;
+
+  saveSettings(settings: Settings): Promise<void>;
+  saveView(view: PersistedView): Promise<void>;
+
+  upsertTask(task: Task): Promise<void>;
+  deleteTask(id: string): Promise<void>;
+
+  upsertHabit(habit: Habit): Promise<void>;
+  setHabitLog(habitId: string, iso: string, value: 0 | 1): Promise<void>;
 }
 
 export const toPersisted = (state: AppState): Persisted => ({
@@ -43,31 +63,160 @@ export const mergePersisted = (initial: AppState, saved: Persisted): AppState =>
   },
 });
 
-export const createLocalStorageStorage = (key: string): JustDoStorage => ({
-  async load() {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) return null;
-      return JSON.parse(raw) as Persisted;
-    } catch {
-      return null;
-    }
-  },
-  async save(value) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(key, JSON.stringify(value));
-  },
-});
+// ---------------------------------------------------------------------------
+// In-memory adapter — used by tests and as a base for the localStorage adapter.
+// Maintains a single `Persisted` snapshot and applies mutations to it.
+// ---------------------------------------------------------------------------
+
+type MemoryStateRef = { current: Persisted | null };
+
+const ensureSnapshot = (ref: MemoryStateRef): Persisted => {
+  if (!ref.current) {
+    ref.current = {
+      view: {
+        tab: "home",
+        year: 1970,
+        month: 1,
+        selectedDate: "1970-01-01",
+        dark: false,
+      },
+      tasks: [],
+      habits: [],
+      settings: {
+        notify: true,
+        notifyTime: "09:00",
+        weekStart: 0,
+        plan: "free",
+      },
+    };
+  }
+  return ref.current;
+};
+
+const applyMutation = (
+  ref: MemoryStateRef,
+  mutate: (snapshot: Persisted) => Persisted,
+) => {
+  ref.current = mutate(ensureSnapshot(ref));
+};
+
+const upsertById = <T extends { id: string }>(list: T[], item: T): T[] => {
+  const index = list.findIndex((existing) => existing.id === item.id);
+  if (index === -1) return [...list, item];
+  const next = list.slice();
+  next[index] = item;
+  return next;
+};
 
 export const createMemoryStorage = (initial: Persisted | null = null): JustDoStorage => {
-  let current = initial;
+  const ref: MemoryStateRef = { current: initial };
+
   return {
     async load() {
-      return current;
+      return ref.current;
     },
-    async save(value) {
-      current = value;
+
+    async saveSettings(settings) {
+      applyMutation(ref, (snap) => ({ ...snap, settings }));
     },
+
+    async saveView(view) {
+      applyMutation(ref, (snap) => ({ ...snap, view }));
+    },
+
+    async upsertTask(task) {
+      applyMutation(ref, (snap) => ({ ...snap, tasks: upsertById(snap.tasks, task) }));
+    },
+
+    async deleteTask(id) {
+      applyMutation(ref, (snap) => ({
+        ...snap,
+        tasks: snap.tasks.filter((task) => task.id !== id),
+      }));
+    },
+
+    async upsertHabit(habit) {
+      applyMutation(ref, (snap) => ({ ...snap, habits: upsertById(snap.habits, habit) }));
+    },
+
+    async setHabitLog(habitId, iso, value) {
+      applyMutation(ref, (snap) => ({
+        ...snap,
+        habits: snap.habits.map((habit) =>
+          habit.id === habitId
+            ? { ...habit, log: { ...habit.log, [iso]: value } }
+            : habit,
+        ),
+      }));
+    },
+  };
+};
+
+// ---------------------------------------------------------------------------
+// localStorage adapter — wraps the memory adapter and serializes after each
+// mutation with a debounced flush. We re-serialize the whole blob because
+// localStorage is synchronous and per-entity writes would just churn JSON
+// stringification for no real win.
+// ---------------------------------------------------------------------------
+
+export const createLocalStorageStorage = (
+  key: string,
+  options: { debounceMs?: number } = {},
+): JustDoStorage => {
+  const debounceMs = options.debounceMs ?? 150;
+  const ref: MemoryStateRef = { current: null };
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const scheduleFlush = () => {
+    if (typeof window === "undefined") return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (!ref.current) return;
+      try {
+        window.localStorage.setItem(key, JSON.stringify(ref.current));
+      } catch {
+        // Quota exceeded or serialization failure — drop silently for now.
+        // A future error channel can surface this.
+      }
+    }, debounceMs);
+  };
+
+  const mutate = async (fn: (snapshot: Persisted) => Persisted) => {
+    applyMutation(ref, fn);
+    scheduleFlush();
+  };
+
+  return {
+    async load() {
+      if (typeof window === "undefined") return null;
+      try {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Persisted;
+        ref.current = parsed;
+        return parsed;
+      } catch {
+        return null;
+      }
+    },
+
+    saveSettings: (settings) => mutate((snap) => ({ ...snap, settings })),
+    saveView: (view) => mutate((snap) => ({ ...snap, view })),
+    upsertTask: (task) =>
+      mutate((snap) => ({ ...snap, tasks: upsertById(snap.tasks, task) })),
+    deleteTask: (id) =>
+      mutate((snap) => ({ ...snap, tasks: snap.tasks.filter((task) => task.id !== id) })),
+    upsertHabit: (habit) =>
+      mutate((snap) => ({ ...snap, habits: upsertById(snap.habits, habit) })),
+    setHabitLog: (habitId, iso, value) =>
+      mutate((snap) => ({
+        ...snap,
+        habits: snap.habits.map((habit) =>
+          habit.id === habitId
+            ? { ...habit, log: { ...habit.log, [iso]: value } }
+            : habit,
+        ),
+      })),
   };
 };

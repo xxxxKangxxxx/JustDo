@@ -11,12 +11,20 @@ import {
   type ReactNode,
 } from "react";
 import { addMonths, todayISO } from "@/lib/date";
-import type { AppState, NewHabitInput, NewTaskInput, TabId } from "@/types/domain";
+import type {
+  AppState,
+  Habit,
+  NewHabitInput,
+  NewTaskInput,
+  Settings,
+  TabId,
+  Task,
+} from "@/types/domain";
 import {
   createLocalStorageStorage,
   mergePersisted,
-  toPersisted,
   type JustDoStorage,
+  type PersistedView,
 } from "./persistence";
 import { createInitialState } from "./sample-data";
 
@@ -40,14 +48,19 @@ type StoreValue = {
   deleteTask: (id: string) => void;
   toggleHabit: (id: string, iso: string) => void;
   addHabit: (habit: NewHabitInput) => void;
-  updateSetting: <K extends keyof AppState["settings"]>(
-    key: K,
-    value: AppState["settings"][K],
-  ) => void;
+  updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   reset: () => void;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
+
+const viewOf = (state: AppState): PersistedView => ({
+  tab: state.view.tab,
+  year: state.view.year,
+  month: state.view.month,
+  selectedDate: state.view.selectedDate,
+  dark: state.view.dark,
+});
 
 export function JustDoProvider({
   children,
@@ -73,105 +86,172 @@ export function JustDoProvider({
     };
   }, [storage]);
 
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    const timer = window.setTimeout(() => {
-      void storage.save(toPersisted(state));
-    }, 150);
-    return () => window.clearTimeout(timer);
-  }, [state, storage]);
+  // Persistence helpers — fire-and-forget. Adapters are expected not to throw
+  // on the happy path; failures will be surfaced via subscribe() in Phase 4-4.
+  const persistTask = useCallback(
+    (task: Task) => {
+      if (!hydratedRef.current) return;
+      void storage.upsertTask(task);
+    },
+    [storage],
+  );
+  const persistTaskDelete = useCallback(
+    (id: string) => {
+      if (!hydratedRef.current) return;
+      void storage.deleteTask(id);
+    },
+    [storage],
+  );
+  const persistHabit = useCallback(
+    (habit: Habit) => {
+      if (!hydratedRef.current) return;
+      void storage.upsertHabit(habit);
+    },
+    [storage],
+  );
+  const persistHabitLog = useCallback(
+    (habitId: string, iso: string, value: 0 | 1) => {
+      if (!hydratedRef.current) return;
+      void storage.setHabitLog(habitId, iso, value);
+    },
+    [storage],
+  );
+  const persistSettings = useCallback(
+    (settings: Settings) => {
+      if (!hydratedRef.current) return;
+      void storage.saveSettings(settings);
+    },
+    [storage],
+  );
+  const persistView = useCallback(
+    (view: PersistedView) => {
+      if (!hydratedRef.current) return;
+      void storage.saveView(view);
+    },
+    [storage],
+  );
 
-  const update = useCallback((fn: (state: AppState) => AppState) => {
-    setState((current) => fn(current));
-  }, []);
+  const updateView = useCallback(
+    (fn: (view: AppState["view"]) => AppState["view"], opts: { persist?: boolean } = {}) => {
+      const persist = opts.persist ?? true;
+      setState((current) => {
+        const nextView = fn(current.view);
+        const next = { ...current, view: nextView };
+        if (persist) persistView(viewOf(next));
+        return next;
+      });
+    },
+    [persistView],
+  );
 
   const value = useMemo<StoreValue>(
     () => ({
       state,
-      setTab: (tab) =>
-        update((s) => ({ ...s, view: { ...s.view, tab, detailTaskId: null } })),
-      setDark: (dark) => update((s) => ({ ...s, view: { ...s.view, dark } })),
-      setMonth: (year, month) => update((s) => ({ ...s, view: { ...s.view, year, month } })),
+      setTab: (tab) => updateView((view) => ({ ...view, tab, detailTaskId: null })),
+      setDark: (dark) => updateView((view) => ({ ...view, dark })),
+      setMonth: (year, month) => updateView((view) => ({ ...view, year, month })),
       moveMonth: (offset) =>
-        update((s) => {
-          const next = addMonths(s.view.year, s.view.month, offset);
-          return { ...s, view: { ...s.view, year: next.year, month: next.month } };
+        updateView((view) => {
+          const next = addMonths(view.year, view.month, offset);
+          return { ...view, year: next.year, month: next.month };
         }),
-      selectDate: (iso) => update((s) => ({ ...s, view: { ...s.view, selectedDate: iso } })),
+      selectDate: (iso) => updateView((view) => ({ ...view, selectedDate: iso })),
+      // Sheet/detail are session-local and intentionally excluded from persistence.
       openAddSheet: (payload) =>
-        update((s) => ({
-          ...s,
-          view: { ...s.view, sheet: { kind: "add", ...(payload ?? {}) } },
-        })),
-      closeSheet: () => update((s) => ({ ...s, view: { ...s.view, sheet: null } })),
-      openDetail: (taskId) => update((s) => ({ ...s, view: { ...s.view, detailTaskId: taskId } })),
-      closeDetail: () => update((s) => ({ ...s, view: { ...s.view, detailTaskId: null } })),
+        updateView((view) => ({ ...view, sheet: { kind: "add", ...(payload ?? {}) } }), {
+          persist: false,
+        }),
+      closeSheet: () => updateView((view) => ({ ...view, sheet: null }), { persist: false }),
+      openDetail: (taskId) =>
+        updateView((view) => ({ ...view, detailTaskId: taskId }), { persist: false }),
+      closeDetail: () =>
+        updateView((view) => ({ ...view, detailTaskId: null }), { persist: false }),
       toggleTask: (id) =>
-        update((s) => ({
-          ...s,
-          tasks: s.tasks.map((task) =>
-            task.id === id ? { ...task, isCompleted: !task.isCompleted } : task,
-          ),
-        })),
-      addTask: (task) =>
-        update((s) => ({
-          ...s,
-          tasks: [
-            ...s.tasks,
-            {
-              id: `t_${crypto.randomUUID().slice(0, 8)}`,
-              tags: [],
-              isCompleted: false,
-              ...task,
-            },
-          ],
-        })),
+        setState((s) => {
+          let updated: Task | null = null;
+          const tasks = s.tasks.map((task) => {
+            if (task.id !== id) return task;
+            updated = { ...task, isCompleted: !task.isCompleted };
+            return updated;
+          });
+          if (updated) persistTask(updated);
+          return { ...s, tasks };
+        }),
+      addTask: (input) =>
+        setState((s) => {
+          const created: Task = {
+            id: `t_${crypto.randomUUID().slice(0, 8)}`,
+            tags: [],
+            isCompleted: false,
+            ...input,
+          };
+          persistTask(created);
+          return { ...s, tasks: [...s.tasks, created] };
+        }),
       updateTask: (id, patch) =>
-        update((s) => ({
-          ...s,
-          tasks: s.tasks.map((task) => (task.id === id ? { ...task, ...patch } : task)),
-        })),
+        setState((s) => {
+          let updated: Task | null = null;
+          const tasks = s.tasks.map((task) => {
+            if (task.id !== id) return task;
+            updated = { ...task, ...patch };
+            return updated;
+          });
+          if (updated) persistTask(updated);
+          return { ...s, tasks };
+        }),
       deleteTask: (id) =>
-        update((s) => ({
-          ...s,
-          tasks: s.tasks.filter((task) => task.id !== id),
-          view: {
-            ...s.view,
-            sheet: s.view.sheet?.taskId === id ? null : s.view.sheet,
-            detailTaskId: s.view.detailTaskId === id ? null : s.view.detailTaskId,
-          },
-        })),
-      toggleHabit: (id, iso) =>
-        update((s) => ({
-          ...s,
-          habits: s.habits.map((habit) =>
-            habit.id === id
-              ? {
-                  ...habit,
-                  log: { ...habit.log, [iso]: habit.log[iso] ? 0 : 1 },
-                }
-              : habit,
-          ),
-        })),
-      addHabit: (habit) =>
-        update((s) => ({
-          ...s,
-          habits: [
-            ...s.habits,
-            {
-              id: `h_${crypto.randomUUID().slice(0, 8)}`,
-              category: "habit",
-              startedAt: todayISO(),
-              log: {},
-              ...habit,
+        setState((s) => {
+          persistTaskDelete(id);
+          return {
+            ...s,
+            tasks: s.tasks.filter((task) => task.id !== id),
+            view: {
+              ...s.view,
+              sheet: s.view.sheet?.taskId === id ? null : s.view.sheet,
+              detailTaskId: s.view.detailTaskId === id ? null : s.view.detailTaskId,
             },
-          ],
-        })),
+          };
+        }),
+      toggleHabit: (id, iso) =>
+        setState((s) => {
+          let nextValue: 0 | 1 | null = null;
+          const habits = s.habits.map((habit) => {
+            if (habit.id !== id) return habit;
+            nextValue = habit.log[iso] ? 0 : 1;
+            return { ...habit, log: { ...habit.log, [iso]: nextValue } };
+          });
+          if (nextValue !== null) persistHabitLog(id, iso, nextValue);
+          return { ...s, habits };
+        }),
+      addHabit: (input) =>
+        setState((s) => {
+          const created: Habit = {
+            id: `h_${crypto.randomUUID().slice(0, 8)}`,
+            category: "habit",
+            startedAt: todayISO(),
+            log: {},
+            ...input,
+          };
+          persistHabit(created);
+          return { ...s, habits: [...s.habits, created] };
+        }),
       updateSetting: (key, value) =>
-        update((s) => ({ ...s, settings: { ...s.settings, [key]: value } })),
+        setState((s) => {
+          const settings = { ...s.settings, [key]: value };
+          persistSettings(settings);
+          return { ...s, settings };
+        }),
       reset: () => setState(createInitialState()),
     }),
-    [state, update],
+    [
+      state,
+      updateView,
+      persistTask,
+      persistTaskDelete,
+      persistHabit,
+      persistHabitLog,
+      persistSettings,
+    ],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

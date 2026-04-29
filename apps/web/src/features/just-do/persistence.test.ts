@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AppState } from "@/types/domain";
+import type { AppState, Habit, Task } from "@/types/domain";
 import {
   createMemoryStorage,
   mergePersisted,
@@ -19,6 +19,28 @@ const stripVolatile = (state: AppState) => ({
   tasks: state.tasks,
   habits: state.habits,
   settings: state.settings,
+});
+
+const sampleTask = (over: Partial<Task> = {}): Task => ({
+  id: "t1",
+  title: "Test",
+  category: "me",
+  startDate: "2026-04-29",
+  endDate: "2026-04-29",
+  isCompleted: false,
+  scheduledTime: null,
+  tags: [],
+  ...over,
+});
+
+const sampleHabit = (over: Partial<Habit> = {}): Habit => ({
+  id: "h1",
+  title: "Run",
+  emoji: "🏃",
+  category: "habit",
+  startedAt: "2026-04-01",
+  log: {},
+  ...over,
 });
 
 describe("toPersisted", () => {
@@ -84,11 +106,61 @@ describe("createMemoryStorage", () => {
     expect(await storage.load()).toBeNull();
   });
 
-  it("round-trips a save", async () => {
-    const initial = createInitialState();
-    const persisted = toPersisted(initial);
+  it("seeds defaults on the first mutation so later loads return a snapshot", async () => {
     const storage = createMemoryStorage();
-    await storage.save(persisted);
-    expect(await storage.load()).toEqual(persisted);
+    await storage.upsertTask(sampleTask());
+    const snap = await storage.load();
+    expect(snap?.tasks).toHaveLength(1);
+    expect(snap?.tasks[0].id).toBe("t1");
+  });
+
+  it("upsertTask replaces an existing task by id", async () => {
+    const storage = createMemoryStorage();
+    await storage.upsertTask(sampleTask({ title: "v1" }));
+    await storage.upsertTask(sampleTask({ title: "v2" }));
+    const snap = await storage.load();
+    expect(snap?.tasks).toHaveLength(1);
+    expect(snap?.tasks[0].title).toBe("v2");
+  });
+
+  it("deleteTask removes a task by id", async () => {
+    const storage = createMemoryStorage();
+    await storage.upsertTask(sampleTask({ id: "a" }));
+    await storage.upsertTask(sampleTask({ id: "b" }));
+    await storage.deleteTask("a");
+    const snap = await storage.load();
+    expect(snap?.tasks.map((task) => task.id)).toEqual(["b"]);
+  });
+
+  it("upsertHabit replaces an existing habit by id", async () => {
+    const storage = createMemoryStorage();
+    await storage.upsertHabit(sampleHabit({ title: "Run" }));
+    await storage.upsertHabit(sampleHabit({ title: "Run 30" }));
+    const snap = await storage.load();
+    expect(snap?.habits).toHaveLength(1);
+    expect(snap?.habits[0].title).toBe("Run 30");
+  });
+
+  it("setHabitLog writes a single date entry without touching others", async () => {
+    const storage = createMemoryStorage();
+    await storage.upsertHabit(sampleHabit({ log: { "2026-04-28": 1 } }));
+    await storage.setHabitLog("h1", "2026-04-29", 1);
+    const snap = await storage.load();
+    expect(snap?.habits[0].log).toEqual({ "2026-04-28": 1, "2026-04-29": 1 });
+  });
+
+  it("saveSettings and saveView persist atomically", async () => {
+    const storage = createMemoryStorage();
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 1, plan: "pro" });
+    await storage.saveView({
+      tab: "stats",
+      year: 2027,
+      month: 7,
+      selectedDate: "2027-07-15",
+      dark: true,
+    });
+    const snap = await storage.load();
+    expect(snap?.settings.weekStart).toBe(1);
+    expect(snap?.view.tab).toBe("stats");
   });
 });
