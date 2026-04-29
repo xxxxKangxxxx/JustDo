@@ -66,6 +66,33 @@ private copies such as:
 
 and copy the desired one to `apps/web/.env.local`.
 
+## Service Role Boundary
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. It must never be imported or used
+from client components, feature components, browser storage adapters, or files
+with `"use client"`.
+
+Allowed path:
+
+```text
+apps/web/src/lib/supabase/service-role.ts
+```
+
+That module imports `server-only`, so accidental client imports should fail at
+build time. The normal browser app must keep using:
+
+```text
+apps/web/src/lib/supabase/client.ts
+```
+
+The cookie-aware auth callback uses:
+
+```text
+apps/web/src/lib/supabase/server.ts
+```
+
+Both server modules are protected with `server-only`.
+
 ## Google OAuth Console Setup
 
 The hosted Supabase project needs Google provider settings in the Supabase

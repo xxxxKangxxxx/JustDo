@@ -77,7 +77,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ### 4-5. 환경변수 / 보안
 - [x] `.env.local.example` 작성, `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` 분리 명시.
-- [ ] service_role 키가 클라이언트 번들에 들어가지 않도록 import 경로 검증 (server-only 모듈 도입 시 점검 — 4-3에서 server action 추가될 때 같이).
+- [x] service_role 키가 클라이언트 번들에 들어가지 않도록 import 경로 검증.
+- [x] server-only 경계 추가 — `lib/supabase/server.ts`, `lib/supabase/service-role.ts`.
+- [x] production build output에서 실제 `SUPABASE_SERVICE_ROLE_KEY` 값 미포함 확인.
 
 ## Phase 5: Offline Sync
 

@@ -21,7 +21,8 @@ Direction: 다음 작업을 Claude Code가 이어받는다.
 - Phase 4-4 Realtime — done
 - Phase 4-5 Env / Security — partially done
   - `.env.local.example` exists and separates public/client env from server-only service role.
-  - Service-role client bundle audit is still pending.
+  - Service-role helper is server-only.
+  - Production build output was scanned for the real service-role key.
 - Phase 5 Offline Sync — pending
 - Phase 6 iOS / Widget Planning — started as strategy docs, implementation pending
 
@@ -105,6 +106,14 @@ supabase start
   - Configure Google provider in Supabase Console.
   - Put hosted URL + anon/public key into local env when testing cloud.
   - Verify hosted Google login and signup fanout.
+
+### Env / Security Audit
+
+- Added `server-only` package.
+- `apps/web/src/lib/supabase/server.ts` imports `server-only`.
+- `apps/web/src/lib/supabase/service-role.ts` is the only module that reads `SUPABASE_SERVICE_ROLE_KEY`.
+- Production build passed.
+- Actual service-role key from `.env.local` was not found in `.next` build outputs.
 
 ### Local Dev Reset Procedure
 
@@ -230,22 +239,19 @@ Note: because `20260429052000_enable_realtime.sql` was edited after its first lo
 
 ## Recommended Next Work
 
-1. **Phase 4-5 Env / Security**
-   - Verify `SUPABASE_SERVICE_ROLE_KEY` is not reachable from the client bundle/import graph.
-   - Consider adding explicit server-only module boundaries before any service-role use.
-2. **Realtime manual browser test**
+1. **Realtime manual browser test**
    - Open two tabs logged into the same account.
    - Create/update/delete task in one tab and confirm the other tab updates.
    - Check habit log toggle across tabs.
    - Once tag UI exists, confirm tag mapping realtime.
-3. **Tag UI**
+2. **Tag UI**
    - Add tag input/editing to add/edit task sheet.
    - Then verify `tags` / `task_tags` realtime in real UI.
-4. **iOS / Widget planning**
+3. **iOS / Widget planning**
    - Decide App Group cache shape.
    - Define mutation queue schema for WidgetKit/offline writes.
    - Decide whether App Intent directly attempts network writes or queue-first.
-5. **Phase 5 Offline Sync**
+4. **Phase 5 Offline Sync**
    - IndexedDB adapter for web.
    - Local mutation queue.
    - Last Write Wins sync policy based on timestamps.

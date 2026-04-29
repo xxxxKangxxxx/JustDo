@@ -378,3 +378,29 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `supabase/.temp/` 는 gitignored 이므로 link metadata 는 커밋되지 않는다.
 - `apps/web/.env.local` 은 아직 gitignored local file 이다. cloud 테스트 시 콘솔의 anon/public key 로 교체해야 한다.
 - Hosted Google OAuth provider 는 Supabase Console 에서 별도로 활성화/설정해야 한다.
+
+## 2026-04-29 Phase 4-5: Env / Security Audit
+
+### Codex
+
+- Env/import audit 실행:
+  - `SUPABASE_SERVICE_ROLE_KEY` 직접 참조는 server-only helper 외 없음.
+  - client/browser Supabase 경로는 `NEXT_PUBLIC_SUPABASE_URL` + anon key 만 사용.
+- `server-only` dependency 추가.
+- `apps/web/src/lib/supabase/server.ts` 에 `import "server-only"` 추가.
+- `apps/web/src/lib/supabase/service-role.ts` 추가.
+  - `SUPABASE_SERVICE_ROLE_KEY` 를 읽는 유일한 helper.
+  - `createClient` 는 `persistSession: false`, `autoRefreshToken: false`.
+  - client import 시 build failure 가 나도록 `server-only` 로 보호.
+- `docs/supabase_cloud_setup.md` 에 service role boundary 문서화.
+- `docs/next_steps.md` Phase 4-5 완료 항목 갱신.
+
+### Verification
+
+- `rg "SUPABASE_SERVICE_ROLE_KEY|service-role|server-only|process\\.env" apps/web/src ...` 로 env/import 경로 점검.
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 55 tests pass.
+- `npm --prefix apps/web run build` → pass.
+- Build output scan:
+  - 실제 `.env.local` 의 `SUPABASE_SERVICE_ROLE_KEY` 값이 `apps/web/.next` 안에 없음.
+  - `SUPABASE_SERVICE_ROLE_KEY` / `service-role` 문자열이 `.next/static` 및 `.next/server/app` JS 산출물에 없음.
