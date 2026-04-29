@@ -98,7 +98,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## UX / UI Backlog
 
-- [x] Habit calendar indicator: 매일 반복 습관은 체크 로그 유무와 관계없이 시작일 이후 날짜에 habit dot 표시.
+- [x] Home calendar scope: 캘린더 dot/list 는 Task 중심으로 유지하고 Habit은 전용 탭에서 관리.
 - [x] Task date range guard: 시작일을 종료일 이후로 변경하면 종료일도 시작일로 자동 보정.
 - [ ] Date/time input polish: MVP는 브라우저/모바일 기본 `input type="date"` / `input type="time"` 유지. 추후 일관된 브랜드 경험이나 날짜 범위 선택 UX가 필요해지면 custom bottom-sheet picker 설계.
 

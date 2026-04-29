@@ -7,8 +7,6 @@ export const tasksOnDate = (tasks: Task[], iso: string) =>
 export const tasksInRange = (tasks: Task[], startISO: string, endISO: string) =>
   tasks.filter((task) => !(task.endDate < startISO || task.startDate > endISO));
 
-export const habitsOnDate = (habits: Habit[], iso: string) => habits.filter((habit) => habit.startedAt <= iso);
-
 export const habitStreak = (habit: Habit, today: string) => {
   let count = 0;
   let cursor = today;

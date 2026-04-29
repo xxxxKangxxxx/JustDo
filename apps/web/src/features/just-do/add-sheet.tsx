@@ -12,7 +12,8 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
   const open = sheet?.kind === "add";
   const editTask = sheet?.taskId ? s.state.tasks.find((task) => task.id === sheet.taskId) : null;
   const initDate = sheet?.date ?? s.state.view.selectedDate;
-  const [type, setType] = useState<"task" | "habit">("task");
+  const initialType = sheet?.initialType ?? "task";
+  const [type, setType] = useState<"task" | "habit">(initialType);
   const [title, setTitle] = useState("");
   const [startDate, setStartDate] = useState(initDate);
   const [endDate, setEndDate] = useState(initDate);
@@ -35,7 +36,7 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
       setCategory(editTask.category);
       setPriority(editTask.priority ?? "medium");
     } else {
-      setType("task");
+      setType(initialType);
       setTitle("");
       setStartDate(initDate);
       setEndDate(initDate);
@@ -44,7 +45,7 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
       setPriority("medium");
       setEmoji("🌱");
     }
-  }, [editTask, initDate, open]);
+  }, [editTask, initDate, initialType, open]);
 
   const updateStartDate = (value: string) => {
     setStartDate(value);

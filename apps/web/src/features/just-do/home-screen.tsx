@@ -11,7 +11,7 @@ import {
 } from "@/lib/date";
 import type { Task, TaskCategory } from "@/types/domain";
 import { CatDot, CircleCheck, IconButton } from "./primitives";
-import { habitsOnDate, habitStreak, tasksInRange, tasksOnDate } from "./selectors";
+import { tasksInRange, tasksOnDate } from "./selectors";
 import { useJustDo } from "./store";
 import { categoryLabel, tokens, type ThemeMode } from "./tokens";
 
@@ -23,10 +23,6 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
   const { year, month, selectedDate } = s.state.view;
   const selected = parseISO(selectedDate);
   const selectedTasks = tasksOnDate(s.state.tasks, selectedDate);
-  const habitsForDay = habitsOnDate(s.state.habits, selectedDate).map((habit) => ({
-    ...habit,
-    doneToday: Boolean(habit.log[selectedDate]),
-  }));
   const grouped: Record<TaskCategory, Task[]> = {
     me: selectedTasks.filter((task) => task.category === "me"),
     ext: selectedTasks.filter((task) => task.category === "ext"),
@@ -100,7 +96,7 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
           </p>
           <span className="flex-1" />
           <span className="text-[11px] font-medium" style={{ color: t.textTertiary }}>
-            {selectedTasks.length + habitsForDay.length}개
+            {selectedTasks.length}개
           </span>
         </div>
 
@@ -109,35 +105,6 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
             <TaskGroup key={category} category={category} tasks={grouped[category]} mode={mode} />
           ) : null,
         )}
-
-        <div className="mt-3.5">
-          <GroupTitle category="habit" count={habitsForDay.length} mode={mode} />
-          {habitsForDay.map((habit, index) => (
-            <div
-              key={habit.id}
-              className="flex items-center gap-3 py-3"
-              style={{ borderBottom: index === habitsForDay.length - 1 ? "none" : `0.5px solid ${t.divider}` }}
-            >
-              <button type="button" onClick={() => s.toggleHabit(habit.id, selectedDate)}>
-                <CircleCheck checked={habit.doneToday} category="habit" mode={mode} />
-              </button>
-              <div className="min-w-0 flex-1">
-                <div
-                  className="flex items-center gap-1.5 text-[15px] font-medium tracking-[-0.2px]"
-                  style={{
-                    color: habit.doneToday ? t.textTertiary : t.text,
-                    textDecoration: habit.doneToday ? "line-through" : "none",
-                  }}
-                >
-                  <span>{habit.emoji}</span> {habit.title}
-                </div>
-                <div className="mt-0.5 text-[11px] font-medium" style={{ color: t.habit.ink }}>
-                  {habitStreak(habit, selectedDate)}일째
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </section>
     </>
   );
@@ -189,7 +156,6 @@ function Calendar({ mode }: { mode: ThemeMode }) {
             {week.map((cell, index) => {
               const selected = cell.iso === selectedDate;
               const dots = cell.iso ? tasksOnDate(s.state.tasks, cell.iso).filter((task) => task.startDate === task.endDate) : [];
-              const hasHabit = cell.iso ? habitsOnDate(s.state.habits, cell.iso).length > 0 : false;
               return (
                 <button
                   key={`${weekIndex}-${index}`}
@@ -211,7 +177,6 @@ function Calendar({ mode }: { mode: ThemeMode }) {
                   <span className="mt-0.5 flex h-1 gap-0.5">
                     {dots.some((task) => task.category === "me") ? <CatDot category="me" mode={mode} size={4} /> : null}
                     {dots.some((task) => task.category === "ext") ? <CatDot category="ext" mode={mode} size={4} /> : null}
-                    {hasHabit ? <CatDot category="habit" mode={mode} size={4} /> : null}
                   </span>
                 </button>
               );
@@ -254,7 +219,7 @@ function TaskGroup({ category, tasks, mode }: { category: TaskCategory; tasks: T
   );
 }
 
-function GroupTitle({ category, count, mode }: { category: "me" | "ext" | "habit"; count: number; mode: ThemeMode }) {
+function GroupTitle({ category, count, mode }: { category: TaskCategory; count: number; mode: ThemeMode }) {
   const t = tokens[mode];
   return (
     <div className="mb-1 flex items-center gap-1.5">

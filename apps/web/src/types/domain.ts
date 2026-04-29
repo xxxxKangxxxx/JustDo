@@ -2,7 +2,7 @@ export type TaskCategory = "me" | "ext";
 export type HabitCategory = "habit";
 export type Category = TaskCategory | HabitCategory;
 export type Priority = "high" | "medium" | "low";
-export type TabId = "home" | "stats" | "settings";
+export type TabId = "home" | "habit" | "stats" | "settings";
 
 export type Task = {
   id: string;
@@ -38,7 +38,7 @@ export type ViewState = {
   month: number;
   selectedDate: string;
   dark: boolean;
-  sheet: null | { kind: "add"; taskId?: string; date?: string };
+  sheet: null | { kind: "add"; taskId?: string; date?: string; initialType?: "task" | "habit" };
   detailTaskId: string | null;
 };
 

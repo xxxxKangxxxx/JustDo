@@ -18,6 +18,16 @@ const tabs: Array<{ id: TabId; label: string; icon: (color: string) => ReactElem
     ),
   },
   {
+    id: "habit",
+    label: "습관",
+    icon: (color) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path d="M12 20c4-2.7 7-6.2 7-10.2C19 6 16.7 4 14.4 4 13.1 4 12.3 4.6 12 5.1 11.7 4.6 10.9 4 9.6 4 7.3 4 5 6 5 9.8 5 13.8 8 17.3 12 20Z" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+        <path d="M9 11.6l1.8 1.8L15.2 9" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     id: "stats",
     label: "통계",
     icon: (color) => (
@@ -62,7 +72,7 @@ export function TabBar({ mode }: { mode: ThemeMode }) {
             key={tab.id}
             type="button"
             onClick={() => setTab(tab.id)}
-            className="flex min-w-16 flex-col items-center gap-[3px] px-3 py-1"
+            className="flex min-w-14 flex-col items-center gap-[3px] px-2 py-1"
           >
             {tab.icon(color)}
             <span className="text-[10px] font-medium tracking-[0.1px]" style={{ color }}>

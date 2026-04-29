@@ -2,6 +2,7 @@
 
 import { AddSheet } from "./add-sheet";
 import { DetailScreen } from "./detail-screen";
+import { HabitScreen } from "./habit-screen";
 import { HomeScreen } from "./home-screen";
 import { AuthProvider, useAuth } from "@/lib/auth/useAuth";
 import { PhoneFrame, StatusBar } from "./primitives";
@@ -34,6 +35,7 @@ function JustDoViewport() {
     <PhoneFrame mode={mode}>
       <StatusBar mode={mode} />
       {state.view.tab === "home" ? <HomeScreen mode={mode} /> : null}
+      {state.view.tab === "habit" ? <HabitScreen mode={mode} /> : null}
       {state.view.tab === "stats" ? <StatsScreen mode={mode} /> : null}
       {state.view.tab === "settings" ? <SettingsScreen mode={mode} /> : null}
       <TabBar mode={mode} />

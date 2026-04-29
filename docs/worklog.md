@@ -409,15 +409,17 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 ### Codex
 
-- Habit calendar dot 기준을 `habit.log[date]` 에서 `habit.startedAt <= date` 로 변경.
-  - 매일 반복 습관은 체크 여부와 관계없이 시작일 이후 모든 날짜에 habit dot 표시.
-  - 선택한 날짜의 habit 목록도 시작일 이후 habit만 표시.
+- Home calendar/list 에서 Habit 노출을 제거하고 Task 중심 화면으로 정리.
+- Habit 전용 탭 추가:
+  - 선택 날짜 기준 daily completion 요약.
+  - 습관별 체크 리스트.
+  - 최근 7일 grid 에서 날짜별 habit log 토글.
+- Habit 탭의 추가 버튼은 Add Sheet 를 Habit 입력 모드로 연다.
 - Task 추가/수정 시 시작일을 종료일 이후로 변경하면 종료일을 시작일로 자동 보정.
 - Submit 직전에도 `endDate >= startDate` 를 보장하도록 저장 payload 보정.
-- `habitsOnDate` selector 및 단위 테스트 추가.
 
 ### Verification
 
 - `npm --prefix apps/web run lint` → pass.
-- `npm --prefix apps/web test` → 57 tests pass.
+- `npm --prefix apps/web test` → 55 tests pass.
 - `npm --prefix apps/web run build` → pass.
