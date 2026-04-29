@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { authProviders } from "@/lib/auth/providers";
 import { useAuth } from "@/lib/auth/useAuth";
+import { StatsScreen } from "./stats-screen";
 import { useJustDo } from "./store";
 import { tokens, type ThemeMode } from "./tokens";
 
@@ -9,6 +11,7 @@ export function SettingsScreen({ mode }: { mode: ThemeMode }) {
   const s = useJustDo();
   const auth = useAuth();
   const t = tokens[mode];
+  const [panel, setPanel] = useState<"main" | "activity">("main");
   const authDisabled = auth.status === "loading";
   const statusDetail =
     auth.status === "loading"
@@ -20,6 +23,11 @@ export function SettingsScreen({ mode }: { mode: ThemeMode }) {
     auth.status === "loading"
       ? "확인 중"
       : auth.user?.displayName ?? auth.user?.email ?? "게스트";
+
+  if (panel === "activity") {
+    return <StatsScreen mode={mode} onBack={() => setPanel("main")} />;
+  }
+
   return (
     <div className="h-[calc(100%-54px)] overflow-auto pb-[100px] pt-1">
       <h1 className="px-5 pb-[18px] pt-3 text-[28px] font-bold tracking-[-0.6px]">설정</h1>
@@ -58,6 +66,9 @@ export function SettingsScreen({ mode }: { mode: ThemeMode }) {
       <Group title="디스플레이" mode={mode}>
         <Row title="다크모드" mode={mode} right={<Toggle on={s.state.view.dark} onChange={s.setDark} mode={mode} />} />
         <Row title="캘린더 시작 요일" detail={s.state.settings.weekStart === 0 ? "일요일" : "월요일"} mode={mode} onClick={() => s.updateSetting("weekStart", s.state.settings.weekStart === 0 ? 1 : 0)} last />
+      </Group>
+      <Group title="리포트" mode={mode}>
+        <Row title="활동 요약" detail="월간" mode={mode} onClick={() => setPanel("activity")} last />
       </Group>
       <Group title="구독" mode={mode}>
         <Row title="현재 플랜" detail={s.state.settings.plan === "pro" ? "Pro" : "Free"} mode={mode} />

@@ -232,6 +232,24 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` → 55 tests pass.
 - `npm --prefix apps/web run build` → pass.
 
+## 2026-04-29 UX Fix: Stats Navigation Scope
+
+### Codex
+
+- 하단 탭을 `홈 / 습관 / 설정` 3개로 단순화하고 `통계` 탭 제거.
+- 기존 통계 화면을 설정 화면의 `리포트 > 활동 요약` 메뉴로 이동.
+- 활동 요약은 직접 habit log 를 조작하는 화면이 아니라 보조 리포트로 역할 변경:
+  - 월간 Task 완료 수/완료율.
+  - Task 카테고리별 완료율.
+  - 오늘 Habit 완료 수, 최근 7일 Habit 완료율, 상위 streak.
+- 기존 localStorage 에 `tab: "stats"` 가 남아 있는 경우 `settings` 로 복구하도록 migration guard 추가.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 56 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
 ## 2026-04-29 Phase 4-3: 저장 오류 표시
 
 ### Codex

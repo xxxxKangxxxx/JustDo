@@ -60,6 +60,9 @@ export const toPersisted = (state: AppState): Persisted => ({
   settings: state.settings,
 });
 
+const normalizeTab = (tab: PersistedView["tab"] | "stats"): AppState["view"]["tab"] =>
+  tab === "stats" ? "settings" : tab;
+
 export const mergePersisted = (initial: AppState, saved: Persisted): AppState => ({
   ...initial,
   tasks: saved.tasks,
@@ -68,6 +71,7 @@ export const mergePersisted = (initial: AppState, saved: Persisted): AppState =>
   view: {
     ...initial.view,
     ...saved.view,
+    tab: normalizeTab(saved.view.tab as PersistedView["tab"] | "stats"),
     sheet: null,
     detailTaskId: null,
   },

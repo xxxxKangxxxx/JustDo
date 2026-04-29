@@ -28,15 +28,6 @@ const tabs: Array<{ id: TabId; label: string; icon: (color: string) => ReactElem
     ),
   },
   {
-    id: "stats",
-    label: "통계",
-    icon: (color) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path d="M5 18V11M10 18V7M15 18v-5M20 18V4" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
     id: "settings",
     label: "설정",
     icon: (color) => (
@@ -72,7 +63,7 @@ export function TabBar({ mode }: { mode: ThemeMode }) {
             key={tab.id}
             type="button"
             onClick={() => setTab(tab.id)}
-            className="flex min-w-14 flex-col items-center gap-[3px] px-2 py-1"
+            className="flex min-w-16 flex-col items-center gap-[3px] px-3 py-1"
           >
             {tab.icon(color)}
             <span className="text-[10px] font-medium tracking-[0.1px]" style={{ color }}>

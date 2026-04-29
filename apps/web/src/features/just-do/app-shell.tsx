@@ -7,7 +7,6 @@ import { HomeScreen } from "./home-screen";
 import { AuthProvider, useAuth } from "@/lib/auth/useAuth";
 import { PhoneFrame, StatusBar } from "./primitives";
 import { SettingsScreen } from "./settings-screen";
-import { StatsScreen } from "./stats-screen";
 import { JustDoProvider, useJustDo } from "./store";
 import { TabBar } from "./tab-bar";
 
@@ -36,7 +35,6 @@ function JustDoViewport() {
       <StatusBar mode={mode} />
       {state.view.tab === "home" ? <HomeScreen mode={mode} /> : null}
       {state.view.tab === "habit" ? <HabitScreen mode={mode} /> : null}
-      {state.view.tab === "stats" ? <StatsScreen mode={mode} /> : null}
       {state.view.tab === "settings" ? <SettingsScreen mode={mode} /> : null}
       <TabBar mode={mode} />
       <DetailScreen mode={mode} />

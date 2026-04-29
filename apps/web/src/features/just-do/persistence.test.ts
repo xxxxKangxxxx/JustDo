@@ -68,7 +68,7 @@ describe("mergePersisted", () => {
       habits: [],
       settings: { ...initial.settings, weekStart: 1 },
       view: {
-        tab: "stats",
+        tab: "habit",
         year: 2027,
         month: 6,
         selectedDate: "2027-06-15",
@@ -80,7 +80,7 @@ describe("mergePersisted", () => {
     expect(merged.habits).toEqual([]);
     expect(merged.settings.weekStart).toBe(1);
     expect(merged.view.year).toBe(2027);
-    expect(merged.view.tab).toBe("stats");
+    expect(merged.view.tab).toBe("habit");
     expect(merged.view.dark).toBe(true);
     expect(merged.view.sheet).toBeNull();
     expect(merged.view.detailTaskId).toBeNull();
@@ -153,7 +153,7 @@ describe("createMemoryStorage", () => {
     const storage = createMemoryStorage();
     await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 1, plan: "pro" });
     await storage.saveView({
-      tab: "stats",
+      tab: "settings",
       year: 2027,
       month: 7,
       selectedDate: "2027-07-15",
@@ -161,6 +161,21 @@ describe("createMemoryStorage", () => {
     });
     const snap = await storage.load();
     expect(snap?.settings.weekStart).toBe(1);
-    expect(snap?.view.tab).toBe("stats");
+    expect(snap?.view.tab).toBe("settings");
+  });
+
+  it("normalizes the removed stats tab to settings when restoring old snapshots", () => {
+    const initial = createInitialState();
+    const saved: Persisted = {
+      ...stripVolatile(initial),
+      view: {
+        tab: "stats" as Persisted["view"]["tab"],
+        year: 2027,
+        month: 6,
+        selectedDate: "2027-06-15",
+        dark: false,
+      },
+    };
+    expect(mergePersisted(initial, saved).view.tab).toBe("settings");
   });
 });

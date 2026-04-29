@@ -2,7 +2,7 @@ export type TaskCategory = "me" | "ext";
 export type HabitCategory = "habit";
 export type Category = TaskCategory | HabitCategory;
 export type Priority = "high" | "medium" | "low";
-export type TabId = "home" | "habit" | "stats" | "settings";
+export type TabId = "home" | "habit" | "settings";
 
 export type Task = {
   id: string;

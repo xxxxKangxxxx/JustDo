@@ -6,7 +6,7 @@ import { habitStreak, tasksInRange } from "./selectors";
 import { useJustDo } from "./store";
 import { tokens, type ThemeMode } from "./tokens";
 
-export function StatsScreen({ mode }: { mode: ThemeMode }) {
+export function StatsScreen({ mode, onBack }: { mode: ThemeMode; onBack?: () => void }) {
   const s = useJustDo();
   const t = tokens[mode];
   const start = `${s.state.view.year}-${String(s.state.view.month).padStart(2, "0")}-01`;
@@ -14,21 +14,48 @@ export function StatsScreen({ mode }: { mode: ThemeMode }) {
   const tasks = tasksInRange(s.state.tasks, start, end);
   const doneCount = tasks.filter((task) => task.isCompleted).length;
   const days7 = Array.from({ length: 7 }, (_, i) => addDays(s.state.view.selectedDate, i - 6));
+  const taskRate = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+  const todayHabitDone = s.state.habits.filter((habit) => habit.log[s.state.view.selectedDate]).length;
+  const habitChecks7 = s.state.habits.reduce(
+    (total, habit) => total + days7.filter((day) => habit.log[day]).length,
+    0,
+  );
+  const habitSlots7 = s.state.habits.length * 7;
+  const habitRate7 = habitSlots7 ? Math.round((habitChecks7 / habitSlots7) * 100) : 0;
+  const topStreaks = [...s.state.habits]
+    .sort((a, b) => habitStreak(b, s.state.view.selectedDate) - habitStreak(a, s.state.view.selectedDate))
+    .slice(0, 3);
 
   return (
     <div className="h-[calc(100%-54px)] overflow-auto px-5 pb-[100px] pt-3">
-      <h1 className="mb-3.5 text-[28px] font-bold tracking-[-0.6px]">통계</h1>
-      <section className="mb-[18px] rounded-[14px] px-4 py-3.5" style={{ background: `linear-gradient(135deg, ${t.me.soft}, ${t.habit.soft})` }}>
+      <header className="mb-4 flex items-center gap-3">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex h-8 w-8 items-center justify-center rounded-full"
+            style={{ background: t.surface, color: t.text }}
+            aria-label="뒤로"
+          >
+            <svg width="8" height="14" viewBox="0 0 8 14">
+              <path d="M6 1L1 7l5 6" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : null}
+        <h1 className="text-[28px] font-bold tracking-[-0.6px]">활동 요약</h1>
+      </header>
+
+      <section className="mb-[18px] rounded-[14px] px-4 py-3.5" style={{ background: t.surface }}>
         <div className="mb-1 text-[11px] font-semibold tracking-[0.3px]" style={{ color: t.me.ink }}>
           {s.state.view.year}년 {s.state.view.month}월
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-4xl font-bold tracking-[-1px]">{doneCount}</span>
-          <span className="text-[13px] font-medium" style={{ color: t.textSecondary }}>
-            / {tasks.length}개 완료
-          </span>
+        <div className="grid grid-cols-3 gap-2">
+          <SummaryMetric label="Task 완료" value={`${doneCount}/${tasks.length}`} mode={mode} />
+          <SummaryMetric label="Task 완료율" value={`${taskRate}%`} mode={mode} />
+          <SummaryMetric label="오늘 Habit" value={`${todayHabitDone}/${s.state.habits.length}`} mode={mode} />
         </div>
       </section>
+
       <SectionTitle mode={mode}>TASK</SectionTitle>
       <section className="mb-3.5 rounded-2xl p-4" style={{ background: t.surface }}>
         {(["me", "ext"] as const).map((category) => {
@@ -52,40 +79,44 @@ export function StatsScreen({ mode }: { mode: ThemeMode }) {
           );
         })}
       </section>
+
       <SectionTitle mode={mode}>HABIT</SectionTitle>
-      <div className="mb-2.5 grid grid-cols-3 gap-2">
-        {s.state.habits.slice(0, 3).map((habit) => (
-          <div key={habit.id} className="rounded-xl px-2.5 py-3 text-center" style={{ background: t.surface }}>
-            <div className="mb-1 text-[22px]">{habit.emoji}</div>
-            <div className="mb-0.5 text-[11px] font-medium" style={{ color: t.textSecondary }}>{habit.title}</div>
-            <div className="text-xl font-bold tracking-[-0.4px]" style={{ color: t.habit.ink }}>
-              {habitStreak(habit, s.state.view.selectedDate)}
-              <span className="ml-0.5 text-[10px] font-medium" style={{ color: t.textTertiary }}>일</span>
-            </div>
+      <section className="rounded-2xl p-4" style={{ background: t.surface }}>
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <SummaryMetric label="활성 습관" value={`${s.state.habits.length}`} mode={mode} />
+          <SummaryMetric label="7일 체크" value={`${habitChecks7}/${habitSlots7}`} mode={mode} />
+          <SummaryMetric label="7일 완료율" value={`${habitRate7}%`} mode={mode} />
+        </div>
+        {topStreaks.map((habit, index) => (
+          <div
+            key={habit.id}
+            className="flex items-center gap-2 py-2.5"
+            style={{ borderTop: index === 0 ? `0.5px solid ${t.divider}` : "none" }}
+          >
+            <span className="text-lg">{habit.emoji}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium" style={{ color: t.text }}>
+              {habit.title}
+            </span>
+            <span className="text-[13px] font-bold" style={{ color: t.habit.ink }}>
+              {habitStreak(habit, s.state.view.selectedDate)}일
+            </span>
           </div>
         ))}
-      </div>
-      <section className="rounded-2xl p-4" style={{ background: t.surface }}>
-        <div className="mb-3 flex items-baseline justify-between">
-          <div className="text-[13px] font-semibold">최근 7일 습관</div>
-          <div className="text-[11px]" style={{ color: t.textTertiary }}>7일</div>
-        </div>
-        {s.state.habits.map((habit) => {
-          const dots = days7.map((day) => Boolean(habit.log[day]));
-          const rate = Math.round((dots.filter(Boolean).length / 7) * 100);
-          return (
-            <div key={habit.id} className="mb-2 flex items-center">
-              <div className="w-[88px] text-xs font-medium" style={{ color: t.textSecondary }}>{habit.emoji} {habit.title}</div>
-              <div className="flex flex-1 gap-1">
-                {dots.map((done, index) => (
-                  <button key={days7[index]} type="button" onClick={() => s.toggleHabit(habit.id, days7[index])} className="h-5 flex-1 rounded" style={{ background: done ? t.habit.solid : t.surfaceAlt }} />
-                ))}
-              </div>
-              <div className="ml-2.5 min-w-7 text-right text-[11px] font-bold" style={{ color: t.habit.ink }}>{rate}%</div>
-            </div>
-          );
-        })}
       </section>
+    </div>
+  );
+}
+
+function SummaryMetric({ label, value, mode }: { label: string; value: string; mode: ThemeMode }) {
+  const t = tokens[mode];
+  return (
+    <div className="rounded-xl px-2.5 py-3 text-center" style={{ background: t.surfaceAlt }}>
+      <div className="mb-1 text-[10px] font-semibold" style={{ color: t.textTertiary }}>
+        {label}
+      </div>
+      <div className="text-lg font-bold tracking-[-0.3px]" style={{ color: t.text }}>
+        {value}
+      </div>
     </div>
   );
 }
