@@ -12,6 +12,14 @@ export type Persisted = {
   settings: AppState["settings"];
 };
 
+export type RemoteChange =
+  | { type: "task_upserted"; task: Task }
+  | { type: "task_deleted"; id: string }
+  | { type: "habit_upserted"; habit: Habit }
+  | { type: "habit_deleted"; id: string }
+  | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 }
+  | { type: "error"; error: unknown };
+
 /**
  * Persistence boundary used by the store.
  *
@@ -35,6 +43,8 @@ export interface JustDoStorage {
 
   upsertHabit(habit: Habit): Promise<void>;
   setHabitLog(habitId: string, iso: string, value: 0 | 1): Promise<void>;
+
+  subscribe?(callback: (change: RemoteChange) => void): () => void;
 }
 
 export const toPersisted = (state: AppState): Persisted => ({
@@ -149,6 +159,10 @@ export const createMemoryStorage = (initial: Persisted | null = null): JustDoSto
         ),
       }));
     },
+
+    subscribe() {
+      return () => undefined;
+    },
   };
 };
 
@@ -218,5 +232,6 @@ export const createLocalStorageStorage = (
             : habit,
         ),
       })),
+    subscribe: () => () => undefined,
   };
 };

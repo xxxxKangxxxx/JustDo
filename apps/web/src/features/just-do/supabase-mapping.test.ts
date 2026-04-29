@@ -67,6 +67,7 @@ describe("taskRowToDomain", () => {
         scheduled_time: "14:00",
       }),
       "외부",
+      ["#취업", "#면접"],
     );
     expect(task).toEqual<Task>({
       id: "t1",
@@ -77,7 +78,7 @@ describe("taskRowToDomain", () => {
       priority: "high",
       isCompleted: true,
       scheduledTime: "14:00",
-      tags: [],
+      tags: ["#취업", "#면접"],
     });
   });
 

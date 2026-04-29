@@ -1,5 +1,6 @@
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Supabase } from "@/lib/supabase/client";
-import type { JustDoStorage, Persisted } from "./persistence";
+import type { JustDoStorage, Persisted, RemoteChange } from "./persistence";
 import {
   habitDomainToInsert,
   habitRowToDomain,
@@ -10,6 +11,15 @@ import {
 } from "./supabase-mapping";
 
 type CategoryCache = Record<string, string>;
+type TaskWithJoins = Parameters<typeof taskRowToDomain>[0] & {
+  categories?: { name: string | null } | null;
+  task_tags?: { tags: { name: string | null } | null }[] | null;
+};
+type TaskRow = Parameters<typeof taskRowToDomain>[0];
+type HabitRow = Parameters<typeof habitRowToDomain>[0];
+type HabitLogRow = Parameters<typeof mergeHabitLogs>[1][number];
+type TagRow = { id: string; user_id: string; name: string };
+type TaskTagRow = { task_id: string; tag_id: string };
 
 /**
  * Supabase implementation of `JustDoStorage`.
@@ -52,12 +62,118 @@ export const createSupabaseStorage = (
     return cache[taskCategoryToName[category]] ?? null;
   };
 
+  const normalizeTags = (tags: string[]): string[] =>
+    Array.from(
+      new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)),
+    );
+
+  const ensureTagIds = async (tags: string[]): Promise<string[]> => {
+    const ids: string[] = [];
+    for (const name of normalizeTags(tags)) {
+      const { data, error } = await client
+        .from("tags")
+        .upsert({ user_id: userId, name }, { onConflict: "user_id,name" })
+        .select("id")
+        .single();
+      if (error) throw error;
+      ids.push(data.id);
+    }
+    return ids;
+  };
+
+  const replaceTaskTags = async (taskId: string, tagNames: string[]) => {
+    const nextTagIds = await ensureTagIds(tagNames);
+    const { data: currentRows, error: currentError } = await client
+      .from("task_tags")
+      .select("tag_id")
+      .eq("task_id", taskId);
+    if (currentError) throw currentError;
+
+    const currentTagIds = new Set((currentRows ?? []).map((row) => row.tag_id));
+    const nextTagIdSet = new Set(nextTagIds);
+    const staleTagIds = [...currentTagIds].filter((tagId) => !nextTagIdSet.has(tagId));
+    const newTagIds = nextTagIds.filter((tagId) => !currentTagIds.has(tagId));
+
+    if (staleTagIds.length > 0) {
+      const { error } = await client
+        .from("task_tags")
+        .delete()
+        .eq("task_id", taskId)
+        .in("tag_id", staleTagIds);
+      if (error) throw error;
+    }
+
+    if (newTagIds.length > 0) {
+      const { error } = await client
+        .from("task_tags")
+        .upsert(newTagIds.map((tagId) => ({ task_id: taskId, tag_id: tagId })));
+      if (error) throw error;
+    }
+  };
+
+  const taskFromJoinedRow = (row: TaskWithJoins) =>
+    taskRowToDomain(
+      row,
+      row.categories?.name ?? null,
+      (row.task_tags ?? [])
+        .map((join) => join.tags?.name)
+        .filter((name): name is string => Boolean(name)),
+    );
+
+  const loadTaskWithTags = async (taskId: string) => {
+    const { data, error } = await client
+      .from("tasks")
+      .select("*, categories(name), task_tags(tags(name))")
+      .eq("user_id", userId)
+      .eq("id", taskId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? taskFromJoinedRow(data as TaskWithJoins) : null;
+  };
+
+  const emitTaskReload = async (
+    callback: (change: RemoteChange) => void,
+    taskId: string,
+  ) => {
+    const task = await loadTaskWithTags(taskId);
+    if (task) {
+      emit(callback, { type: "task_upserted", task });
+    } else {
+      emit(callback, { type: "task_deleted", id: taskId });
+    }
+  };
+
+  const emitTasksForTag = async (
+    callback: (change: RemoteChange) => void,
+    tagId: string,
+  ) => {
+    const { data, error } = await client
+      .from("task_tags")
+      .select("task_id")
+      .eq("tag_id", tagId);
+    if (error) throw error;
+
+    await Promise.all(
+      Array.from(new Set((data ?? []).map((row) => row.task_id))).map((taskId) =>
+        emitTaskReload(callback, taskId),
+      ),
+    );
+  };
+
+  const emit = (callback: (change: RemoteChange) => void, change: RemoteChange) => {
+    callback(change);
+  };
+
+  const emitError = (callback: (change: RemoteChange) => void, error: unknown) => {
+    callback({ type: "error", error });
+  };
+
   return {
     async load(): Promise<Persisted | null> {
       const [tasksResult, habitsResult, logsResult] = await Promise.all([
         client
           .from("tasks")
-          .select("*, categories(name)")
+          .select("*, categories(name), task_tags(tags(name))")
           .eq("user_id", userId),
         client.from("habits").select("*").eq("user_id", userId),
         client.from("habit_logs").select("*").eq("user_id", userId),
@@ -67,9 +183,7 @@ export const createSupabaseStorage = (
       if (habitsResult.error) throw habitsResult.error;
       if (logsResult.error) throw logsResult.error;
 
-      const tasks = (tasksResult.data ?? []).map((row) =>
-        taskRowToDomain(row, row.categories?.name ?? null),
-      );
+      const tasks = ((tasksResult.data ?? []) as TaskWithJoins[]).map(taskFromJoinedRow);
       const habitsBare = (habitsResult.data ?? []).map(habitRowToDomain);
       const habits = mergeHabitLogs(habitsBare, logsResult.data ?? []);
 
@@ -109,6 +223,7 @@ export const createSupabaseStorage = (
         .from("tasks")
         .upsert(taskDomainToInsert(task, userId, categoryId));
       if (error) throw error;
+      await replaceTaskTags(task.id, task.tags);
     },
 
     async deleteTask(id) {
@@ -150,6 +265,161 @@ export const createSupabaseStorage = (
           .eq("log_date", iso);
         if (error) throw error;
       }
+    },
+
+    subscribe(callback) {
+      const channels: RealtimeChannel[] = [];
+
+      const tasksChannel = client
+        .channel(`just-do:${userId}:tasks`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "tasks",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            void (async () => {
+              if (payload.eventType === "DELETE") {
+                const oldRow = payload.old as Partial<TaskRow>;
+                if (oldRow.id) emit(callback, { type: "task_deleted", id: oldRow.id });
+                return;
+              }
+
+              const row = payload.new as TaskRow;
+              await emitTaskReload(callback, row.id);
+            })().catch((error: unknown) => emitError(callback, error));
+          },
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            emitError(callback, new Error("tasks realtime subscription failed"));
+          }
+        });
+      channels.push(tasksChannel);
+
+      const tagsChannel = client
+        .channel(`just-do:${userId}:tags`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "tags",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            void (async () => {
+              if (payload.eventType === "INSERT") return;
+              const row =
+                payload.eventType === "DELETE"
+                  ? (payload.old as Partial<TagRow>)
+                  : (payload.new as Partial<TagRow>);
+              if (row.id) await emitTasksForTag(callback, row.id);
+            })().catch((error: unknown) => emitError(callback, error));
+          },
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            emitError(callback, new Error("tags realtime subscription failed"));
+          }
+        });
+      channels.push(tagsChannel);
+
+      const taskTagsChannel = client
+        .channel(`just-do:${userId}:task_tags`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "task_tags",
+          },
+          (payload) => {
+            void (async () => {
+              const row =
+                payload.eventType === "DELETE"
+                  ? (payload.old as Partial<TaskTagRow>)
+                  : (payload.new as Partial<TaskTagRow>);
+              if (row.task_id) await emitTaskReload(callback, row.task_id);
+            })().catch((error: unknown) => emitError(callback, error));
+          },
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            emitError(callback, new Error("task tags realtime subscription failed"));
+          }
+        });
+      channels.push(taskTagsChannel);
+
+      const habitsChannel = client
+        .channel(`just-do:${userId}:habits`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "habits",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as Partial<HabitRow>;
+              if (oldRow.id) emit(callback, { type: "habit_deleted", id: oldRow.id });
+              return;
+            }
+
+            emit(callback, {
+              type: "habit_upserted",
+              habit: habitRowToDomain(payload.new as HabitRow),
+            });
+          },
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            emitError(callback, new Error("habits realtime subscription failed"));
+          }
+        });
+      channels.push(habitsChannel);
+
+      const logsChannel = client
+        .channel(`just-do:${userId}:habit_logs`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "habit_logs",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            const row =
+              payload.eventType === "DELETE"
+                ? (payload.old as Partial<HabitLogRow>)
+                : (payload.new as Partial<HabitLogRow>);
+            if (!row.habit_id || !row.log_date) return;
+            emit(callback, {
+              type: "habit_log_set",
+              habitId: row.habit_id,
+              iso: row.log_date,
+              value: payload.eventType === "DELETE" ? 0 : row.is_completed ? 1 : 0,
+            });
+          },
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            emitError(callback, new Error("habit logs realtime subscription failed"));
+          }
+        });
+      channels.push(logsChannel);
+
+      return () => {
+        for (const channel of channels) {
+          void client.removeChannel(channel);
+        }
+      };
     },
   };
 };

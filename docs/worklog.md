@@ -146,3 +146,203 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - Codex 가 다음 작업 시작 시 sanity check 명령 4개를 핸드오프에 적어둠 (`git status`, `supabase status`, `lint`, `build`, `test`).
 - `apps/web/.env.local` 은 머신-로컬 키이므로 git 에 들어가지 않는다. 다른 환경에서 이어 작업하려면 `supabase status -o env` 로 재생성.
+
+## 2026-04-29 Phase 4-3: 인증
+
+### Codex
+
+- `@supabase/ssr` 의존성 추가.
+- `apps/web/src/lib/supabase/client.ts` 를 `createBrowserClient` 기반으로 전환하고, `apps/web/src/lib/supabase/server.ts` 에 cookie-aware server client 추가.
+- `apps/web/src/lib/auth/useAuth.tsx` 추가:
+  - 앱에는 `{ user, status, signInWithProvider, signOut }` 도메인 타입만 노출.
+  - Supabase `getSession`, `onAuthStateChange`, `signInWithOAuth`, `signOut` 호출은 훅 내부로 격리.
+- `apps/web/src/app/(auth)/callback/route.ts` 추가. 실제 URL은 route group 특성상 `/callback`.
+- `JustDoProvider` 가 `userId` 를 받아 로그인 상태에서는 `createSupabaseStorage(client, userId)`, 게스트 상태에서는 기존 localStorage 어댑터를 사용하도록 변경.
+- 새 task/habit 생성 ID를 Supabase UUID 컬럼과 호환되도록 `crypto.randomUUID()` 로 변경.
+- Settings 계정 섹션에 Google/Apple 로그인 및 로그아웃 액션 연결.
+- `supabase/config.toml` 에 Google/Apple OAuth provider env 참조와 callback redirect URL 추가.
+- `apps/web/.env.local.example` 에 OAuth provider credential 키 추가.
+- Supabase task tag round-trip 구현:
+  - load 시 `task_tags(tags(name))` join 으로 `Task.tags` 채움.
+  - upsert 시 `tags` lookup-or-create 후 `task_tags` upsert/delete 로 매핑 교체.
+- 테스트 추가/갱신:
+  - `lib/auth/useAuth.test.ts` — session mapping, OAuth redirect call helper.
+  - `supabase-mapping.test.ts` — task tag mapping.
+
+### Verification
+
+- `supabase status` → local development setup running (Docker 접근은 권한 상승으로 확인).
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 55 tests pass.
+- `npm --prefix apps/web run build` → pass. 샌드박스에서는 Turbopack 포트 바인딩 제한으로 실패하여 권한 상승으로 재실행.
+
+### Notes
+
+- 실제 Google/Apple OAuth 로그인과 signup fanout (`public.users`, 기본 categories, Trial subscription) 검증은 provider credential 값을 `.env.local` 또는 hosted Supabase dashboard에 넣은 뒤 진행해야 한다.
+- `settings` / `view` 의 원격 영속화는 여전히 미결이며 Supabase 어댑터에서 no-op 상태다.
+
+## 2026-04-29 Phase 4-3: 로컬 OAuth 검증 / 중복 저장 보정
+
+### Codex
+
+- 사용자가 Google Cloud Console에서 JustDo 전용 OAuth client 를 생성하고 `.env.local` 에 값을 반영.
+- `.env.local` 을 shell 환경변수로 로드한 상태에서 `supabase stop && supabase start` 를 실행해 로컬 Auth 컨테이너에 Google provider 값을 반영.
+- Google OAuth 로그인 성공 후 로컬 DB에서 signup fanout 확인:
+  - `auth.users` row 생성.
+  - `public.users` row 생성 (`display_name`, `avatar_url` 포함).
+  - 기본 categories `나` / `외부` 생성.
+  - `user_subscriptions` trial row 생성.
+- 앱에서 task/habit 생성 및 habit check 후 원격 저장 확인:
+  - `tasks` 저장 확인.
+  - `habits` 저장 확인.
+  - `habit_logs` 저장 확인.
+- React dev/StrictMode에서 `setState` updater 내부 side effect가 두 번 실행될 수 있어 task/habit 원격 insert가 중복되는 문제를 확인.
+- `store.tsx` mutation handlers 를 보정:
+  - `setState` updater 내부에서 `persist*` 호출 제거.
+  - 생성/수정/삭제/토글 payload 를 이벤트 핸들러에서 먼저 계산하고 state update 후 한 번만 persistence 호출.
+- 날짜/시간 입력 UI는 현재 브라우저 기본 `input type="date"` / `input type="time"` 사용. custom picker 개선은 UX backlog 로만 기록.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 55 tests pass.
+
+## 2026-04-29 Phase 4-3: 인증 상태 UI 정리
+
+### Codex
+
+- `useAuth` 반환값에 `error` / `clearError` 추가.
+- `getSession`, `signInWithProvider`, `signOut` 실패를 auth error state 로 반영.
+- `lib/auth/providers.ts` 추가:
+  - Google provider 는 기본 활성.
+  - Apple provider 는 `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true` 일 때만 활성.
+- Settings 계정 섹션 개선:
+  - 인증 상태 (`확인 중` / `로그인됨` / `게스트`) 표시.
+  - profile detail 을 실제 auth user metadata/email 기반으로 표시.
+  - auth error 메시지를 계정 섹션 안에 표시.
+  - Google 로그인은 활성, Apple 로그인은 credential 준비 전 비활성 상태로 표시.
+  - 로그아웃 실패도 auth error 로 표시.
+- `.env.local.example` 에 client-visible provider switch 추가:
+  - `NEXT_PUBLIC_AUTH_GOOGLE_ENABLED=true`
+  - `NEXT_PUBLIC_AUTH_APPLE_ENABLED=false`
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 55 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
+## 2026-04-29 Phase 4-3: 저장 오류 표시
+
+### Codex
+
+- `JustDoProvider` 에 store-level `syncError` / `clearSyncError` 추가.
+- hydrate 실패와 모든 persistence mutation 실패를 `syncError` 로 캡처.
+- 개발 모드에서는 storage error 를 `console.error` 로도 출력.
+- 성공한 persistence operation 은 기존 오류를 clear.
+- Settings 화면에 `동기화` 섹션 추가:
+  - 저장 상태 `정상` / `확인 필요` 표시.
+  - 저장 오류 메시지 표시.
+  - 오류 지우기 액션 제공.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 55 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
+## 2026-04-29 Local Dev 데이터 정리 절차
+
+### Codex
+
+- `supabase/scripts/reset_local_app_data.sql` 추가.
+  - 로컬 테스트 `auth.users` 를 삭제.
+  - FK cascade 로 `public.users`, categories, tags, tasks, habits, habit_logs, subscriptions 등 user-owned app data 정리.
+  - 실행 전/후 주요 테이블 count 를 출력.
+- root `package.json` 에 `npm run db:reset-local-app-data` 스크립트 추가.
+- `docs/local_dev.md` 추가:
+  - 로컬 Supabase 앱 데이터 reset 절차.
+  - 브라우저 `localStorage` 정리 참고.
+  - hosted/shared DB 에서 실행하지 말라는 경고.
+- `README.md` 에 로컬 Supabase 시작과 app data reset 명령 추가.
+
+### Verification
+
+- `npm run db:reset-local-app-data -- --help` 로 스크립트 명령 경로와 Supabase CLI flag 인식 확인.
+- 실제 데이터 삭제 실행은 하지 않음.
+
+## 2026-04-29 Phase 4-4: Realtime
+
+### Codex
+
+- `supabase/migrations/20260429052000_enable_realtime.sql` 추가.
+  - `tasks`, `habits`, `habit_logs` 에 `replica identity full` 설정.
+  - 세 테이블을 `supabase_realtime` publication 에 추가.
+- `JustDoStorage.subscribe(callback)` 인터페이스 확장.
+- `RemoteChange` 도메인 이벤트 타입 추가:
+  - `task_upserted` / `task_deleted`
+  - `habit_upserted` / `habit_deleted`
+  - `habit_log_set`
+  - `error`
+- localStorage / memory adapter 는 no-op unsubscribe 를 반환.
+- Supabase adapter 에 Realtime 구독 추가:
+  - `tasks`: INSERT/UPDATE/DELETE 를 Task 도메인 이벤트로 매핑.
+  - `habits`: INSERT/UPDATE/DELETE 를 Habit 도메인 이벤트로 매핑.
+  - `habit_logs`: INSERT/UPDATE/DELETE 를 habit log set 이벤트로 매핑.
+- `store.tsx` 가 `activeStorage.subscribe` 를 사용해 remote event 를 앱 state 에 반영하도록 연결.
+- Realtime subscription error 는 기존 `syncError` 경로로 표시.
+
+### Verification
+
+- `supabase migration up` → `20260429052000_enable_realtime.sql` 로컬 DB 적용.
+- `pg_publication_tables` 확인 → `tasks`, `habits`, `habit_logs` 가 `supabase_realtime` publication 에 등록됨.
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 55 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
+### Notes
+
+- 현재 Realtime 범위는 task/habit/habit_logs 본문이다. `task_tags` / `tags` join 변경은 realtime 이벤트로 아직 즉시 반영하지 않는다.
+- 같은 클라이언트에서 발생한 change echo 는 idempotent upsert/delete 로 처리한다.
+
+## 2026-04-29 Widget Sync Strategy
+
+### Codex
+
+- `docs/widget_sync_strategy.md` 추가.
+- 위젯을 passive view 가 아니라 short-lived write client 로 정의.
+- 목표 구조 명시:
+  - Widget tap → App Intent → shared iOS data layer / sync client → Supabase write.
+  - Open web/iOS clients 는 Realtime 으로 즉시 반영.
+  - Closed clients 는 next load/sync 에 반영.
+- WidgetKit 은 지속 Realtime 구독 클라이언트가 아니므로 App Group cache + mutation queue 가 필요하다고 정리.
+- Task complete / Habit check 의 durable write path 와 Realtime event 요구사항 기록.
+- `just_do_planning.md`, `just_do_prd.md`, `next_steps.md` 에 위젯 동기화 원칙과 추후 iOS 계획 반영.
+
+### Notes
+
+- 다음 Realtime 보강은 `tags` / `task_tags` 반영.
+- iOS 구현 전 결정 필요:
+  - Core Data only vs App Group snapshot 병행.
+  - Widget App Intent 가 직접 network write 를 시도할지, queue-first 로 갈지.
+  - mutation queue schema.
+
+## 2026-04-29 Phase 4-4: Tags Realtime 보강
+
+### Codex
+
+- Realtime publication 범위에 `tags`, `task_tags` 추가.
+- `tags`, `task_tags` 에 `replica identity full` 설정.
+- Supabase storage adapter 보강:
+  - task INSERT/UPDATE realtime payload 처리 시 raw row만 매핑하지 않고 task를 `categories` + `task_tags(tags)` join 으로 재조회.
+  - `task_tags` INSERT/UPDATE/DELETE 발생 시 해당 `task_id` 를 재조회해 `Task.tags` 최신 상태 반영.
+  - `tags` UPDATE/DELETE 발생 시 연결된 task들을 재조회해 tag name/removal 반영.
+  - Realtime task reload 중 task가 없으면 `task_deleted` 이벤트로 처리.
+- 로컬 DB는 이미 `20260429052000_enable_realtime.sql` 이 적용된 상태였기 때문에, 같은 변경을 `supabase db query` 로 보정 적용.
+
+### Verification
+
+- `pg_publication_tables` 확인 → `tasks`, `tags`, `task_tags`, `habits`, `habit_logs` 가 `supabase_realtime` publication 에 등록됨.
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 55 tests pass.
+- `npm --prefix apps/web run build` → pass.

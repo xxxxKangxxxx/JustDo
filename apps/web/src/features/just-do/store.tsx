@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { addMonths, todayISO } from "@/lib/date";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   AppState,
   Habit,
@@ -25,14 +26,18 @@ import {
   mergePersisted,
   type JustDoStorage,
   type PersistedView,
+  type RemoteChange,
 } from "./persistence";
 import { createInitialState } from "./sample-data";
+import { createSupabaseStorage } from "./supabase-storage";
 
 const defaultStorageKey = "just-do/web/v1";
 const defaultStorage = createLocalStorageStorage(defaultStorageKey);
 
 type StoreValue = {
   state: AppState;
+  syncError: string | null;
+  clearSyncError: () => void;
   setTab: (tab: TabId) => void;
   setDark: (dark: boolean) => void;
   setMonth: (year: number, month: number) => void;
@@ -62,91 +67,190 @@ const viewOf = (state: AppState): PersistedView => ({
   dark: state.view.dark,
 });
 
+const upsertById = <T extends { id: string }>(list: T[], item: T): T[] => {
+  const index = list.findIndex((existing) => existing.id === item.id);
+  if (index === -1) return [...list, item];
+  const next = list.slice();
+  next[index] = item;
+  return next;
+};
+
 export function JustDoProvider({
   children,
-  storage = defaultStorage,
+  storage,
+  userId = null,
 }: {
   children: ReactNode;
   storage?: JustDoStorage;
+  userId?: string | null;
 }) {
+  const activeStorage = useMemo(() => {
+    if (storage) return storage;
+    if (userId) return createSupabaseStorage(getSupabaseClient(), userId);
+    return defaultStorage;
+  }, [storage, userId]);
   const [state, setState] = useState<AppState>(createInitialState);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const hydratedRef = useRef(false);
+
+  const reportSyncError = useCallback((err: unknown) => {
+    const message = err instanceof Error && err.message
+      ? err.message
+      : "저장 중 문제가 발생했습니다.";
+    setSyncError(message);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("JustDo storage error:", err);
+    }
+  }, []);
+
+  const clearSyncError = useCallback(() => setSyncError(null), []);
+
+  const persist = useCallback(
+    (operation: Promise<void>) => {
+      operation.then(clearSyncError).catch(reportSyncError);
+    },
+    [clearSyncError, reportSyncError],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    storage.load().then((saved) => {
-      if (cancelled) return;
-      if (saved) {
-        setState((current) => mergePersisted(current, saved));
-      }
-      hydratedRef.current = true;
-    });
+    hydratedRef.current = false;
+    activeStorage
+      .load()
+      .then((saved) => {
+        if (cancelled) return;
+        if (saved) {
+          setState((current) => mergePersisted(current, saved));
+        }
+        hydratedRef.current = true;
+        clearSyncError();
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        hydratedRef.current = true;
+        reportSyncError(err);
+      });
     return () => {
       cancelled = true;
     };
-  }, [storage]);
+  }, [activeStorage, clearSyncError, reportSyncError]);
 
-  // Persistence helpers — fire-and-forget. Adapters are expected not to throw
-  // on the happy path; failures will be surfaced via subscribe() in Phase 4-4.
+  const applyRemoteChange = useCallback(
+    (change: RemoteChange) => {
+      if (change.type === "error") {
+        reportSyncError(change.error);
+        return;
+      }
+
+      clearSyncError();
+
+      setState((current) => {
+        switch (change.type) {
+          case "task_upserted":
+            return { ...current, tasks: upsertById(current.tasks, change.task) };
+          case "task_deleted":
+            return {
+              ...current,
+              tasks: current.tasks.filter((task) => task.id !== change.id),
+              view: {
+                ...current.view,
+                sheet: current.view.sheet?.taskId === change.id ? null : current.view.sheet,
+                detailTaskId:
+                  current.view.detailTaskId === change.id ? null : current.view.detailTaskId,
+              },
+            };
+          case "habit_upserted": {
+            const existing = current.habits.find((habit) => habit.id === change.habit.id);
+            const habit = existing
+              ? { ...change.habit, log: existing.log }
+              : change.habit;
+            return { ...current, habits: upsertById(current.habits, habit) };
+          }
+          case "habit_deleted":
+            return {
+              ...current,
+              habits: current.habits.filter((habit) => habit.id !== change.id),
+            };
+          case "habit_log_set":
+            return {
+              ...current,
+              habits: current.habits.map((habit) =>
+                habit.id === change.habitId
+                  ? { ...habit, log: { ...habit.log, [change.iso]: change.value } }
+                  : habit,
+              ),
+            };
+        }
+      });
+    },
+    [clearSyncError, reportSyncError],
+  );
+
+  useEffect(() => {
+    if (!activeStorage.subscribe) return;
+    return activeStorage.subscribe(applyRemoteChange);
+  }, [activeStorage, applyRemoteChange]);
+
+  // Persistence helpers — fire-and-forget from the caller's perspective. Any
+  // rejected adapter operation is captured in `syncError` for the UI.
   const persistTask = useCallback(
     (task: Task) => {
       if (!hydratedRef.current) return;
-      void storage.upsertTask(task);
+      persist(activeStorage.upsertTask(task));
     },
-    [storage],
+    [activeStorage, persist],
   );
   const persistTaskDelete = useCallback(
     (id: string) => {
       if (!hydratedRef.current) return;
-      void storage.deleteTask(id);
+      persist(activeStorage.deleteTask(id));
     },
-    [storage],
+    [activeStorage, persist],
   );
   const persistHabit = useCallback(
     (habit: Habit) => {
       if (!hydratedRef.current) return;
-      void storage.upsertHabit(habit);
+      persist(activeStorage.upsertHabit(habit));
     },
-    [storage],
+    [activeStorage, persist],
   );
   const persistHabitLog = useCallback(
     (habitId: string, iso: string, value: 0 | 1) => {
       if (!hydratedRef.current) return;
-      void storage.setHabitLog(habitId, iso, value);
+      persist(activeStorage.setHabitLog(habitId, iso, value));
     },
-    [storage],
+    [activeStorage, persist],
   );
   const persistSettings = useCallback(
     (settings: Settings) => {
       if (!hydratedRef.current) return;
-      void storage.saveSettings(settings);
+      persist(activeStorage.saveSettings(settings));
     },
-    [storage],
+    [activeStorage, persist],
   );
   const persistView = useCallback(
     (view: PersistedView) => {
       if (!hydratedRef.current) return;
-      void storage.saveView(view);
+      persist(activeStorage.saveView(view));
     },
-    [storage],
+    [activeStorage, persist],
   );
 
   const updateView = useCallback(
     (fn: (view: AppState["view"]) => AppState["view"], opts: { persist?: boolean } = {}) => {
       const persist = opts.persist ?? true;
-      setState((current) => {
-        const nextView = fn(current.view);
-        const next = { ...current, view: nextView };
-        if (persist) persistView(viewOf(next));
-        return next;
-      });
+      const nextView = fn(state.view);
+      setState((current) => ({ ...current, view: nextView }));
+      if (persist) persistView(viewOf({ ...state, view: nextView }));
     },
-    [persistView],
+    [persistView, state],
   );
 
   const value = useMemo<StoreValue>(
     () => ({
       state,
+      syncError,
+      clearSyncError,
       setTab: (tab) => updateView((view) => ({ ...view, tab, detailTaskId: null })),
       setDark: (dark) => updateView((view) => ({ ...view, dark })),
       setMonth: (year, month) => updateView((view) => ({ ...view, year, month })),
@@ -166,81 +270,78 @@ export function JustDoProvider({
         updateView((view) => ({ ...view, detailTaskId: taskId }), { persist: false }),
       closeDetail: () =>
         updateView((view) => ({ ...view, detailTaskId: null }), { persist: false }),
-      toggleTask: (id) =>
-        setState((s) => {
-          let updated: Task | null = null;
-          const tasks = s.tasks.map((task) => {
-            if (task.id !== id) return task;
-            updated = { ...task, isCompleted: !task.isCompleted };
-            return updated;
-          });
-          if (updated) persistTask(updated);
-          return { ...s, tasks };
-        }),
-      addTask: (input) =>
-        setState((s) => {
-          const created: Task = {
-            id: `t_${crypto.randomUUID().slice(0, 8)}`,
-            tags: [],
-            isCompleted: false,
-            ...input,
-          };
-          persistTask(created);
-          return { ...s, tasks: [...s.tasks, created] };
-        }),
-      updateTask: (id, patch) =>
-        setState((s) => {
-          let updated: Task | null = null;
-          const tasks = s.tasks.map((task) => {
-            if (task.id !== id) return task;
-            updated = { ...task, ...patch };
-            return updated;
-          });
-          if (updated) persistTask(updated);
-          return { ...s, tasks };
-        }),
-      deleteTask: (id) =>
-        setState((s) => {
-          persistTaskDelete(id);
-          return {
-            ...s,
-            tasks: s.tasks.filter((task) => task.id !== id),
-            view: {
-              ...s.view,
-              sheet: s.view.sheet?.taskId === id ? null : s.view.sheet,
-              detailTaskId: s.view.detailTaskId === id ? null : s.view.detailTaskId,
-            },
-          };
-        }),
-      toggleHabit: (id, iso) =>
-        setState((s) => {
-          let nextValue: 0 | 1 | null = null;
-          const habits = s.habits.map((habit) => {
-            if (habit.id !== id) return habit;
-            nextValue = habit.log[iso] ? 0 : 1;
-            return { ...habit, log: { ...habit.log, [iso]: nextValue } };
-          });
-          if (nextValue !== null) persistHabitLog(id, iso, nextValue);
-          return { ...s, habits };
-        }),
-      addHabit: (input) =>
-        setState((s) => {
-          const created: Habit = {
-            id: `h_${crypto.randomUUID().slice(0, 8)}`,
-            category: "habit",
-            startedAt: todayISO(),
-            log: {},
-            ...input,
-          };
-          persistHabit(created);
-          return { ...s, habits: [...s.habits, created] };
-        }),
-      updateSetting: (key, value) =>
-        setState((s) => {
-          const settings = { ...s.settings, [key]: value };
-          persistSettings(settings);
-          return { ...s, settings };
-        }),
+      toggleTask: (id) => {
+        const updated = state.tasks.find((task) => task.id === id);
+        if (!updated) return;
+        const nextTask = { ...updated, isCompleted: !updated.isCompleted };
+        setState((s) => ({
+          ...s,
+          tasks: s.tasks.map((task) => (task.id === id ? nextTask : task)),
+        }));
+        persistTask(nextTask);
+      },
+      addTask: (input) => {
+        const created: Task = {
+          id: crypto.randomUUID(),
+          tags: [],
+          isCompleted: false,
+          ...input,
+        };
+        setState((s) => ({ ...s, tasks: [...s.tasks, created] }));
+        persistTask(created);
+      },
+      updateTask: (id, patch) => {
+        const existing = state.tasks.find((task) => task.id === id);
+        if (!existing) return;
+        const updated = { ...existing, ...patch };
+        setState((s) => ({
+          ...s,
+          tasks: s.tasks.map((task) => (task.id === id ? updated : task)),
+        }));
+        persistTask(updated);
+      },
+      deleteTask: (id) => {
+        setState((s) => ({
+          ...s,
+          tasks: s.tasks.filter((task) => task.id !== id),
+          view: {
+            ...s.view,
+            sheet: s.view.sheet?.taskId === id ? null : s.view.sheet,
+            detailTaskId: s.view.detailTaskId === id ? null : s.view.detailTaskId,
+          },
+        }));
+        persistTaskDelete(id);
+      },
+      toggleHabit: (id, iso) => {
+        const existing = state.habits.find((habit) => habit.id === id);
+        if (!existing) return;
+        const nextValue: 0 | 1 = existing.log[iso] ? 0 : 1;
+        setState((s) => ({
+          ...s,
+          habits: s.habits.map((habit) =>
+            habit.id === id
+              ? { ...habit, log: { ...habit.log, [iso]: nextValue } }
+              : habit,
+          ),
+        }));
+        persistHabitLog(id, iso, nextValue);
+      },
+      addHabit: (input) => {
+        const created: Habit = {
+          id: crypto.randomUUID(),
+          category: "habit",
+          startedAt: todayISO(),
+          log: {},
+          ...input,
+        };
+        setState((s) => ({ ...s, habits: [...s.habits, created] }));
+        persistHabit(created);
+      },
+      updateSetting: (key, value) => {
+        const settings = { ...state.settings, [key]: value };
+        setState((s) => ({ ...s, settings }));
+        persistSettings(settings);
+      },
       reset: () => setState(createInitialState()),
     }),
     [
@@ -251,6 +352,8 @@ export function JustDoProvider({
       persistHabit,
       persistHabitLog,
       persistSettings,
+      syncError,
+      clearSyncError,
     ],
   );
 

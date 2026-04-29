@@ -3,6 +3,7 @@
 import { AddSheet } from "./add-sheet";
 import { DetailScreen } from "./detail-screen";
 import { HomeScreen } from "./home-screen";
+import { AuthProvider, useAuth } from "@/lib/auth/useAuth";
 import { PhoneFrame, StatusBar } from "./primitives";
 import { SettingsScreen } from "./settings-screen";
 import { StatsScreen } from "./stats-screen";
@@ -11,7 +12,16 @@ import { TabBar } from "./tab-bar";
 
 export function JustDoApp() {
   return (
-    <JustDoProvider>
+    <AuthProvider>
+      <JustDoAppWithAuth />
+    </AuthProvider>
+  );
+}
+
+function JustDoAppWithAuth() {
+  const { user } = useAuth();
+  return (
+    <JustDoProvider userId={user?.id ?? null}>
       <JustDoViewport />
     </JustDoProvider>
   );

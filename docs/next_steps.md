@@ -57,18 +57,23 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] 어댑터/매핑 단위 테스트.
 
 ### 4-3. 인증
-- [ ] `lib/auth/useAuth.tsx` — Supabase Auth를 감싸는 훅. `{ user, status, signIn, signOut }` 도메인 타입만 노출. Supabase 세션/JWT 형태는 훅 안에서만 보임.
-- [ ] `app/(auth)/callback/route.ts` — OAuth 콜백 처리.
-- [ ] Apple / Google provider 활성화 (`supabase/config.toml` `[auth.external.*]` + `.env.local`에 client id/secret).
-- [ ] `JustDoProvider`가 `useAuth().user`를 받아 로그인 상태에서는 `createSupabaseStorage(client, user.id)`, 비로그인 상태에서는 `createLocalStorageStorage(...)`를 사용하도록 storage 선택 로직 추가.
-- [ ] `public.users` upsert / `user_subscriptions` Trial 레코드 생성은 `handle_new_auth_user()` 트리거가 처리 — 로그인 흐름에서 별도 확인만.
-- [ ] `Task.tags` round-trip 활성화 — `task_tags` upsert/delete + `tags` 테이블 lookup-or-create. (Phase 4-2에서 미뤄둔 항목)
-- [ ] `useAuth` 단위 테스트 (mocked Supabase Auth client).
+- [x] `lib/auth/useAuth.tsx` — Supabase Auth를 감싸는 훅. `{ user, status, signIn, signOut }` 도메인 타입만 노출. Supabase 세션/JWT 형태는 훅 안에서만 보임.
+- [x] `app/(auth)/callback/route.ts` — OAuth 콜백 처리.
+- [x] Apple / Google provider 활성화 (`supabase/config.toml` `[auth.external.*]` + `.env.local`에 client id/secret). 실제 provider credential 값 입력은 배포/로컬 OAuth 검증 시 필요.
+- [x] `JustDoProvider`가 `useAuth().user`를 받아 로그인 상태에서는 `createSupabaseStorage(client, user.id)`, 비로그인 상태에서는 `createLocalStorageStorage(...)`를 사용하도록 storage 선택 로직 추가.
+- [x] `public.users` upsert / `user_subscriptions` Trial 레코드 생성은 `handle_new_auth_user()` 트리거가 처리 — Google OAuth 로그인 후 로컬 DB에서 확인.
+- [x] `Task.tags` round-trip 활성화 — `task_tags` upsert/delete + `tags` 테이블 lookup-or-create. (Phase 4-2에서 미뤄둔 항목)
+- [x] `useAuth` 단위 테스트 (mocked Supabase Auth client).
+- [x] React dev/StrictMode에서 `setState` updater 내부 side effect가 중복 원격 저장을 만들지 않도록 store mutation purity 보강.
+- [x] 인증 상태 UI 정리 — loading/signed-in/guest 상태 표시, 로그인 실패 메시지 노출, provider availability에 따라 Apple 버튼 비활성화.
+- [x] 원격 저장 오류 노출 — persistence 실패를 `syncError` 로 캡처하고 Settings 동기화 섹션에 표시.
+- [x] 로컬 개발 데이터 정리 절차 추가 — `npm run db:reset-local-app-data`, `docs/local_dev.md`.
 
 ### 4-4. Realtime
-- [ ] `JustDoStorage.subscribe(callback)` 인터페이스 확장.
-- [ ] tasks / habits / habit_logs 테이블 구독.
-- [ ] Realtime 페이로드를 도메인 이벤트 타입으로 매핑.
+- [x] `JustDoStorage.subscribe(callback)` 인터페이스 확장.
+- [x] tasks / habits / habit_logs 테이블 구독.
+- [x] Realtime 페이로드를 도메인 이벤트 타입으로 매핑.
+- [x] `task_tags` / `tags` realtime 반영. tag join 변경 시 affected task를 재조회해 `Task.tags` 최신 상태 반영.
 
 ### 4-5. 환경변수 / 보안
 - [x] `.env.local.example` 작성, `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` 분리 명시.
@@ -86,7 +91,18 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [ ] Create `apps/ios/` once the web domain model is stable.
 - [ ] Map the shared domain model to Swift/SwiftUI.
 - [ ] Plan Core Data entities from the Supabase schema.
+- [ ] Define iOS App Group cache and mutation queue for WidgetKit actions.
 - [ ] Implement WidgetKit small, medium, and large widgets based on `reference/screens/widgets.jsx`.
+
+## UX / UI Backlog
+
+- [ ] Date/time input polish: MVP는 브라우저/모바일 기본 `input type="date"` / `input type="time"` 유지. 추후 일관된 브랜드 경험이나 날짜 범위 선택 UX가 필요해지면 custom bottom-sheet picker 설계.
+
+## Sync / Widget Backlog
+
+- [x] Widget sync strategy documented in `docs/widget_sync_strategy.md`.
+- [ ] Define shared mutation event names that both web and iOS can implement.
+- [ ] Design iOS mutation queue schema for widget/offline writes.
 
 ## Open Decisions
 

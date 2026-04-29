@@ -33,3 +33,19 @@ The first implementation target lives in `apps/web/`.
 npm install
 npm run dev:web
 ```
+
+## Local Supabase
+
+Local development uses the Supabase CLI stack under `supabase/`.
+
+```bash
+supabase start
+```
+
+To clear local test accounts and app data without resetting migrations:
+
+```bash
+npm run db:reset-local-app-data
+```
+
+See `docs/local_dev.md` for the local reset procedure and browser data notes.

@@ -167,6 +167,10 @@
 #### 위젯 데이터 갱신
 - TimelineProvider로 주기적 갱신
 - Task 완료 처리 시 앱과 동기화
+- 위젯 체크 액션은 App Intent → iOS shared data layer / mutation queue → Supabase write 경로를 사용한다.
+- 앱/웹이 열려 있으면 Supabase Realtime으로 변경을 즉시 반영한다.
+- 위젯은 App Group cache를 읽고, action 후 WidgetKit timeline reload를 요청한다.
+- 자세한 운영 전략은 `widget_sync_strategy.md` 참고.
 
 ---
 

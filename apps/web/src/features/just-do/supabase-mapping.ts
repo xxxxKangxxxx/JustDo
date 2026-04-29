@@ -29,7 +29,11 @@ const nameToTaskCategory = (name: string | null | undefined): TaskCategory => {
 const isPriority = (value: string | null): value is Priority =>
   value === "high" || value === "medium" || value === "low";
 
-export const taskRowToDomain = (row: TaskRow, categoryName: string | null): Task => ({
+export const taskRowToDomain = (
+  row: TaskRow,
+  categoryName: string | null,
+  tags: string[] = [],
+): Task => ({
   id: row.id,
   title: row.title,
   category: nameToTaskCategory(categoryName),
@@ -38,9 +42,7 @@ export const taskRowToDomain = (row: TaskRow, categoryName: string | null): Task
   priority: isPriority(row.priority) ? row.priority : undefined,
   isCompleted: row.is_completed,
   scheduledTime: row.scheduled_time,
-  // tags: Phase 4-2 skips the task_tags join. The adapter round-trips an
-  // empty array; tags are wired up alongside auth in Phase 4-3.
-  tags: [],
+  tags,
 });
 
 export const taskDomainToInsert = (
