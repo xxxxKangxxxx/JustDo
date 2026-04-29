@@ -1,6 +1,17 @@
 # Just Do — DB 스키마 설계 v0.1
 > Supabase (PostgreSQL) 기준
 
+> **Source of truth:** `supabase/migrations/*.sql` — 실제 DB는 마이그레이션이 결정한다. 이 문서는 v0.1 설계 초안이며, 마이그레이션과 어긋나면 마이그레이션이 옳다.
+>
+> Phase 4-1에서 이 초안 대비 다음 항목이 보강되었다 (`supabase/migrations/20260429014750_init_schema.sql` 참고):
+> - `set_updated_at()` 트리거 함수 → `users` / `tasks` / `subtasks` / `habits` / `habit_logs` / `user_subscriptions` 에 부착.
+> - `tasks` 에 start/end_date 무결성 CHECK 추가.
+> - `handle_new_auth_user()` 트리거: 회원가입 시 `public.users` + 기본 카테고리 (`나` / `외부`) + Trial subscription 자동 생성.
+> - 누락됐던 RLS 정책 보강: `subtasks` / `task_dependencies` / `task_tags` / `habit_tags` / `user_subscriptions` / `plans`. 총 12개 테이블, 37개 정책.
+> - `public.users.id` 가 모든 비즈니스 FK 의 종착점 — `auth.users` 직접 참조는 `public.users` 와 signup 트리거 한 곳에만 (이전 가능성 보존, `backend_strategy.md` 참고).
+>
+> Phase 4-2에서 `supabase/migrations/20260429021447_add_habit_emoji.sql` 으로 `habits.emoji TEXT NOT NULL DEFAULT '🌱'` 컬럼이 추가되었다.
+
 ---
 
 ## 1. 테이블 구조 개요

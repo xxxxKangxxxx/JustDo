@@ -88,3 +88,61 @@ This document records coordination notes for work done with Codex and Claude Cod
 - 모든 Phase 4 이후 백엔드/데이터 작업은 `backend_strategy.md`를 따른다.
 - 컴포넌트가 `supabase.from(...)` 직접 호출 금지 — 어댑터 경유.
 - 비즈니스 데이터 FK는 `public.users.id` 경유, `auth.users.id` 직접 참조 금지.
+
+## 2026-04-29 Phase 4-1: 스키마/마이그레이션
+
+### Claude Code
+
+- Supabase CLI 2.95.4 설치 (`brew install supabase/tap/supabase`).
+- `supabase init`으로 `supabase/` 워크스페이스 + `config.toml` 생성.
+- `supabase/migrations/20260429014750_init_schema.sql` 작성:
+  - 12개 테이블, 모든 비즈니스 FK는 `public.users(id)` 경유.
+  - `set_updated_at()` 트리거 함수를 5개 테이블에 부착.
+  - `tasks`에 start/end_date 무결성 CHECK.
+  - `handle_new_auth_user()` 트리거: 회원가입 시 `public.users` + 기본 카테고리 (`나`/`외부`) + Trial subscription 자동 생성.
+  - 12개 테이블 RLS 활성화 + 37개 정책 (junction 테이블은 부모 ownership으로 검증).
+- 로컬 검증: `supabase start` → 마이그레이션 자동 적용, 트리거 fanout 정상, RLS로 다른 사용자 격리 확인 (other-user 0건 / owner 1건), CASCADE 정상.
+- `20260429021447_add_habit_emoji.sql` 추가: 도메인 `Habit.emoji`를 위한 컬럼 보강 (default `'🌱'`).
+
+### Notes
+
+- 추후 자체 백엔드 이전을 위해 `auth.users` 참조는 `public.users` 한 곳, `handle_new_auth_user` 트리거 한 곳으로 격리.
+- Supabase 전용 SQL은 `auth.uid()`(RLS 정책)뿐 — 표준 Postgres만 사용.
+
+## 2026-04-29 Phase 4-2: 클라이언트/어댑터
+
+### Claude Code
+
+- `@supabase/supabase-js` 의존성 추가.
+- `lib/supabase/client.ts`에 브라우저 클라이언트 싱글턴 + 환경변수 검증.
+- `apps/web/.env.local.example` 추가, 로컬 키로 `.env.local` 셋업.
+- `supabase gen types typescript --local` → `lib/supabase/database.types.ts`.
+- `JustDoStorage` 인터페이스를 per-entity로 확장:
+  - `load()` + `saveSettings(s)` + `saveView(v)` + `upsertTask(t)` + `deleteTask(id)` + `upsertHabit(h)` + `setHabitLog(habitId, iso, value)`.
+  - `createMemoryStorage` / `createLocalStorageStorage` 둘 다 새 인터페이스로 재구현 (공유 헬퍼: `applyMutation`, `upsertById`).
+- `store.tsx` 리팩토링: 디바운스 전체 save 제거, 각 mutation에서 fire-and-forget으로 어댑터 호출. `hydratedRef` 가드로 첫 hydrate 전 mutation은 스킵.
+- `features/just-do/supabase-mapping.ts`: 도메인 ↔ DB row 매핑 함수들 (`taskRowToDomain`, `taskDomainToInsert`, `habitRowToDomain`, `habitDomainToInsert`, `mergeHabitLogs`, `taskCategoryToName`).
+- `features/just-do/supabase-storage.ts`: `createSupabaseStorage(client, userId)`로 `JustDoStorage` 구현. categories name→id 캐시 lazy 로드. settings/view는 v1 스키마에 자리가 없어 일단 no-op (Phase 4-3에서 보강).
+- 테스트 52개 (이전 41 + 매핑 11) 모두 통과.
+
+### Notes
+
+- `Task.tags`는 어댑터에서 round-trip으로 빈 배열 처리 — `task_tags` 매핑은 Phase 4-3에서 auth와 함께.
+- `Task.category` 도메인 enum (`me`/`ext`)은 DB `categories.name`(`나`/`외부`)에 매핑. 회원가입 트리거가 시드하는 이름이 변경되면 `taskCategoryToName` 도 같이 업데이트해야 함.
+- `Habit.recur_type`은 v1 도메인에 아직 없어 어댑터에서 항상 `'daily'`로 insert. recurring 모델 정식화는 별도 작업.
+
+## 2026-04-29 Codex 핸드오프 준비
+
+### Claude Code
+
+- `docs/claude_handoff.md` 를 Claude Code → Codex 방향으로 전면 재작성. Phase 진행 상태, 활성 검증, Phase 4-3 부터의 권장 순서, 자주 열어볼 파일 경로 정리.
+- `docs/just_do_db_schema.md` 상단에 "마이그레이션이 source of truth" 노트 + Phase 4-1/4-2에서 보강된 항목 (`set_updated_at`, signup 트리거, 누락 RLS, `habits.emoji`) 명시.
+- `docs/next_steps.md` 정리:
+  - Phase 4-3 항목을 더 세분화 (`useAuth` 훅, OAuth 콜백, provider 활성화, storage 선택 로직, `Task.tags` round-trip 활성화, 테스트).
+  - Phase 4-5 의 `.env.local.example` 항목은 done 표시. service-role 검증은 server action 도입 시점으로 미룸.
+  - Open Decisions 갱신: 카테고리 네이밍은 결정, settings/view 원격 영속화 미결, `Habit.recur_type` 정식화 미결 추가.
+
+### Notes
+
+- Codex 가 다음 작업 시작 시 sanity check 명령 4개를 핸드오프에 적어둠 (`git status`, `supabase status`, `lint`, `build`, `test`).
+- `apps/web/.env.local` 은 머신-로컬 키이므로 git 에 들어가지 않는다. 다른 환경에서 이어 작업하려면 `supabase status -o env` 로 재생성.

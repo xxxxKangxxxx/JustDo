@@ -40,23 +40,30 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > 운영 원칙은 `backend_strategy.md` 참고. 모든 Supabase 의존 코드는 어댑터 뒤에 격리한다.
 
 ### 4-1. 스키마 / 마이그레이션
-- [ ] `docs/just_do_db_schema.md` 검토 — `auth.users` 직접 FK 제거, `public.users` 경유 구조 확인.
-- [ ] `supabase/` 워크스페이스 셋업 (`supabase init`).
-- [ ] raw SQL 마이그레이션 작성 (`supabase/migrations/0001_init.sql` 등).
-- [ ] 모든 user-owned 테이블 RLS 정책 작성.
-- [ ] `supabase start` 로컬 검증.
+- [x] `docs/just_do_db_schema.md` 검토 — `auth.users` 직접 FK 제거, `public.users` 경유 구조 확인.
+- [x] `supabase/` 워크스페이스 셋업 (`supabase init`).
+- [x] raw SQL 마이그레이션 작성 (`supabase/migrations/0001_init.sql` 등).
+- [x] 모든 user-owned 테이블 RLS 정책 작성.
+- [x] `supabase start` 로컬 검증.
+- [x] `habits.emoji` 보강 마이그레이션.
 
 ### 4-2. 클라이언트 / 어댑터
-- [ ] `apps/web`에 `@supabase/supabase-js` 설치.
-- [ ] `lib/supabase/` 클라이언트 (브라우저/서버 분리).
-- [ ] `supabase gen types typescript` 로 생성 타입 → 도메인 타입 매핑 레이어.
-- [ ] `JustDoStorage`를 구현하는 Supabase 어댑터.
-- [ ] 어댑터 단위 테스트 (Memory storage 패턴 확장).
+- [x] `apps/web`에 `@supabase/supabase-js` 설치.
+- [x] `lib/supabase/client.ts` 브라우저 클라이언트 (싱글턴, env 검증).
+- [x] `supabase gen types typescript --local` 로 `database.types.ts` 생성.
+- [x] `JustDoStorage`를 per-entity 인터페이스로 확장 (load + saveSettings/saveView + upsertTask/deleteTask + upsertHabit/setHabitLog).
+- [x] `localStorage` / `memory` 어댑터를 새 인터페이스로 재구현.
+- [x] `createSupabaseStorage(client, userId)` 어댑터 + 매핑 레이어 (`supabase-mapping.ts`).
+- [x] 어댑터/매핑 단위 테스트.
 
 ### 4-3. 인증
-- [ ] `useAuth()` 훅 추상화 — Supabase Auth는 구현 디테일.
-- [ ] Apple / Google OAuth 콜백 라우트.
-- [ ] 로그인 시 `public.users` upsert + `user_subscriptions` Trial 레코드 생성.
+- [ ] `lib/auth/useAuth.tsx` — Supabase Auth를 감싸는 훅. `{ user, status, signIn, signOut }` 도메인 타입만 노출. Supabase 세션/JWT 형태는 훅 안에서만 보임.
+- [ ] `app/(auth)/callback/route.ts` — OAuth 콜백 처리.
+- [ ] Apple / Google provider 활성화 (`supabase/config.toml` `[auth.external.*]` + `.env.local`에 client id/secret).
+- [ ] `JustDoProvider`가 `useAuth().user`를 받아 로그인 상태에서는 `createSupabaseStorage(client, user.id)`, 비로그인 상태에서는 `createLocalStorageStorage(...)`를 사용하도록 storage 선택 로직 추가.
+- [ ] `public.users` upsert / `user_subscriptions` Trial 레코드 생성은 `handle_new_auth_user()` 트리거가 처리 — 로그인 흐름에서 별도 확인만.
+- [ ] `Task.tags` round-trip 활성화 — `task_tags` upsert/delete + `tags` 테이블 lookup-or-create. (Phase 4-2에서 미뤄둔 항목)
+- [ ] `useAuth` 단위 테스트 (mocked Supabase Auth client).
 
 ### 4-4. Realtime
 - [ ] `JustDoStorage.subscribe(callback)` 인터페이스 확장.
@@ -64,8 +71,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [ ] Realtime 페이로드를 도메인 이벤트 타입으로 매핑.
 
 ### 4-5. 환경변수 / 보안
-- [ ] `.env.local.example` 작성, `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` 분리 명시.
-- [ ] service_role 키가 클라이언트 번들에 들어가지 않도록 import 경로 검증.
+- [x] `.env.local.example` 작성, `NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` 분리 명시.
+- [ ] service_role 키가 클라이언트 번들에 들어가지 않도록 import 경로 검증 (server-only 모듈 도입 시 점검 — 4-3에서 server action 추가될 때 같이).
 
 ## Phase 5: Offline Sync
 
@@ -83,7 +90,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Open Decisions
 
-- [ ] Subscription pricing.
-- [ ] Whether web and iOS share generated types from the Supabase schema.
+- [ ] Subscription pricing (월/연 금액).
+- [ ] Whether web and iOS share generated types from the Supabase schema, or each platform regenerates locally.
 - [ ] Whether Task Dependency visualization ships in v1 or remains v2.
-- [ ] Final naming for categories beyond the default `[나]`, `[외부]`, and `Habit`.
+- [ ] User-customizable category names (현재는 회원가입 트리거가 한국어 `나` / `외부` 시드 + 도메인 enum `me` / `ext` 매핑 — 사용자 rename UI 제공할지).
+- [ ] `settings` / `view` 의 원격 영속화 위치 (현재 Supabase 어댑터에서 no-op). `public.user_settings` 테이블을 추가할지 vs 기기-로컬만 유지할지.
+- [ ] `Habit.recur_type` 도메인 모델 정식화 (현재 어댑터는 `'daily'` 고정 insert).
