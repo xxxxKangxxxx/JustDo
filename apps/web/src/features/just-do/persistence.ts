@@ -46,6 +46,7 @@ export type RemoteChange =
  */
 export interface JustDoStorage {
   load(): Promise<Persisted | null>;
+  replaceSnapshot?(snapshot: Persisted): Promise<void>;
 
   saveSettings(settings: Settings): Promise<void>;
   saveView(view: PersistedView): Promise<void>;
@@ -146,6 +147,10 @@ export const createMemoryStorage = (initial: Persisted | null = null): JustDoSto
       return ref.current;
     },
 
+    async replaceSnapshot(snapshot) {
+      ref.current = snapshot;
+    },
+
     async saveSettings(settings) {
       applyMutation(ref, (snap) => ({ ...snap, settings }));
     },
@@ -233,6 +238,11 @@ export const createLocalStorageStorage = (
       } catch {
         return null;
       }
+    },
+
+    async replaceSnapshot(snapshot) {
+      ref.current = snapshot;
+      scheduleFlush();
     },
 
     saveSettings: (settings) => mutate((snap) => ({ ...snap, settings })),
@@ -327,6 +337,11 @@ export const createSnapshotStorage = (
     async load() {
       ref.current = await store.read();
       return ref.current;
+    },
+
+    async replaceSnapshot(snapshot) {
+      ref.current = snapshot;
+      await store.write(snapshot);
     },
 
     saveSettings: (settings) => mutate((snap) => ({ ...snap, settings })),
@@ -514,4 +529,131 @@ export const createIndexedDBStorage = (
   };
 
   return createSnapshotStorage(store, { queue });
+};
+
+const applyQueuedMutation = async (storage: JustDoStorage, queued: QueuedMutation) => {
+  switch (queued.mutation.type) {
+    case "task_upsert":
+      await storage.upsertTask(queued.mutation.task);
+      return;
+    case "task_delete":
+      await storage.deleteTask(queued.mutation.id);
+      return;
+    case "habit_upsert":
+      await storage.upsertHabit(queued.mutation.habit);
+      return;
+    case "habit_log_set":
+      await storage.setHabitLog(
+        queued.mutation.habitId,
+        queued.mutation.iso,
+        queued.mutation.value,
+      );
+      return;
+  }
+};
+
+export const flushQueuedMutations = async (
+  queueStorage: JustDoStorage,
+  remoteStorage: JustDoStorage,
+) => {
+  const queued = await queueStorage.listQueuedMutations?.();
+  if (!queued?.length) return;
+
+  for (const mutation of queued) {
+    await applyQueuedMutation(remoteStorage, mutation);
+    await queueStorage.removeQueuedMutation?.(mutation.id);
+  }
+};
+
+const applyRemoteChangeToSnapshot = (snapshot: Persisted, change: RemoteChange): Persisted => {
+  switch (change.type) {
+    case "task_upserted":
+      return { ...snapshot, tasks: upsertById(snapshot.tasks, change.task) };
+    case "task_deleted":
+      return {
+        ...snapshot,
+        tasks: snapshot.tasks.filter((task) => task.id !== change.id),
+      };
+    case "habit_upserted": {
+      const existing = snapshot.habits.find((habit) => habit.id === change.habit.id);
+      const habit = existing ? { ...change.habit, log: existing.log } : change.habit;
+      return { ...snapshot, habits: upsertById(snapshot.habits, habit) };
+    }
+    case "habit_deleted":
+      return {
+        ...snapshot,
+        habits: snapshot.habits.filter((habit) => habit.id !== change.id),
+      };
+    case "habit_log_set":
+      return {
+        ...snapshot,
+        habits: snapshot.habits.map((habit) =>
+          habit.id === change.habitId
+            ? { ...habit, log: { ...habit.log, [change.iso]: change.value } }
+            : habit,
+        ),
+      };
+    case "error":
+      return snapshot;
+  }
+};
+
+export const createSyncedStorage = (
+  localStorage: JustDoStorage,
+  remoteStorage: JustDoStorage,
+): JustDoStorage => {
+  const flush = () => flushQueuedMutations(localStorage, remoteStorage);
+
+  const withFlush = async (operation: Promise<void>) => {
+    await operation;
+    await flush();
+  };
+
+  return {
+    async load() {
+      const local = await localStorage.load();
+      const pending = await localStorage.listQueuedMutations?.();
+
+      if (pending?.length) {
+        void flush().catch(() => undefined);
+        return local;
+      }
+
+      const remote = await remoteStorage.load();
+      if (remote && localStorage.replaceSnapshot) {
+        await localStorage.replaceSnapshot(remote);
+      }
+      return remote ?? local;
+    },
+
+    replaceSnapshot: localStorage.replaceSnapshot
+      ? (snapshot) => localStorage.replaceSnapshot?.(snapshot) ?? Promise.resolve()
+      : undefined,
+
+    saveSettings: (settings) => localStorage.saveSettings(settings),
+    saveView: (view) => localStorage.saveView(view),
+    upsertTask: (task) => withFlush(localStorage.upsertTask(task)),
+    deleteTask: (id) => withFlush(localStorage.deleteTask(id)),
+    upsertHabit: (habit) => withFlush(localStorage.upsertHabit(habit)),
+    setHabitLog: (habitId, iso, value) =>
+      withFlush(localStorage.setHabitLog(habitId, iso, value)),
+
+    listQueuedMutations: () => localStorage.listQueuedMutations?.() ?? Promise.resolve([]),
+    removeQueuedMutation: (id) => localStorage.removeQueuedMutation?.(id) ?? Promise.resolve(),
+    clearQueuedMutations: () => localStorage.clearQueuedMutations?.() ?? Promise.resolve(),
+
+    subscribe(callback) {
+      return remoteStorage.subscribe?.((change) => {
+        void (async () => {
+          if (change.type !== "error" && localStorage.replaceSnapshot) {
+            const snapshot = await localStorage.load();
+            if (snapshot) {
+              await localStorage.replaceSnapshot(applyRemoteChangeToSnapshot(snapshot, change));
+            }
+          }
+          callback(change);
+        })().catch((error: unknown) => callback({ type: "error", error }));
+      }) ?? (() => undefined);
+    },
+  };
 };

@@ -5,8 +5,11 @@ import {
   createMemoryStorage,
   createMemoryMutationQueue,
   createSnapshotStorage,
+  createSyncedStorage,
+  flushQueuedMutations,
   mergePersisted,
   toPersisted,
+  type JustDoStorage,
   type Persisted,
 } from "./persistence";
 import { createInitialState } from "./sample-data";
@@ -267,5 +270,104 @@ describe("createIndexedDBStorage", () => {
 
     await storage.upsertTask(sampleTask({ id: "fallback" }));
     expect((await fallback.load())?.tasks.map((task) => task.id)).toEqual(["fallback"]);
+  });
+});
+
+describe("flushQueuedMutations", () => {
+  it("applies queued mutations to remote storage and removes flushed entries", async () => {
+    let snapshot: Persisted | null = null;
+    const queue = createMemoryMutationQueue();
+    const local = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      {
+        queue,
+        now: () => "2026-04-29T00:00:00.000Z",
+        createId: () => crypto.randomUUID(),
+      },
+    );
+    const remote = createMemoryStorage();
+
+    await local.upsertTask(sampleTask({ id: "queued-task" }));
+    await local.upsertHabit(sampleHabit({ id: "queued-habit" }));
+    await local.setHabitLog("queued-habit", "2026-04-29", 1);
+    expect(await local.listQueuedMutations?.()).toHaveLength(3);
+
+    await flushQueuedMutations(local, remote);
+
+    expect(await local.listQueuedMutations?.()).toEqual([]);
+    const remoteSnapshot = await remote.load();
+    expect(remoteSnapshot?.tasks.map((task) => task.id)).toEqual(["queued-task"]);
+    expect(remoteSnapshot?.habits[0].log).toEqual({ "2026-04-29": 1 });
+  });
+});
+
+describe("createSyncedStorage", () => {
+  it("writes locally, flushes to remote, and clears the queue", async () => {
+    let snapshot: Persisted | null = null;
+    const queue = createMemoryMutationQueue();
+    const local = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      { queue },
+    );
+    const remote = createMemoryStorage();
+    const synced = createSyncedStorage(local, remote);
+
+    await synced.upsertTask(sampleTask({ id: "synced-task" }));
+
+    expect((await local.load())?.tasks.map((task) => task.id)).toEqual(["synced-task"]);
+    expect((await remote.load())?.tasks.map((task) => task.id)).toEqual(["synced-task"]);
+    expect(await synced.listQueuedMutations?.()).toEqual([]);
+  });
+
+  it("keeps queued mutations locally when remote flush fails", async () => {
+    let snapshot: Persisted | null = null;
+    const queue = createMemoryMutationQueue();
+    const local = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      {
+        queue,
+        now: () => "2026-04-29T00:00:00.000Z",
+        createId: () => "pending",
+      },
+    );
+    const remote: JustDoStorage = {
+      async load() {
+        return null;
+      },
+      async saveSettings() {},
+      async saveView() {},
+      async upsertTask() {
+        throw new Error("offline");
+      },
+      async deleteTask() {},
+      async upsertHabit() {},
+      async setHabitLog() {},
+    };
+    const synced = createSyncedStorage(local, remote);
+
+    await expect(synced.upsertTask(sampleTask({ id: "offline-task" }))).rejects.toThrow("offline");
+    expect((await local.load())?.tasks.map((task) => task.id)).toEqual(["offline-task"]);
+    expect((await synced.listQueuedMutations?.())?.map((mutation) => mutation.id)).toEqual(["pending"]);
   });
 });

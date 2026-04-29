@@ -24,6 +24,7 @@ import type {
 import {
   createIndexedDBStorage,
   createLocalStorageStorage,
+  createSyncedStorage,
   mergePersisted,
   type JustDoStorage,
   type PersistedView,
@@ -36,6 +37,15 @@ const defaultStorageKey = "just-do/web/v1";
 const defaultStorage = createIndexedDBStorage({
   fallback: createLocalStorageStorage(defaultStorageKey),
 });
+
+const storageForUser = (userId: string) => {
+  const local = createIndexedDBStorage({
+    dbName: `just-do-web-${userId}`,
+    fallback: createLocalStorageStorage(`${defaultStorageKey}/${userId}`),
+  });
+  const remote = createSupabaseStorage(getSupabaseClient(), userId);
+  return createSyncedStorage(local, remote);
+};
 
 type StoreValue = {
   state: AppState;
@@ -89,7 +99,7 @@ export function JustDoProvider({
 }) {
   const activeStorage = useMemo(() => {
     if (storage) return storage;
-    if (userId) return createSupabaseStorage(getSupabaseClient(), userId);
+    if (userId) return storageForUser(userId);
     return defaultStorage;
   }, [storage, userId]);
   const [state, setState] = useState<AppState>(createInitialState);

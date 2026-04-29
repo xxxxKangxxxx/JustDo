@@ -96,6 +96,16 @@ alive. V1 should handle this without losing the tap:
 Conflict policy for v1: Last Write Wins using updated timestamps. This should
 be revisited if collaborative/shared tasks ship later.
 
+Web implementation note:
+
+- Logged-in web storage now uses a per-user IndexedDB snapshot and queue.
+- Mutations are written locally first, then flushed to Supabase in `updatedAt`
+  order.
+- If Supabase write fails, the local mutation remains queued for the next flush
+  attempt.
+- Realtime remote changes are mirrored back into the local snapshot without
+  creating new queued mutations.
+
 Shared mutation names:
 
 - `task_upsert`

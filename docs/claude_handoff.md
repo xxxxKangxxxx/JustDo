@@ -255,4 +255,4 @@ Note: because `20260429052000_enable_realtime.sql` was edited after its first lo
    - IndexedDB adapter for web is implemented as the guest/local storage default with localStorage fallback.
    - Local mutation queue is implemented for IndexedDB snapshot storage.
    - Shared mutation names: `task_upsert`, `task_delete`, `habit_upsert`, `habit_log_set`.
-   - Last Write Wins sync policy based on timestamps.
+   - Logged-in storage is local-first: per-user IndexedDB snapshot + mutation queue, flushed to Supabase in `updatedAt` order.

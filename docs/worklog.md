@@ -295,6 +295,29 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` → 59 tests pass.
 - `npm --prefix apps/web run build` → pass.
 
+## 2026-04-29 Phase 5-3: Supabase Queue Flush
+
+### Codex
+
+- `replaceSnapshot` storage hook 추가.
+  - remote snapshot/realtime payload 를 로컬 snapshot 에 반영할 때 queue 를 새로 만들지 않기 위한 경로.
+- `flushQueuedMutations(local, remote)` 추가.
+  - `updatedAt` 순서로 local queue 를 읽고 Supabase storage mutation API 에 순차 적용.
+  - remote write 성공 후 해당 queue item 제거.
+  - 실패 시 남은 queue 유지.
+- `createSyncedStorage(local, remote)` 추가.
+  - load 시 pending queue 가 없으면 Supabase snapshot 을 local IndexedDB 에 mirror.
+  - pending queue 가 있으면 local snapshot 을 우선 사용하고 background flush 시도.
+  - task/habit write 는 local-first 로 반영한 뒤 Supabase flush.
+  - Realtime remote change 는 local snapshot 에 queue 없이 mirror.
+- 로그인 사용자 storage 경로를 Supabase 직접 사용에서 per-user IndexedDB + Supabase synced storage 로 변경.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 62 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
 ## 2026-04-29 Phase 4-3: 저장 오류 표시
 
 ### Codex
