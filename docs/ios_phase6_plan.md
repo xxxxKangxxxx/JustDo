@@ -140,3 +140,5 @@ mutations and then requests a timeline reload.
 4. Implement App Group `WidgetSnapshot` read/write. (Done in
    `AppGroupWidgetSnapshotStore`.)
 5. Build WidgetKit small/medium/large layouts from `reference/screens/widgets.jsx`.
+   (Initial SwiftUI layouts done in `JustDoShared/Widgets`; Xcode widget
+   extension target still needs to host them.)

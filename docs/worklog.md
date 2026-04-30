@@ -1074,3 +1074,31 @@ This document records coordination notes for work done with Codex and Claude Cod
 ### Verification
 
 - `swift test` from `apps/ios` → 12 tests pass.
+
+## 2026-04-30 Phase 6: WidgetKit Layouts
+
+### Codex
+
+- Added WidgetKit-ready SwiftUI layouts in `JustDoShared/Widgets`.
+  - `JustDoWidgetView` switches between small, medium, and large layouts.
+  - Small: remaining count + compact item list.
+  - Medium: week strip + item list.
+  - Large: month grid + today item list.
+- Added `JustDoWidgetDisplayModelFactory`.
+  - Converts `WidgetSnapshot` into display items.
+  - Limits items by widget size.
+  - Builds week/month date models using a fixed Gregorian UTC calendar.
+  - Maps category colors and Habit green lane.
+- Added display model tests for small/medium/large behavior.
+
+### Verification
+
+- `swift test` from `apps/ios` → 15 tests pass.
+
+### Claude Handoff Notes
+
+- `docs/claude_handoff.md` was refreshed for a Claude Code transition.
+- Removed stale uncommitted Phase 5 notes and old test counts.
+- Updated the recommended next work to focus on Xcode app/widget/shared target
+  creation and wiring the existing SwiftPM shared code into a real WidgetKit
+  extension.

@@ -9,6 +9,8 @@ The current contents are intentionally project-light:
   events that the app and WidgetKit should share.
 - `JustDoShared/Storage` defines the first Core Data model, in-memory stack,
   domain mappers, and App Group widget snapshot store.
+- `JustDoShared/Widgets` defines WidgetKit-ready small, medium, and large
+  SwiftUI layouts plus display models.
 - `Tests/JustDoSharedTests` verifies the Swift mirror against JSON fixtures
   shaped like the web persisted snapshot and mutation queue.
 

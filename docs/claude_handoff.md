@@ -81,8 +81,15 @@ npm --prefix apps/web run build    # expect: pass
 git diff --check                   # expect: clean
 ```
 
-If any step fails, stop and investigate before starting new work — the
-last commit (`fbb8589`) was green.
+For iOS shared-code verification:
+
+```bash
+cd apps/ios
+swift test                         # expect: 15 tests pass
+```
+
+If any step fails, stop and investigate before starting new work. The latest
+pushed iOS infrastructure commits were green before this handoff.
 
 ### 5. End-of-session cleanup
 
@@ -105,25 +112,21 @@ docker ps --format '{{.Names}}'
 Do not stop the unrelated containers (`freshbox-*`, `field-*`, etc.) —
 they belong to other projects on this machine.
 
-## Working Tree State (uncommitted)
+## Working Tree State
 
-Last upstream commit: `e33c907 docs: refresh Claude handoff`.
+At handoff, the intent is to leave `main` clean and pushed. If `git status -sb`
+shows local changes, they should be reviewed against the latest worklog entry
+before continuing.
 
-Today's session left a broad uncommitted feature set in the working tree:
+Latest pushed commits in this session:
 
-- Phase 5.5 Category Management.
-- Phase 5.6 User Preferences Sync.
-- Phase 5.7 Habit Recurrence (daily + weekly).
-- Supabase migrations:
-  - `20260430090000_category_management.sql`
-  - `20260430103000_user_preferences.sql`
-
-Suggested commit grouping (next session may split or combine):
-
-1. `feat(web): add dynamic task categories`
-2. `feat(web): sync week start preference`
-3. `feat(web): add weekly habit recurrence`
-4. `docs: refresh schema and implementation handoff`
+```text
+e5f0144 feat(ios): add widget snapshot store
+da793b2 feat(ios): add core data mappers
+21a093c test(ios): add drift fixtures
+cdd5b1f docs(ios): start phase 6 planning
+18af974 feat(web): finalize category and habit workflows
+```
 
 ## Current Status
 
@@ -141,9 +144,12 @@ Suggested commit grouping (next session may split or combine):
 - Phase 5.6 User Preferences Sync — done.
 - Phase 5.7 Habit Recurrence (daily + weekly) — done for new habit creation,
   storage/sync, selectors, Habit screen, Stats screen, and Habit detail/edit.
-- Phase 6 iOS / Widget — planning kickoff done. `apps/ios/` now contains
-  Swift shared domain and mutation queue contracts; `docs/ios_phase6_plan.md`
-  defines Core Data, App Group cache, and WidgetKit next steps.
+- Phase 6 iOS / Widget — SwiftPM shared-code track is underway:
+  - Swift domain and mutation queue contracts.
+  - Drift JSON fixtures.
+  - Initial Core Data model/mappers.
+  - App Group `WidgetSnapshot` read/write store.
+  - Initial small/medium/large SwiftUI widget layouts.
 
 ## v1 Open Decisions — all closed
 
@@ -158,20 +164,16 @@ See `docs/worklog.md` 2026-04-29 entries for full rationale.
 | 5 | settings/view remote persistence | `public.users.preferences jsonb` column (Phase 5.6). Sync `weekStart` only. `notify` / `notifyTime` / `dark` / `view.*` stay device-local permanently. `plan` keeps using `user_subscriptions`. |
 | 6 | `Habit.recur_type` | v1 = daily + weekly (Phase 5.7). monthly + `recur_end_date` go to v2. Domain gains `Habit.recurType: 'daily' \| 'weekly'`, `Habit.recurDays?: number[]`. |
 
-## Latest Implementation Commit Trail (pre-uncommitted work)
+## Latest Implementation Commit Trail
 
 ```text
-e33c907 docs: refresh Claude handoff
-6ca542e feat(web): show sync status
-6f2a24c feat(web): flush offline queue to supabase
-8b993c5 feat(web): add local mutation queue
-c35e409 feat(web): add indexeddb storage adapter
-45416e5 refactor(web): move stats into settings
-ad09afd feat(web): split habits into dedicated tab
-ade38a1 fix(web): polish habit calendar and date range
-83f41cb chore(web): guard Supabase service role usage
-e879ce6 docs: add Supabase cloud setup notes
-90a1aed feat(web): add auth and realtime sync
+e5f0144 feat(ios): add widget snapshot store
+da793b2 feat(ios): add core data mappers
+21a093c test(ios): add drift fixtures
+cdd5b1f docs(ios): start phase 6 planning
+18af974 feat(web): finalize category and habit workflows
+fc8ab70 docs: add cold-start checklist to claude handoff
+fbb8589 docs: close v1 decisions and add Phase 5.5/5.6/5.7
 ```
 
 ## App Shape Now
@@ -208,9 +210,12 @@ Applied migrations:
 - `20260429014750_init_schema.sql`
 - `20260429021447_add_habit_emoji.sql`
 - `20260429052000_enable_realtime.sql`
+- `20260430090000_category_management.sql`
+- `20260430103000_user_preferences.sql`
 
 Realtime publication includes:
 
+- `categories`
 - `tasks`
 - `tags`
 - `task_tags`
@@ -270,9 +275,13 @@ type QueuedMutation = {
   id: string;
   updatedAt: string;
   mutation:
+    | { type: "category_upsert"; category: Category }
+    | { type: "category_delete"; id: string }
+    | { type: "preferences_set"; key: "week_start"; value: Settings["weekStart"] }
     | { type: "task_upsert"; task: Task }
     | { type: "task_delete"; id: string }
     | { type: "habit_upsert"; habit: Habit }
+    | { type: "habit_delete"; id: string }
     | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 };
 };
 ```
@@ -318,6 +327,17 @@ apps/web/src/features/just-do/tags.ts
 apps/web/src/features/just-do/tags.test.ts
 apps/web/src/features/just-do/persistence.test.ts
 
+apps/ios/Package.swift
+apps/ios/JustDoShared/Domain/JustDoModels.swift
+apps/ios/JustDoShared/Sync/MutationQueueSchema.swift
+apps/ios/JustDoShared/Storage/CoreDataModel.swift
+apps/ios/JustDoShared/Storage/CoreDataStack.swift
+apps/ios/JustDoShared/Storage/CoreDataMappers.swift
+apps/ios/JustDoShared/Storage/AppGroupWidgetSnapshotStore.swift
+apps/ios/JustDoShared/Widgets/JustDoWidgetDisplayModel.swift
+apps/ios/JustDoShared/Widgets/JustDoWidgetViews.swift
+apps/ios/Tests/JustDoSharedTests/
+
 apps/web/src/lib/auth/useAuth.tsx
 apps/web/src/lib/auth/providers.ts
 apps/web/src/lib/supabase/client.ts
@@ -329,18 +349,27 @@ supabase/config.toml
 supabase/migrations/20260429014750_init_schema.sql
 supabase/migrations/20260429021447_add_habit_emoji.sql
 supabase/migrations/20260429052000_enable_realtime.sql
+supabase/migrations/20260430090000_category_management.sql
+supabase/migrations/20260430103000_user_preferences.sql
 supabase/scripts/reset_local_app_data.sql
 ```
 
 ## Verification Status
 
-Latest checks (post Tag UI + offline regression tests):
+Latest web checks:
 
 ```bash
 npm --prefix apps/web run lint     # pass
-npm --prefix apps/web test         # 70 tests pass
+npm --prefix apps/web test         # 76 tests pass
 npm --prefix apps/web run build    # pass
 git diff --check                   # pass
+```
+
+Latest iOS shared-code checks:
+
+```bash
+cd apps/ios
+swift test                         # 15 tests pass
 ```
 
 Cloud manual checks already performed by the user/Codex:
@@ -363,7 +392,8 @@ Cloud manual checks already performed by the user/Codex:
   Console OAuth is separate and already configured.
 - `settings` / `view` remain device-local except `settings.weekStart`, which
   syncs through `public.users.preferences.week_start`.
-- `Habit.recur_type` is fixed as `'daily'` in adapter inserts.
+- Habit recurrence is now domain-backed. v1 supports `daily` and `weekly`;
+  remote `monthly` is treated defensively as `daily` until v2.
 - Task tags are supported in adapter/realtime and the Add/Edit Task sheet has
   a chip input surface.
 - Phase 5 queue has the LWW timestamp field and ordered flush path, but it does
@@ -374,64 +404,36 @@ Cloud manual checks already performed by the user/Codex:
 - Tag UI commits draft tags on Enter / comma / blur. Submit also harvests any
   uncommitted draft so the user does not lose a half-typed tag — keep this
   behavior in mind when iterating on the picker.
-- Phase 5.5 domain migration has started. App code now uses
-  `Task.categoryId: string | null` and `AppState.categories`; legacy
-  local snapshots with `category: "me" | "ext"` are mapped on hydration.
-- `Habit.recur_type` is still `'daily'` hardcoded in the adapter until 5.7
-  lands. Do not introduce new code paths that depend on weekly behavior
-  before the Phase 5.7 domain change ships.
+- Phase 5.5 domain migration is complete. App code uses
+  `Task.categoryId: string | null` and `AppState.categories`; legacy local
+  snapshots with `category: "me" | "ext"` are mapped on hydration.
 - IndexedDB schema is still at version `2`; categories live inside the
   existing snapshot and queue stores. The queue now supports
-  `category_upsert` / `category_delete` / `preferences_set`.
+  category, preferences, task, habit, and habit log mutations.
 
 ## Recommended Next Work
 
-The v1 sequence is fixed: 5.5 → 5.6 → 5.7 → Phase 6. Each phase has its
-own checklist in `docs/next_steps.md`. Highlights below.
+Phase 5.5, 5.6, and 5.7 are implemented. The next useful work is now Phase 6
+iOS/Xcode integration.
 
-1. **Finish Phase 5.5 — Category Management polish**
-   - Hosted and local Supabase both have
-     `20260430090000_category_management.sql` applied. Schema checks confirmed
-     `categories.position` and `categories.is_default` in both databases.
-   - Settings category reorder supports both up/down buttons and drag reorder.
-   - `just_do_prd.md` / `just_do_planning.md` fixed me/ext language has been
-     updated to custom categories.
-   - Manually verify category CRUD + offline queue against hosted Supabase.
+1. **Create Xcode app/widget/shared targets**
+   - Host the existing SwiftPM shared code from `apps/ios`.
+   - Planned targets: `JustDoApp`, `JustDoWidget`, `JustDoShared`,
+     `JustDoTests`.
+   - Add App Group entitlement placeholder for `group.com.justdo.app`.
 
-2. **Phase 5.7 — Habit Recurrence (daily + weekly, ~2-3d)**
-   - Domain: `Habit.recurType: 'daily' | 'weekly'`,
-     `Habit.recurDays?: number[]` (0=Sun … 6=Sat).
-   - Adapter: drop the hardcoded `'daily'` insert. Persist
-     `recur_type` + `recur_days`. Defensive fallback if `'monthly'`
-     ever shows up (shouldn't in v1).
-   - Add Sheet (habit mode): `매일` / `매주` segment, plus a 7-day
-     toggle row when weekly. Require ≥1 day selected.
-   - Selectors: `isActiveOn(habit, iso)`. `habitStreak` skips inactive
-     weekdays (skip, not break).
-   - Habit Screen: `LAST 7 DAYS` grid disables inactive weekday cells.
-     `DAILY CHECK` denominator counts only habits active on the
-     selected date.
-   - Decide whether Add Sheet supports habit *edit* mode (currently
-     only task edit). Treat that as a sub-task here.
-   - Update PRD / planning to mark monthly + `recur_end_date` as v2.
+2. **Wire WidgetKit extension to shared layouts**
+   - Use `AppGroupWidgetSnapshotStore` to read `widget_snapshot.json`.
+   - Convert snapshot with `JustDoWidgetDisplayModelFactory`.
+   - Render `JustDoWidgetView` for small/medium/large families.
+
+3. **Implement widget App Intents**
+   - Task complete/uncomplete.
+   - Habit check/uncheck.
+   - Open task/habit detail in app.
+   - Write through the shared mutation queue before trying network sync.
 
 4. **Manual Offline Sync Verification (cloud, one-time)**
    - Steps live in `docs/local_dev.md` → "Manual Offline Sync
      Verification". Run once on hosted Supabase before declaring v1
      ready.
-
-5. **Phase 6 — iOS / Widget (after 5.5/5.6/5.7)**
-   - `apps/ios/` exists.
-   - Swift Codable mirrors live in
-     `apps/ios/JustDoShared/Domain/JustDoModels.swift`.
-   - Drift fixture tests live in `apps/ios/Tests/JustDoSharedTests` and verify
-     web-shaped snapshot, queue, and widget JSON.
-   - Queue event names are mirrored in
-     `apps/ios/JustDoShared/Sync/MutationQueueSchema.swift`.
-   - Initial Core Data model and mappers live in
-     `apps/ios/JustDoShared/Storage`.
-   - App Group widget snapshot read/write store lives in
-     `AppGroupWidgetSnapshotStore`.
-   - Core Data / App Group split is documented in `docs/ios_phase6_plan.md`.
-   - Implement WidgetKit small / medium / large widgets from
-     `reference/screens/widgets.jsx`.

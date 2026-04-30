@@ -204,7 +204,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Add Swift drift tests with web-shaped snapshot, queue, and widget fixtures.
 - [x] Implement initial Core Data model and domain mappers.
 - [x] Implement App Group `WidgetSnapshot` read/write store.
-- [ ] Implement WidgetKit small, medium, and large widgets based on `reference/screens/widgets.jsx`.
+- [x] Implement WidgetKit small, medium, and large widget layouts based on `reference/screens/widgets.jsx`.
+- [ ] Create Xcode app/widget/shared targets that host the SwiftPM shared code.
 
 ## UX / UI Backlog
 
