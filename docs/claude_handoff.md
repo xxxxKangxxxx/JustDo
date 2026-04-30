@@ -121,15 +121,13 @@ before continuing.
 Latest pushed commits in this session (Claude Code, 2026-04-30):
 
 ```text
-<pending> feat(ios): scaffold xcode app and widget targets
+090815a feat(ios): scaffold xcode app and widget targets
 f3e1b05 feat(ios): add widget layouts
 e5f0144 feat(ios): add widget snapshot store
 da793b2 feat(ios): add core data mappers
 21a093c test(ios): add drift fixtures
 cdd5b1f docs(ios): start phase 6 planning
 ```
-
-Note: replace `<pending>` with the actual SHA after push.
 
 ## Current Status
 
@@ -179,13 +177,13 @@ See `docs/worklog.md` 2026-04-29 entries for full rationale.
 ## Latest Implementation Commit Trail
 
 ```text
+090815a feat(ios): scaffold xcode app and widget targets
+f3e1b05 feat(ios): add widget layouts
 e5f0144 feat(ios): add widget snapshot store
 da793b2 feat(ios): add core data mappers
 21a093c test(ios): add drift fixtures
 cdd5b1f docs(ios): start phase 6 planning
 18af974 feat(web): finalize category and habit workflows
-fc8ab70 docs: add cold-start checklist to claude handoff
-fbb8589 docs: close v1 decisions and add Phase 5.5/5.6/5.7
 ```
 
 ## App Shape Now
