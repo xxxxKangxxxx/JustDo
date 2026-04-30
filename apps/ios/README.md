@@ -7,6 +7,8 @@ The current contents are intentionally project-light:
 - `JustDoShared/Domain/JustDoModels.swift` mirrors the web domain model.
 - `JustDoShared/Sync/MutationQueueSchema.swift` defines the local mutation
   events that the app and WidgetKit should share.
+- `JustDoShared/Storage` defines the first Core Data model, in-memory stack,
+  and domain mappers.
 - `Tests/JustDoSharedTests` verifies the Swift mirror against JSON fixtures
   shaped like the web persisted snapshot and mutation queue.
 

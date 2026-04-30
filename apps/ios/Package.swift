@@ -14,7 +14,10 @@ let package = Package(
     targets: [
         .target(
             name: "JustDoShared",
-            path: "JustDoShared"
+            path: "JustDoShared",
+            linkerSettings: [
+                .linkedFramework("CoreData"),
+            ]
         ),
         .testTarget(
             name: "JustDoSharedTests",

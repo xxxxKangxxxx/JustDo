@@ -1035,3 +1035,26 @@ This document records coordination notes for work done with Codex and Claude Cod
 ### Verification
 
 - `swift test` from `apps/ios` → 4 tests pass.
+
+## 2026-04-30 Phase 6: Core Data Model and Mappers
+
+### Codex
+
+- Added an initial Core Data model factory in Swift code so it can be tested
+  before Xcode project generation.
+- Added `CoreDataStack` with an in-memory mode for unit tests.
+- Added domain mappers for:
+  - `Category`
+  - `Task`
+  - `Habit`
+  - `QueuedMutation`
+- Mapper policy:
+  - UUID relationships are stored as UUID fields first.
+  - Array/dictionary fields (`tags`, `recurDays`, `log`) are stored as JSON
+    `Data` to keep the first Core Data model simple and close to the web
+    persisted shape.
+- Added Core Data mapper tests covering entity presence and round-trips.
+
+### Verification
+
+- `swift test` from `apps/ios` → 9 tests pass.

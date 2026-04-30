@@ -202,6 +202,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Plan Core Data entities from the Supabase schema.
 - [x] Define iOS App Group cache and mutation queue for WidgetKit actions.
 - [x] Add Swift drift tests with web-shaped snapshot, queue, and widget fixtures.
+- [x] Implement initial Core Data model and domain mappers.
 - [ ] Implement WidgetKit small, medium, and large widgets based on `reference/screens/widgets.jsx`.
 
 ## UX / UI Backlog

@@ -428,6 +428,8 @@ own checklist in `docs/next_steps.md`. Highlights below.
      web-shaped snapshot, queue, and widget JSON.
    - Queue event names are mirrored in
      `apps/ios/JustDoShared/Sync/MutationQueueSchema.swift`.
+   - Initial Core Data model and mappers live in
+     `apps/ios/JustDoShared/Storage`.
    - Core Data / App Group split is documented in `docs/ios_phase6_plan.md`.
    - Implement WidgetKit small / medium / large widgets from
      `reference/screens/widgets.jsx`.
