@@ -792,3 +792,182 @@ This document records coordination notes for work done with Codex and Claude Cod
     bump 하도록 조율할 것.
   - 모든 v1 결정 매트릭스는 `claude_handoff.md` 의 "v1 Open Decisions —
     all closed" 표 한 장에 압축. 오늘 chat 을 replay 할 필요 없음.
+
+## 2026-04-30 Phase 5.5: Category Management 시작
+
+### Codex
+
+- `TaskCategory = "me" | "ext"` enum 제거. `Task.category` 를
+  `Task.categoryId: string | null` 로 전환.
+- `Category` 도메인 타입과 `AppState.categories` 추가.
+- legacy guest/local snapshots 의 `category: "me" | "ext"` 를 기본
+  seed category id (`cat_me`, `cat_ext`) 로 hydration 중 자동 매핑.
+- `categoryStyle(category, mode)` 추가:
+  - category hex color 를 light/dark 의 `solid`, `soft`, `ink` 로 변환.
+  - Home, Detail, Stats, Add Sheet, primitives 의 `tokens.me/ext`
+    직접 참조를 동적 category style 로 교체.
+- Supabase adapter 변경:
+  - categories load/upsert/delete 추가.
+  - task mapping 이 `category_id` 를 직접 보존.
+  - `taskCategoryToName` / `nameToTaskCategory` 제거.
+  - categories realtime channel 추가 (`category_upserted`,
+    `category_deleted`).
+- Offline queue 확장:
+  - `category_upsert`, `category_delete` mutation 추가.
+  - IndexedDB snapshot mutation 과 `flushQueuedMutations` 경로 연결.
+- Settings → 카테고리 관리 화면 추가:
+  - category rename, preset 8색, hex 직접 입력, 숨김 native color picker,
+    delete.
+  - 마지막 category 삭제 방지.
+  - reorder 는 v1 초기 구현으로 화살표 버튼 제공. 실제 drag
+    interaction 은 polish 결정으로 남김.
+- Migration 추가:
+  - `20260430090000_category_management.sql`
+  - `categories.position`, `categories.is_default` 추가 및 기존 seed row
+    백필.
+  - signup trigger 가 기본 category 를 `is_default = true`, position
+    0/1 로 생성.
+  - `categories` realtime publication 등록.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 71 tests pass.
+- `npm --prefix apps/web run build` → pass (sandbox Turbopack port 제한으로
+  권한 상승 재실행).
+- `supabase db push` → hosted project 에
+  `20260430090000_category_management.sql` 적용.
+- linked DB schema check → `categories.is_default`, `categories.position`
+  존재 확인.
+
+### Notes
+
+- `docs/just_do_db_schema.md` 는 categories 스키마를 갱신함.
+- `docs/just_do_prd.md`, `docs/just_do_planning.md` 의 me/ext 제품 서술은
+  아직 남은 문서 정리 항목.
+- 구버전 IndexedDB/localStorage snapshot 에 `categories` 가 없는 경우에도
+  mutation 경로에서 자동 normalize 하도록 보강. 첨부된
+  `findIndex` 오류의 직접 원인.
+- 새로고침 시 Auth loading 동안 guest/sample state 가 먼저 렌더링되며
+  캘린더에 다른 UI가 보이는 flicker 를 방지하기 위해 Auth/Storage
+  hydration 완료 전에는 loading viewport 를 표시하도록 변경.
+- Supabase categories load 는 구버전 스키마(`is_default`, `position`
+  미적용)에서도 읽기 fallback 을 수행하도록 보강.
+- Local Supabase stack 을 다시 시작하고
+  `20260430090000_category_management.sql` 을 적용. local DB schema check
+  에서 `categories.is_default`, `categories.position` 존재 확인.
+
+## 2026-04-30 Phase 5.6: User Preferences Sync
+
+### Codex
+
+- Migration 추가:
+  - `20260430103000_user_preferences.sql`
+  - `public.users.preferences jsonb not null default '{}'::jsonb` 추가.
+  - 기존 `users_select_self` / `users_update_self` RLS 정책 재사용.
+- Supabase adapter 변경:
+  - `load()` 시 `users.preferences.week_start` 를 읽어
+    `settings.weekStart` 로 반영.
+  - `saveSettings(settings)` 는 `weekStart` 만 `preferences.week_start` 로
+    merge update. `notify`, `notifyTime`, `dark`, `view.*` 는 device-local
+    유지.
+  - 구버전 스키마 fallback 유지: `preferences` 컬럼이 없는 DB에서는
+    default weekStart 로 읽고 원격 저장은 no-op.
+- Offline queue 확장:
+  - `preferences_set { key: "week_start", value }` mutation 추가.
+  - `flushQueuedMutations` 에서 preferences mutation 처리.
+  - `createSyncedStorage.saveSettings` 가 local-first 저장 후 queue flush.
+- 게스트 → 로그인 전이 정책 구현:
+  - remote `week_start` 가 default(0) 이고 local `weekStart` 가 1이면
+    최초 synced load 중 local 값을 remote 에 1회 push.
+- 테스트 추가:
+  - weekStart 변경만 preferences queue 에 쌓이는지 검증.
+  - remote default 상태에서 local weekStart push 동작 검증.
+- Local/hosted Supabase 모두 migration 적용 후 schema check:
+  - `users.preferences` = `jsonb`.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 73 tests pass.
+- `npm --prefix apps/web run build` → pass.
+
+## 2026-04-30 Phase 5.7: Habit Recurrence (daily + weekly)
+
+### Codex
+
+- Habit domain updated:
+  - `Habit.recurType: "daily" | "weekly"` and `Habit.recurDays?: number[]`
+    added.
+  - `NewHabitInput` now carries recurrence fields.
+  - Older local snapshots without recurrence are normalized to `daily`.
+- Supabase habit mapping updated:
+  - `habitRowToDomain` preserves `recur_type` / `recur_days`.
+  - Unsupported remote recurrence values (for example future `monthly`) fall
+    back to `daily` in the v1 domain.
+  - `habitDomainToInsert` now writes domain recurrence instead of hard-coded
+    `daily`.
+- Add Sheet habit flow updated:
+  - Habit mode includes "매일 / 요일" recurrence segment.
+  - Weekly mode shows a seven-day picker and prevents removing the last
+    selected weekday.
+  - New weekly habits default to the sheet's selected date weekday.
+- Habit behavior updated:
+  - `habitActiveOn(habit, iso)` helper added.
+  - `habitStreak` skips inactive weekly dates instead of breaking streaks.
+  - Habit daily summary uses only habits active on the selected date.
+  - Today list hides inactive habits.
+  - Last 7 Days grid disables inactive cells and calculates rates from active
+    slots only.
+  - Stats screen uses active habit slots for today and 7-day metrics.
+- Tests updated:
+  - Supabase mapping tests cover daily and weekly habit recurrence.
+  - Selector tests cover active weekday checks and weekly streak skipping.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 76 tests pass.
+- `npm --prefix apps/web run build` → pass (sandbox Turbopack port 제한으로
+  권한 상승 재실행).
+- `git diff --check` → pass.
+
+### Notes
+
+- No new migration was needed because `habits.recur_type` and
+  `habits.recur_days` already exist in the schema.
+- Habit edit/detail is still a product decision. Current implementation covers
+  new habit creation and existing habit rendering/sync.
+- v2 monthly extension path:
+  - Add `"monthly"` to the domain recurrence union.
+  - Define `recurDays` semantics for month days or add a separate field.
+  - Expose `recur_end_date` in the domain and UI if finite recurrence is
+    needed.
+- `docs/just_do_prd.md` and `docs/just_do_planning.md` now state Habit
+  recurrence scope as v1 = daily/weekly, v2 = monthly/end date.
+
+## 2026-04-30 Phase 5.7 Follow-up: Habit Detail and Category Drag Reorder
+
+### Codex
+
+- Habit detail/edit screen added:
+  - Habit list rows now open a detail screen.
+  - Title edit, emoji edit, recurrence edit, reminder time edit, and habit
+    delete are supported.
+  - Recent 14-day check history is shown in the detail screen. Active dates
+    can be toggled; inactive weekly dates are disabled.
+- Habit persistence extended:
+  - `Habit.reminderTime` added and mapped to Supabase `habits.reminder_at`.
+  - `deleteHabit` added to storage adapters, offline queue, Supabase adapter,
+    and store.
+  - Detail view state now supports `detailHabitId` and stays session-local.
+- Category management polish:
+  - Existing up/down arrow reorder remains.
+  - Category rows can also be dragged and dropped to reorder.
+
+### Verification
+
+- `npm --prefix apps/web run lint` → pass.
+- `npm --prefix apps/web test` → 76 tests pass.
+- `npm --prefix apps/web run build` → pass (sandbox Turbopack port 제한으로
+  권한 상승 재실행).

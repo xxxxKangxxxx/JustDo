@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Habit, Task } from "@/types/domain";
-import { habitStreak, tasksInRange, tasksOnDate } from "./selectors";
+import { habitActiveOn, habitStreak, tasksInRange, tasksOnDate } from "./selectors";
 
 const makeTask = (over: Partial<Task> = {}): Task => ({
   id: "t",
   title: "x",
-  category: "me",
+  categoryId: "cat_me",
   startDate: "2026-04-10",
   endDate: "2026-04-10",
   isCompleted: false,
@@ -67,6 +67,7 @@ describe("habitStreak", () => {
     emoji: "🏃",
     category: "habit",
     startedAt: "2026-04-01",
+    recurType: "daily",
     log: {
       "2026-04-05": 1,
       "2026-04-06": 1,
@@ -85,5 +86,26 @@ describe("habitStreak", () => {
 
   it("breaks at the first missing day", () => {
     expect(habitStreak(habit, "2026-04-09")).toBe(1);
+  });
+
+  it("checks weekly habits only on selected weekdays", () => {
+    const weekly: Habit = { ...habit, recurType: "weekly", recurDays: [1, 3, 5] };
+    expect(habitActiveOn(weekly, "2026-04-06")).toBe(true);
+    expect(habitActiveOn(weekly, "2026-04-07")).toBe(false);
+  });
+
+  it("skips inactive weekdays when counting a weekly streak", () => {
+    const weekly: Habit = {
+      ...habit,
+      recurType: "weekly",
+      recurDays: [1, 3, 5],
+      log: {
+        "2026-04-06": 1,
+        "2026-04-08": 1,
+        "2026-04-10": 1,
+      },
+    };
+
+    expect(habitStreak(weekly, "2026-04-10")).toBe(3);
   });
 });

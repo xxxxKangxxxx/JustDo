@@ -2,9 +2,9 @@
 
 import { addDays } from "@/lib/date";
 import { CatDot } from "./primitives";
-import { habitStreak, tasksInRange } from "./selectors";
+import { habitActiveOn, habitStreak, tasksInRange } from "./selectors";
 import { useJustDo } from "./store";
-import { tokens, type ThemeMode } from "./tokens";
+import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
 
 export function StatsScreen({ mode, onBack }: { mode: ThemeMode; onBack?: () => void }) {
   const s = useJustDo();
@@ -15,12 +15,16 @@ export function StatsScreen({ mode, onBack }: { mode: ThemeMode; onBack?: () => 
   const doneCount = tasks.filter((task) => task.isCompleted).length;
   const days7 = Array.from({ length: 7 }, (_, i) => addDays(s.state.view.selectedDate, i - 6));
   const taskRate = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
-  const todayHabitDone = s.state.habits.filter((habit) => habit.log[s.state.view.selectedDate]).length;
+  const activeTodayHabits = s.state.habits.filter((habit) => habitActiveOn(habit, s.state.view.selectedDate));
+  const todayHabitDone = activeTodayHabits.filter((habit) => habit.log[s.state.view.selectedDate]).length;
   const habitChecks7 = s.state.habits.reduce(
-    (total, habit) => total + days7.filter((day) => habit.log[day]).length,
+    (total, habit) => total + days7.filter((day) => habitActiveOn(habit, day) && habit.log[day]).length,
     0,
   );
-  const habitSlots7 = s.state.habits.length * 7;
+  const habitSlots7 = s.state.habits.reduce(
+    (total, habit) => total + days7.filter((day) => habitActiveOn(habit, day)).length,
+    0,
+  );
   const habitRate7 = habitSlots7 ? Math.round((habitChecks7 / habitSlots7) * 100) : 0;
   const topStreaks = [...s.state.habits]
     .sort((a, b) => habitStreak(b, s.state.view.selectedDate) - habitStreak(a, s.state.view.selectedDate))
@@ -52,28 +56,29 @@ export function StatsScreen({ mode, onBack }: { mode: ThemeMode; onBack?: () => 
         <div className="grid grid-cols-3 gap-2">
           <SummaryMetric label="Task 완료" value={`${doneCount}/${tasks.length}`} mode={mode} />
           <SummaryMetric label="Task 완료율" value={`${taskRate}%`} mode={mode} />
-          <SummaryMetric label="오늘 Habit" value={`${todayHabitDone}/${s.state.habits.length}`} mode={mode} />
+          <SummaryMetric label="오늘 Habit" value={`${todayHabitDone}/${activeTodayHabits.length}`} mode={mode} />
         </div>
       </section>
 
       <SectionTitle mode={mode}>TASK</SectionTitle>
       <section className="mb-3.5 rounded-2xl p-4" style={{ background: t.surface }}>
-        {(["me", "ext"] as const).map((category) => {
-          const items = tasks.filter((task) => task.category === category);
+        {sortedCategories(s.state.categories).map((category) => {
+          const items = tasks.filter((task) => task.categoryId === category.id);
           const done = items.filter((task) => task.isCompleted).length;
           const total = Math.max(items.length, 1);
           const rate = Math.round((done / total) * 100);
+          const c = categoryStyle(category, mode);
           return (
-            <div key={category} className="mb-2.5">
+            <div key={category.id} className="mb-2.5">
               <div className="mb-1 flex items-center text-xs">
                 <CatDot category={category} mode={mode} size={7} />
-                <span className="ml-1.5 font-semibold">[{category === "me" ? "나" : "외부"}]</span>
+                <span className="ml-1.5 font-semibold">[{category.name}]</span>
                 <span className="flex-1" />
                 <span style={{ color: t.textSecondary }}>{done} / {items.length}</span>
-                <span className="ml-2.5 min-w-8 text-right font-bold" style={{ color: t[category].ink }}>{rate}%</span>
+                <span className="ml-2.5 min-w-8 text-right font-bold" style={{ color: c.ink }}>{rate}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full" style={{ background: t.surfaceAlt }}>
-                <div className="h-full rounded-full" style={{ width: `${rate}%`, background: t[category].solid }} />
+                <div className="h-full rounded-full" style={{ width: `${rate}%`, background: c.solid }} />
               </div>
             </div>
           );

@@ -1,42 +1,46 @@
 import type { Database } from "@/lib/supabase/database.types";
-import type { Habit, HabitCategory, Priority, Task, TaskCategory } from "@/types/domain";
+import type { Category, Habit, HabitCategory, HabitRecurType, Priority, Task } from "@/types/domain";
 
+type CategoryRow = Database["public"]["Tables"]["categories"]["Row"];
+type CategoryInsert = Database["public"]["Tables"]["categories"]["Insert"];
 type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
 type TaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
 type HabitRow = Database["public"]["Tables"]["habits"]["Row"];
 type HabitInsert = Database["public"]["Tables"]["habits"]["Insert"];
 type HabitLogRow = Database["public"]["Tables"]["habit_logs"]["Row"];
 
-/**
- * Domain `Task.category` is a small enum (`"me"`, `"ext"`) while the DB stores
- * a FK to `categories(name)`. The signup trigger seeds these names on every
- * new account so this map is the bridge between the two layers. If a future
- * migration changes the seed names, update this map and write a data
- * migration; do not branch on the domain enum elsewhere.
- */
-export const taskCategoryToName: Record<TaskCategory, string> = {
-  me: "나",
-  ext: "외부",
-};
-
 const habitCategoryName = "Habit";
-
-const nameToTaskCategory = (name: string | null | undefined): TaskCategory => {
-  if (name === taskCategoryToName.ext) return "ext";
-  return "me";
-};
 
 const isPriority = (value: string | null): value is Priority =>
   value === "high" || value === "medium" || value === "low";
 
-export const taskRowToDomain = (
-  row: TaskRow,
-  categoryName: string | null,
-  tags: string[] = [],
-): Task => ({
+const toHabitRecurType = (value: string | null): HabitRecurType =>
+  value === "weekly" ? "weekly" : "daily";
+
+export const categoryRowToDomain = (row: CategoryRow): Category => ({
+  id: row.id,
+  name: row.name,
+  color: row.color,
+  isDefault: row.is_default,
+  position: row.position,
+});
+
+export const categoryDomainToInsert = (
+  category: Category,
+  userId: string,
+): CategoryInsert => ({
+  id: category.id,
+  user_id: userId,
+  name: category.name,
+  color: category.color,
+  is_default: category.isDefault,
+  position: category.position,
+});
+
+export const taskRowToDomain = (row: TaskRow, tags: string[] = []): Task => ({
   id: row.id,
   title: row.title,
-  category: nameToTaskCategory(categoryName),
+  categoryId: row.category_id,
   startDate: row.start_date ?? "",
   endDate: row.end_date ?? row.start_date ?? "",
   priority: isPriority(row.priority) ? row.priority : undefined,
@@ -48,11 +52,10 @@ export const taskRowToDomain = (
 export const taskDomainToInsert = (
   task: Task,
   userId: string,
-  categoryId: string | null,
 ): TaskInsert => ({
   id: task.id,
   user_id: userId,
-  category_id: categoryId,
+  category_id: task.categoryId,
   title: task.title,
   priority: task.priority ?? null,
   start_date: task.startDate || null,
@@ -68,6 +71,12 @@ export const habitRowToDomain = (row: HabitRow): Habit => ({
   emoji: row.emoji,
   category: habitCategoryName.toLowerCase() as HabitCategory,
   startedAt: row.created_at.slice(0, 10),
+  recurType: toHabitRecurType(row.recur_type),
+  recurDays:
+    row.recur_type === "weekly" && row.recur_days?.length
+      ? row.recur_days
+      : undefined,
+  reminderTime: row.reminder_at,
   log: {},
 });
 
@@ -76,9 +85,12 @@ export const habitDomainToInsert = (habit: Habit, userId: string): HabitInsert =
   user_id: userId,
   title: habit.title,
   emoji: habit.emoji,
-  // Domain habits are always daily for v1. Recur configuration is wired up
-  // alongside the recurring-task work later.
-  recur_type: "daily",
+  recur_type: habit.recurType,
+  recur_days:
+    habit.recurType === "weekly" && habit.recurDays?.length
+      ? habit.recurDays
+      : null,
+  reminder_at: habit.reminderTime ?? null,
 });
 
 export const mergeHabitLogs = (habits: Habit[], logs: HabitLogRow[]): Habit[] => {

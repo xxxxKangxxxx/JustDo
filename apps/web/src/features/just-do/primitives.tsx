@@ -1,6 +1,11 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { Category } from "@/types/domain";
-import { categoryLabel, tokens, type ThemeMode } from "./tokens";
+import { categoryStyle, tokens, type ThemeMode } from "./tokens";
+
+type VisualCategory = Category | "habit" | null | undefined;
+
+const visualStyle = (category: VisualCategory, mode: ThemeMode) =>
+  category === "habit" ? tokens[mode].habit : categoryStyle(category, mode);
 
 export function PhoneFrame({ children, mode }: { children: ReactNode; mode: ThemeMode }) {
   const t = tokens[mode];
@@ -60,12 +65,12 @@ export function CircleCheck({
   size = 20,
 }: {
   checked: boolean;
-  category: Category;
+  category?: VisualCategory;
   mode: ThemeMode;
   size?: number;
 }) {
   const t = tokens[mode];
-  const c = t[category];
+  const c = visualStyle(category, mode);
   return (
     <span
       className="flex shrink-0 items-center justify-center rounded-full transition"
@@ -85,24 +90,24 @@ export function CircleCheck({
   );
 }
 
-export function CatDot({ category, mode, size = 6 }: { category: Category; mode: ThemeMode; size?: number }) {
+export function CatDot({ category, mode, size = 6 }: { category?: VisualCategory; mode: ThemeMode; size?: number }) {
   return (
     <span
       className="shrink-0 rounded-full"
-      style={{ width: size, height: size, background: tokens[mode][category].solid }}
+      style={{ width: size, height: size, background: visualStyle(category, mode).solid }}
     />
   );
 }
 
-export function CatTag({ category, mode }: { category: Category; mode: ThemeMode }) {
-  const t = tokens[mode];
-  const c = t[category];
+export function CatTag({ category, mode }: { category?: VisualCategory; mode: ThemeMode }) {
+  const c = visualStyle(category, mode);
+  const label = category === "habit" ? "Habit" : category?.name ?? "미분류";
   return (
     <span
       className="rounded-[5px] px-2 py-[3px] text-[11px] font-semibold tracking-[0.2px]"
       style={{ color: c.ink, background: c.soft }}
     >
-      {categoryLabel[category]}
+      {label}
     </span>
   );
 }

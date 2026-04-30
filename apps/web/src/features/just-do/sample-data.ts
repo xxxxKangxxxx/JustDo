@@ -1,5 +1,6 @@
 import { addDays, parseISO, todayISO } from "@/lib/date";
 import type { AppState } from "@/types/domain";
+import { defaultCategories } from "./tokens";
 
 const sampleToday = todayISO();
 const { year, month } = parseISO(sampleToday);
@@ -13,12 +14,14 @@ export const createInitialState = (): AppState => ({
     dark: false,
     sheet: null,
     detailTaskId: null,
+    detailHabitId: null,
   },
+  categories: defaultCategories,
   tasks: [
     {
       id: "t_portfolio",
       title: "포트폴리오 정리",
-      category: "me",
+      categoryId: "cat_me",
       startDate: addDays(sampleToday, -3),
       endDate: addDays(sampleToday, 2),
       priority: "medium",
@@ -29,7 +32,7 @@ export const createInitialState = (): AppState => ({
     {
       id: "t_interview",
       title: "면접 준비 자료 정리",
-      category: "me",
+      categoryId: "cat_me",
       startDate: sampleToday,
       endDate: addDays(sampleToday, 4),
       priority: "high",
@@ -40,7 +43,7 @@ export const createInitialState = (): AppState => ({
     {
       id: "t_meeting",
       title: "업체 미팅",
-      category: "ext",
+      categoryId: "cat_ext",
       startDate: sampleToday,
       endDate: sampleToday,
       priority: "high",
@@ -51,7 +54,7 @@ export const createInitialState = (): AppState => ({
     {
       id: "t_report",
       title: "팀 보고서 제출",
-      category: "ext",
+      categoryId: "cat_ext",
       startDate: addDays(sampleToday, -6),
       endDate: sampleToday,
       priority: "medium",
@@ -62,7 +65,7 @@ export const createInitialState = (): AppState => ({
     {
       id: "t_read",
       title: "독서 30분",
-      category: "me",
+      categoryId: "cat_me",
       startDate: sampleToday,
       endDate: sampleToday,
       priority: "low",
@@ -78,6 +81,7 @@ export const createInitialState = (): AppState => ({
       emoji: "🏃",
       category: "habit",
       startedAt: addDays(sampleToday, -12),
+      recurType: "daily",
       log: Object.fromEntries(
         Array.from({ length: 9 }, (_, i) => [addDays(sampleToday, i - 8), 1]),
       ),
@@ -88,6 +92,7 @@ export const createInitialState = (): AppState => ({
       emoji: "💧",
       category: "habit",
       startedAt: addDays(sampleToday, -28),
+      recurType: "daily",
       log: Object.fromEntries(
         Array.from({ length: 28 }, (_, i) => [addDays(sampleToday, i - 27), 1]),
       ),
@@ -98,6 +103,8 @@ export const createInitialState = (): AppState => ({
       emoji: "🧘",
       category: "habit",
       startedAt: addDays(sampleToday, -5),
+      recurType: "weekly",
+      recurDays: [1, 2, 3, 4, 5],
       log: {
         [addDays(sampleToday, -5)]: 1,
         [addDays(sampleToday, -4)]: 1,

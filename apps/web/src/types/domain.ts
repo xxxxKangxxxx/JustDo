@@ -1,13 +1,20 @@
-export type TaskCategory = "me" | "ext";
 export type HabitCategory = "habit";
-export type Category = TaskCategory | HabitCategory;
+export type HabitRecurType = "daily" | "weekly";
 export type Priority = "high" | "medium" | "low";
 export type TabId = "home" | "habit" | "settings";
+
+export type Category = {
+  id: string;
+  name: string;
+  color: string;
+  isDefault: boolean;
+  position: number;
+};
 
 export type Task = {
   id: string;
   title: string;
-  category: TaskCategory;
+  categoryId: string | null;
   startDate: string;
   endDate: string;
   priority?: Priority;
@@ -22,6 +29,9 @@ export type Habit = {
   emoji: string;
   category: HabitCategory;
   startedAt: string;
+  recurType: HabitRecurType;
+  recurDays?: number[];
+  reminderTime?: string | null;
   log: Record<string, 0 | 1>;
 };
 
@@ -40,10 +50,12 @@ export type ViewState = {
   dark: boolean;
   sheet: null | { kind: "add"; taskId?: string; date?: string; initialType?: "task" | "habit" };
   detailTaskId: string | null;
+  detailHabitId: string | null;
 };
 
 export type AppState = {
   view: ViewState;
+  categories: Category[];
   tasks: Task[];
   habits: Habit[];
   settings: Settings;
@@ -51,7 +63,7 @@ export type AppState = {
 
 export type NewTaskInput = {
   title: string;
-  category: TaskCategory;
+  categoryId: string | null;
   startDate: string;
   endDate: string;
   priority: Priority;
@@ -62,4 +74,7 @@ export type NewTaskInput = {
 export type NewHabitInput = {
   title: string;
   emoji: string;
+  recurType: HabitRecurType;
+  recurDays?: number[];
+  reminderTime?: string | null;
 };

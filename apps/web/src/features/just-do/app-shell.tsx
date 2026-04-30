@@ -19,7 +19,10 @@ export function JustDoApp() {
 }
 
 function JustDoAppWithAuth() {
-  const { user } = useAuth();
+  const { status, user } = useAuth();
+  if (status === "loading") {
+    return <LoadingViewport mode="light" />;
+  }
   return (
     <JustDoProvider userId={user?.id ?? null}>
       <JustDoViewport />
@@ -28,8 +31,11 @@ function JustDoAppWithAuth() {
 }
 
 function JustDoViewport() {
-  const { state } = useJustDo();
+  const { isHydrated, state } = useJustDo();
   const mode = state.view.dark ? "dark" : "light";
+  if (!isHydrated) {
+    return <LoadingViewport mode={mode} />;
+  }
   return (
     <PhoneFrame mode={mode}>
       <StatusBar mode={mode} />
@@ -39,6 +45,23 @@ function JustDoViewport() {
       <TabBar mode={mode} />
       <DetailScreen mode={mode} />
       <AddSheet mode={mode} />
+    </PhoneFrame>
+  );
+}
+
+function LoadingViewport({ mode }: { mode: "light" | "dark" }) {
+  return (
+    <PhoneFrame mode={mode}>
+      <StatusBar mode={mode} />
+      <div className="flex h-[calc(100%-54px)] items-center justify-center">
+        <div
+          className="h-5 w-5 animate-spin rounded-full border-2 border-transparent"
+          style={{
+            borderTopColor: mode === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.35)",
+            borderRightColor: mode === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)",
+          }}
+        />
+      </div>
     </PhoneFrame>
   );
 }

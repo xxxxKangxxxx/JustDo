@@ -42,6 +42,7 @@ CREATE TABLE public.users (
   email         TEXT,
   display_name  TEXT,
   avatar_url    TEXT,
+  preferences   JSONB NOT NULL DEFAULT '{}'::jsonb, -- cross-device user prefs, v1: week_start
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
@@ -50,14 +51,16 @@ CREATE TABLE public.users (
 ---
 
 ### categories
-> [나] / [외부] 카테고리. 기본값 2개 + 사용자 커스텀 색상 설정 가능
+> 사용자 관리 Task 카테고리. 신규 가입 시 [나] / [외부] 2개가 기본 생성되며 이후 rename/color/reorder/delete 가능
 
 ```sql
 CREATE TABLE public.categories (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,          -- '나', '외부'
+  name       TEXT NOT NULL,          -- 사용자 표시명
   color      TEXT NOT NULL,          -- hex 색상코드 (예: '#4A90E2')
+  position   INT NOT NULL DEFAULT 0,
+  is_default BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```

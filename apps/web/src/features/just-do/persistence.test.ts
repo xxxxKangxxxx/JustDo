@@ -22,6 +22,7 @@ const stripVolatile = (state: AppState) => ({
     selectedDate: state.view.selectedDate,
     dark: state.view.dark,
   },
+  categories: state.categories,
   tasks: state.tasks,
   habits: state.habits,
   settings: state.settings,
@@ -30,7 +31,7 @@ const stripVolatile = (state: AppState) => ({
 const sampleTask = (over: Partial<Task> = {}): Task => ({
   id: "t1",
   title: "Test",
-  category: "me",
+  categoryId: "cat_me",
   startDate: "2026-04-29",
   endDate: "2026-04-29",
   isCompleted: false,
@@ -45,6 +46,7 @@ const sampleHabit = (over: Partial<Habit> = {}): Habit => ({
   emoji: "🏃",
   category: "habit",
   startedAt: "2026-04-01",
+  recurType: "daily",
   log: {},
   ...over,
 });
@@ -258,6 +260,34 @@ describe("createSnapshotStorage", () => {
     await storage.clearQueuedMutations?.();
     expect(await storage.listQueuedMutations?.()).toEqual([]);
   });
+
+  it("queues weekStart preference changes separately from device-local settings", async () => {
+    let snapshot: Persisted | null = null;
+    const queue = createMemoryMutationQueue();
+    const storage = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      {
+        queue,
+        now: () => "2026-04-29T00:00:00.000Z",
+        createId: () => "pref",
+      },
+    );
+
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 0, plan: "free" });
+    expect(await storage.listQueuedMutations?.()).toEqual([]);
+
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 1, plan: "free" });
+    expect((await storage.listQueuedMutations?.())?.map((item) => item.mutation)).toEqual([
+      { type: "preferences_set", key: "week_start", value: 1 },
+    ]);
+  });
 });
 
 describe("createIndexedDBStorage", () => {
@@ -443,6 +473,24 @@ describe("createSyncedStorage", () => {
     const remoteSnapshot = await remoteBackend.load();
     expect(remoteSnapshot?.tasks.map((task) => task.id)).toEqual(["offline-1"]);
     expect(remoteSnapshot?.habits[0].log).toEqual({ "2026-04-29": 1 });
+  });
+
+  it("pushes local weekStart once when the remote preference is still default", async () => {
+    const local = createMemoryStorage({
+      ...stripVolatile(createInitialState()),
+      settings: { notify: false, notifyTime: "08:00", weekStart: 1, plan: "free" },
+    });
+    const remote = createMemoryStorage({
+      ...stripVolatile(createInitialState()),
+      settings: { notify: true, notifyTime: "09:00", weekStart: 0, plan: "free" },
+    });
+    const synced = createSyncedStorage(local, remote);
+
+    const loaded = await synced.load();
+
+    expect(loaded?.settings.weekStart).toBe(1);
+    expect((await remote.load())?.settings.weekStart).toBe(1);
+    expect((await local.load())?.settings.weekStart).toBe(1);
   });
 
   it("flushes queued mutations in updatedAt order", async () => {

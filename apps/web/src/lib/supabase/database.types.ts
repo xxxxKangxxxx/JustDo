@@ -44,21 +44,27 @@ export type Database = {
           color: string
           created_at: string
           id: string
+          is_default: boolean
           name: string
+          position: number
           user_id: string
         }
         Insert: {
           color: string
           created_at?: string
           id?: string
+          is_default?: boolean
           name: string
+          position?: number
           user_id: string
         }
         Update: {
           color?: string
           created_at?: string
           id?: string
+          is_default?: boolean
           name?: string
+          position?: number
           user_id?: string
         }
         Relationships: [
@@ -492,6 +498,7 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          preferences: Json
           updated_at: string
         }
         Insert: {
@@ -500,6 +507,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id: string
+          preferences?: Json
           updated_at?: string
         }
         Update: {
@@ -508,6 +516,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          preferences?: Json
           updated_at?: string
         }
         Relationships: []

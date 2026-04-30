@@ -10,7 +10,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Where We Are (2026-04-29)
+## Where We Are (2026-04-30)
 
 - Phase 1–5 done. Phase 5 follow-up (Task tag UI, offline sync regression
   tests, manual verification doc) shipped in this session — see working
@@ -18,10 +18,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - All v1 open decisions closed in this session. Decision matrix lives in
   `docs/claude_handoff.md` ("v1 Open Decisions — all closed") with full
   rationale in `docs/worklog.md` 2026-04-29 entries.
-- Next sequence is fixed: **Phase 5.5 → 5.6 → 5.7 → Phase 6 iOS**. The
-  three sub-phases are domain-model changes that must land before iOS
-  starts mirroring the schema, otherwise the Swift mirror has to be
-  redone.
+- Phase 5.5 Category Management, Phase 5.6 User Preferences Sync, and
+  Phase 5.7 Habit Recurrence (daily + weekly) are implemented. The web
+  domain model is now ready for Phase 6 iOS planning, aside from remaining
+  PRD/planning prose cleanup and optional category drag reorder polish.
 
 ## Phase 1: Repository Baseline
 
@@ -106,92 +106,95 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > Phase 6 iOS 진입 전 완료 필수. 도메인 모델이 크게 바뀌므로 iOS 가 mirror 하기 전에 확정돼야 한다.
 
 ### 5.5-1. 스키마 / 마이그레이션
-- [ ] `categories` 에 `position int default 0`, `is_default boolean default false` 추가.
-- [ ] 기존 시드 row (`나`, `외부`) 에 `is_default = true` 백필.
-- [ ] `handle_new_auth_user()` 트리거 수정: 시드 카테고리 insert 시 `is_default = true` 설정.
-- [ ] `categories` realtime publication 등록.
+- [x] `categories` 에 `position int default 0`, `is_default boolean default false` 추가.
+- [x] 기존 시드 row (`나`, `외부`) 에 `is_default = true` 백필.
+- [x] `handle_new_auth_user()` 트리거 수정: 시드 카테고리 insert 시 `is_default = true` 설정.
+- [x] `categories` realtime publication 등록.
 
 ### 5.5-2. 도메인 / 어댑터
-- [ ] `TaskCategory = "me" | "ext"` enum 폐기. `Task.category` → `Task.categoryId: string | null`.
-- [ ] 새 `Category` 타입 (`{ id, name, color, isDefault, position }`) 추가, `AppState.categories: Category[]`.
-- [ ] Habit 의 `category = "habit"` 은 그대로 유지 (사용자 카테고리와 분리).
-- [ ] Supabase 어댑터: `categories` CRUD + 로드 join.
-- [ ] 기존 `taskCategoryToName` / `nameToTaskCategory` 매핑 제거.
-- [ ] 어댑터/매핑 단위 테스트 갱신.
+- [x] `TaskCategory = "me" | "ext"` enum 폐기. `Task.category` → `Task.categoryId: string | null`.
+- [x] 새 `Category` 타입 (`{ id, name, color, isDefault, position }`) 추가, `AppState.categories: Category[]`.
+- [x] Habit 의 `category = "habit"` 은 그대로 유지 (사용자 카테고리와 분리).
+- [x] Supabase 어댑터: `categories` CRUD + 로드 join.
+- [x] 기존 `taskCategoryToName` / `nameToTaskCategory` 매핑 제거.
+- [x] 어댑터/매핑 단위 테스트 갱신.
 
 ### 5.5-3. Realtime / Offline
-- [ ] `categories` 채널 추가, INSERT/UPDATE/DELETE → `category_*` 도메인 이벤트.
-- [ ] IndexedDB queue 에 `category_upsert`, `category_delete` 뮤테이션 타입 추가.
-- [ ] `flushQueuedMutations` 가 카테고리 뮤테이션도 처리하도록 확장.
+- [x] `categories` 채널 추가, INSERT/UPDATE/DELETE → `category_*` 도메인 이벤트.
+- [x] IndexedDB queue 에 `category_upsert`, `category_delete` 뮤테이션 타입 추가.
+- [x] `flushQueuedMutations` 가 카테고리 뮤테이션도 처리하도록 확장.
 
 ### 5.5-4. UI / 디자인 토큰
-- [ ] Settings → "카테고리" 관리 화면: 리스트 (드래그 reorder), rename, 색상 변경, 삭제. 마지막 카테고리 삭제 방지.
-- [ ] 색상 입력: **preset 팔레트 (8색) + custom hex picker** 둘 다 v1 에 제공.
+- [x] Settings → "카테고리" 관리 화면: 리스트 (화살표 버튼 reorder), rename, 색상 변경, 삭제. 마지막 카테고리 삭제 방지.
+- [x] 색상 입력: **preset 팔레트 (8색) + custom hex picker** 둘 다 v1 에 제공.
+  - hex 직접 입력 + 숨김 native color picker 버튼 제공. 기본 color input 의 네모 swatch 는 노출하지 않음.
   - hex 입력 시 light/dark 각 모드용 (solid, soft, ink) 자동 계산 로직 (예: HSL 기반 보정).
-  - preset 8색은 hand-tuned (solid/soft/ink × light/dark) 로 시작.
-- [ ] `categoryStyle(category, mode)` 헬퍼 추가, `tokens[mode].me/ext` 직접 참조 사용처 (Add/Edit Sheet, Detail, Home, primitives 등) 전부 헬퍼로 마이그레이션.
-- [ ] Add/Edit Task sheet 의 카테고리 segment → 동적 chip selector.
-- [ ] 카테고리 개수 무제한, 검색 없음, reorder 만 지원.
+  - preset 8색은 hex 기반 + HSL 보정으로 시작.
+- [x] `categoryStyle(category, mode)` 헬퍼 추가, `tokens[mode].me/ext` 직접 참조 사용처 (Add/Edit Sheet, Detail, Home, primitives 등) 전부 헬퍼로 마이그레이션.
+- [x] Add/Edit Task sheet 의 카테고리 segment → 동적 chip selector.
+- [x] 카테고리 개수 무제한, 검색 없음, reorder 만 지원.
+- [x] Button reorder 유지 + drag reorder interaction 추가.
 
 ### 5.5-5. 문서 / 회귀
-- [ ] `just_do_prd.md`, `just_do_planning.md`, `just_do_db_schema.md` 의 me/ext 서술 갱신.
-- [ ] 게스트 (비로그인) localStorage 의 기존 `category: "me"|"ext"` 데이터 hydration 처리 (시드 카테고리 자동 생성 + 매핑) 또는 폐기 정책 결정.
-- [ ] `npm --prefix apps/web run lint / test / build` 통과.
+- [ ] `just_do_prd.md`, `just_do_planning.md` 의 me/ext 서술 갱신.
+- [x] `just_do_db_schema.md` 의 me/ext 서술 갱신.
+- [x] 게스트 (비로그인) localStorage 의 기존 `category: "me"|"ext"` 데이터 hydration 처리: 기본 시드 카테고리 생성 + legacy enum 매핑.
+- [x] `npm --prefix apps/web run lint / test / build` 통과.
 
 ## Phase 5.6: User Preferences Sync
 
 > Phase 6 iOS 진입 전 완료. cross-device 사용자 선호 동기화 인프라.
 
 ### 5.6-1. 스키마
-- [ ] `public.users` 에 `preferences jsonb not null default '{}'::jsonb` 컬럼 추가 (마이그레이션 1개).
-- [ ] RLS 는 기존 `users_select_self` / `users_update_self` 정책 재사용.
+- [x] `public.users` 에 `preferences jsonb not null default '{}'::jsonb` 컬럼 추가 (마이그레이션 1개).
+- [x] RLS 는 기존 `users_select_self` / `users_update_self` 정책 재사용.
 
 ### 5.6-2. 어댑터
-- [ ] Supabase 어댑터에 `loadPreferences()` / `savePreferences(patch)` 추가 — partial JSONB merge 패턴.
-- [ ] `JustDoStorage.saveSettings(settings)` 가 cross-device 필드만 추출해 preferences 로 라우팅. 나머지는 device-local 유지.
-- [ ] v1 동기화 필드: **`week_start`** 하나만.
-- [ ] 어댑터 단위 테스트.
+- [x] Supabase 어댑터에 preferences load/save 추가 — partial JSONB merge 패턴.
+- [x] `JustDoStorage.saveSettings(settings)` 가 cross-device 필드만 추출해 preferences 로 라우팅. 나머지는 device-local 유지.
+- [x] v1 동기화 필드: **`week_start`** 하나만.
+- [x] 어댑터/동기화 단위 테스트.
 
 ### 5.6-3. 오프라인 큐
-- [ ] `preferences_set: { key, value }` 뮤테이션 타입 추가.
-- [ ] `flushQueuedMutations` 가 preferences 뮤테이션도 처리.
+- [x] `preferences_set: { key, value }` 뮤테이션 타입 추가.
+- [x] `flushQueuedMutations` 가 preferences 뮤테이션도 처리.
 
 ### 5.6-4. 동작 정책
-- [ ] Realtime 미포함. 다음 load 시 반영.
-- [ ] 게스트 → 로그인 전이 시 localStorage 의 `weekStart` 를 1회 원격에 push (서버 값이 default 일 때만). 이후 원격 우선.
-- [ ] 향후 cross-device 필드 추가 시 JSONB 키만 늘리면 됨 (migration 불필요).
+- [x] Realtime 미포함. 다음 load 시 반영.
+- [x] 게스트 → 로그인 전이 시 localStorage 의 `weekStart` 를 1회 원격에 push (서버 값이 default 일 때만). 이후 원격 우선.
+- [x] 향후 cross-device 필드 추가 시 JSONB 키만 늘리면 됨 (migration 불필요).
 
 ### 5.6-5. 문서
-- [ ] `claude_handoff.md` 의 "settings/view remain device-local" 노트 갱신: `weekStart` 만 예외.
+- [x] `claude_handoff.md` 의 "settings/view remain device-local" 노트 갱신: `weekStart` 만 예외.
 
 ## Phase 5.7: Habit Recurrence (daily + weekly)
 
 > Phase 6 iOS 진입 전 완료. PRD 가 명시한 Habit 반복 주기 기능의 v1 구현.
 
 ### 5.7-1. 도메인
-- [ ] `Habit` 에 `recurType: 'daily' | 'weekly'`, `recurDays?: number[]` (0=일~6=토) 추가.
-- [ ] `NewHabitInput` 갱신.
-- [ ] `recurType` 미지정 hydration 시 'daily' 폴백 (구버전 localStorage 호환).
+- [x] `Habit` 에 `recurType: 'daily' | 'weekly'`, `recurDays?: number[]` (0=일~6=토) 추가.
+- [x] `NewHabitInput` 갱신.
+- [x] `recurType` 미지정 hydration 시 'daily' 폴백 (구버전 localStorage 호환).
 
 ### 5.7-2. 어댑터
-- [ ] `habitDomainToInsert`: 하드코딩된 `'daily'` 제거, 도메인 값 그대로 insert. `recur_days` 도 함께.
-- [ ] `habitRowToDomain`: `recur_type` / `recur_days` 보존. `recur_type === 'monthly'` 행은 v1 에 진입할 수 없으므로 'daily' 폴백 + 경고 (방어적).
-- [ ] 어댑터 단위 테스트 갱신.
+- [x] `habitDomainToInsert`: 하드코딩된 `'daily'` 제거, 도메인 값 그대로 insert. `recur_days` 도 함께.
+- [x] `habitRowToDomain`: `recur_type` / `recur_days` 보존. `recur_type === 'monthly'` 행은 v1 에 진입할 수 없으므로 'daily' 폴백.
+- [x] 어댑터 단위 테스트 갱신.
 
 ### 5.7-3. UI
-- [ ] Add Sheet (habit 모드): 반복 segment "매일 / 매주" 추가. weekly 선택 시 요일 picker (7개 토글, 최소 1개 선택 필수).
-- [ ] Detail/편집은 Habit 화면이 별도 detail 을 안 가지므로 Add Sheet 의 edit 모드도 동일하게 동작 (현재 Add Sheet 가 task edit 만 지원 → habit edit 모드 추가 결정 필요. 작업 시 함께 보강).
+- [x] Add Sheet (habit 모드): 반복 segment "매일 / 요일" 추가. weekly 선택 시 요일 picker (7개 토글, 최소 1개 선택 필수).
+- [x] Habit detail/edit 화면 추가: 제목, 이모지, 반복 설정, 알림 시간, 삭제, 최근 체크 기록 확인/수정.
 
 ### 5.7-4. Selectors / Habit Screen
-- [ ] `isActiveOn(habit, iso)` 헬퍼: daily 면 항상 true, weekly 면 해당 요일 포함 여부.
-- [ ] `habitStreak` 가 비활성 요일을 *skip* 하면서 카운트 (비활성일은 break 가 아님).
-- [ ] Habit Screen `DAILY CHECK`: 분모를 *선택 날짜에 활성인 habit* 으로만 카운트. 비활성 habit 은 리스트에서 회색 처리하거나 숨김 (UX 결정).
-- [ ] `LAST 7 DAYS` grid: 비활성 요일 셀은 disabled (회색, 클릭 비활성).
-- [ ] selector / streak 단위 테스트 보강.
+- [x] `habitActiveOn(habit, iso)` 헬퍼: daily 면 항상 true, weekly 면 해당 요일 포함 여부.
+- [x] `habitStreak` 가 비활성 요일을 *skip* 하면서 카운트 (비활성일은 break 가 아님).
+- [x] Habit Screen `DAILY CHECK`: 분모를 *선택 날짜에 활성인 habit* 으로만 카운트. 비활성 habit 은 Today 리스트에서 숨김.
+- [x] `LAST 7 DAYS` grid: 비활성 요일 셀은 disabled (회색, 클릭 비활성).
+- [x] selector / streak 단위 테스트 보강.
 
 ### 5.7-5. 문서
-- [ ] `just_do_prd.md` / `just_do_planning.md` 의 "매일/매주/매월" 표현을 v1=매일+매주, v2=매월 로 정리.
-- [ ] worklog 에 v2 확장 경로 명시 (`recurType` enum 에 'monthly' 추가, `recurDays` 의미 분기, `recur_end_date` 도메인 추가).
+- [x] `just_do_prd.md` / `just_do_planning.md` 의 "매일/매주/매월" 표현을 v1=매일+매주, v2=매월 로 정리.
+- [x] worklog 에 v2 확장 경로 명시 (`recurType` enum 에 'monthly' 추가, `recurDays` 의미 분기, `recur_end_date` 도메인 추가).
 
 ## Phase 6: iOS Planning
 

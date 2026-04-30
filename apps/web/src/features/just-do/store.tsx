@@ -14,6 +14,7 @@ import { addMonths, todayISO } from "@/lib/date";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   AppState,
+  Category,
   Habit,
   NewHabitInput,
   NewTaskInput,
@@ -49,6 +50,7 @@ const storageForUser = (userId: string) => {
 
 type StoreValue = {
   state: AppState;
+  isHydrated: boolean;
   syncError: string | null;
   syncStatus: {
     isOnline: boolean;
@@ -64,13 +66,22 @@ type StoreValue = {
   openAddSheet: (payload?: { taskId?: string; date?: string; initialType?: "task" | "habit" }) => void;
   closeSheet: () => void;
   openDetail: (taskId: string) => void;
+  openHabitDetail: (habitId: string) => void;
   closeDetail: () => void;
   toggleTask: (id: string) => void;
+  addCategory: (input: { name: string; color: string }) => void;
+  updateCategory: (
+    id: string,
+    patch: Partial<Pick<Category, "name" | "color" | "position">>,
+  ) => void;
+  deleteCategory: (id: string) => void;
   addTask: (task: NewTaskInput) => void;
   updateTask: (id: string, patch: Partial<NewTaskInput>) => void;
   deleteTask: (id: string) => void;
   toggleHabit: (id: string, iso: string) => void;
   addHabit: (habit: NewHabitInput) => void;
+  updateHabit: (id: string, patch: Partial<NewHabitInput>) => void;
+  deleteHabit: (id: string) => void;
   updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   reset: () => void;
 };
@@ -111,6 +122,8 @@ export function JustDoProvider({
     return defaultStorage;
   }, [storage, userId]);
   const [state, setState] = useState<AppState>(createInitialState);
+  const [hydratedStorage, setHydratedStorage] = useState<JustDoStorage | null>(null);
+  const isHydrated = hydratedStorage === activeStorage;
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState({
     isOnline: browserOnline(),
@@ -166,12 +179,14 @@ export function JustDoProvider({
           setState((current) => mergePersisted(current, saved));
         }
         hydratedRef.current = true;
+        setHydratedStorage(activeStorage);
         clearSyncError();
         refreshPendingCount();
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         hydratedRef.current = true;
+        setHydratedStorage(activeStorage);
         reportSyncError(err);
       });
     return () => {
@@ -217,6 +232,16 @@ export function JustDoProvider({
 
       setState((current) => {
         switch (change.type) {
+          case "category_upserted":
+            return { ...current, categories: upsertById(current.categories, change.category) };
+          case "category_deleted":
+            return {
+              ...current,
+              categories: current.categories.filter((category) => category.id !== change.id),
+              tasks: current.tasks.map((task) =>
+                task.categoryId === change.id ? { ...task, categoryId: null } : task,
+              ),
+            };
           case "task_upserted":
             return { ...current, tasks: upsertById(current.tasks, change.task) };
           case "task_deleted":
@@ -228,6 +253,7 @@ export function JustDoProvider({
                 sheet: current.view.sheet?.taskId === change.id ? null : current.view.sheet,
                 detailTaskId:
                   current.view.detailTaskId === change.id ? null : current.view.detailTaskId,
+                detailHabitId: current.view.detailHabitId,
               },
             };
           case "habit_upserted": {
@@ -241,6 +267,11 @@ export function JustDoProvider({
             return {
               ...current,
               habits: current.habits.filter((habit) => habit.id !== change.id),
+              view: {
+                ...current.view,
+                detailHabitId:
+                  current.view.detailHabitId === change.id ? null : current.view.detailHabitId,
+              },
             };
           case "habit_log_set":
             return {
@@ -278,10 +309,31 @@ export function JustDoProvider({
     },
     [activeStorage, persist],
   );
+  const persistCategory = useCallback(
+    (category: Category) => {
+      if (!hydratedRef.current) return;
+      persist(activeStorage.upsertCategory(category));
+    },
+    [activeStorage, persist],
+  );
+  const persistCategoryDelete = useCallback(
+    (id: string) => {
+      if (!hydratedRef.current) return;
+      persist(activeStorage.deleteCategory(id));
+    },
+    [activeStorage, persist],
+  );
   const persistHabit = useCallback(
     (habit: Habit) => {
       if (!hydratedRef.current) return;
       persist(activeStorage.upsertHabit(habit));
+    },
+    [activeStorage, persist],
+  );
+  const persistHabitDelete = useCallback(
+    (id: string) => {
+      if (!hydratedRef.current) return;
+      persist(activeStorage.deleteHabit(id));
     },
     [activeStorage, persist],
   );
@@ -320,10 +372,12 @@ export function JustDoProvider({
   const value = useMemo<StoreValue>(
     () => ({
       state,
+      isHydrated,
       syncError,
       syncStatus,
       clearSyncError,
-      setTab: (tab) => updateView((view) => ({ ...view, tab, detailTaskId: null })),
+      setTab: (tab) =>
+        updateView((view) => ({ ...view, tab, detailTaskId: null, detailHabitId: null })),
       setDark: (dark) => updateView((view) => ({ ...view, dark })),
       setMonth: (year, month) => updateView((view) => ({ ...view, year, month })),
       moveMonth: (offset) =>
@@ -339,9 +393,17 @@ export function JustDoProvider({
         }),
       closeSheet: () => updateView((view) => ({ ...view, sheet: null }), { persist: false }),
       openDetail: (taskId) =>
-        updateView((view) => ({ ...view, detailTaskId: taskId }), { persist: false }),
+        updateView((view) => ({ ...view, detailTaskId: taskId, detailHabitId: null }), {
+          persist: false,
+        }),
+      openHabitDetail: (habitId) =>
+        updateView((view) => ({ ...view, detailTaskId: null, detailHabitId: habitId }), {
+          persist: false,
+        }),
       closeDetail: () =>
-        updateView((view) => ({ ...view, detailTaskId: null }), { persist: false }),
+        updateView((view) => ({ ...view, detailTaskId: null, detailHabitId: null }), {
+          persist: false,
+        }),
       toggleTask: (id) => {
         const updated = state.tasks.find((task) => task.id === id);
         if (!updated) return;
@@ -351,6 +413,48 @@ export function JustDoProvider({
           tasks: s.tasks.map((task) => (task.id === id ? nextTask : task)),
         }));
         persistTask(nextTask);
+      },
+      addCategory: (input) => {
+        const nextPosition = state.categories.reduce(
+          (max, category) => Math.max(max, category.position),
+          -1,
+        ) + 1;
+        const category: Category = {
+          id: crypto.randomUUID(),
+          name: input.name.trim() || "새 카테고리",
+          color: input.color,
+          isDefault: false,
+          position: nextPosition,
+        };
+        setState((s) => ({ ...s, categories: [...s.categories, category] }));
+        persistCategory(category);
+      },
+      updateCategory: (id, patch) => {
+        const existing = state.categories.find((category) => category.id === id);
+        if (!existing) return;
+        const updated = {
+          ...existing,
+          ...patch,
+          name: patch.name === undefined ? existing.name : patch.name.trim() || existing.name,
+        };
+        setState((s) => ({
+          ...s,
+          categories: s.categories.map((category) =>
+            category.id === id ? updated : category,
+          ),
+        }));
+        persistCategory(updated);
+      },
+      deleteCategory: (id) => {
+        if (state.categories.length <= 1) return;
+        setState((s) => ({
+          ...s,
+          categories: s.categories.filter((category) => category.id !== id),
+          tasks: s.tasks.map((task) =>
+            task.categoryId === id ? { ...task, categoryId: null } : task,
+          ),
+        }));
+        persistCategoryDelete(id);
       },
       addTask: (input) => {
         const created: Task = {
@@ -380,6 +484,7 @@ export function JustDoProvider({
             ...s.view,
             sheet: s.view.sheet?.taskId === id ? null : s.view.sheet,
             detailTaskId: s.view.detailTaskId === id ? null : s.view.detailTaskId,
+            detailHabitId: s.view.detailHabitId,
           },
         }));
         persistTaskDelete(id);
@@ -409,6 +514,39 @@ export function JustDoProvider({
         setState((s) => ({ ...s, habits: [...s.habits, created] }));
         persistHabit(created);
       },
+      updateHabit: (id, patch) => {
+        const existing = state.habits.find((habit) => habit.id === id);
+        if (!existing) return;
+        const nextRecurType = patch.recurType ?? existing.recurType;
+        const updated: Habit = {
+          ...existing,
+          ...patch,
+          title: patch.title === undefined ? existing.title : patch.title.trim() || existing.title,
+          recurType: nextRecurType,
+          recurDays:
+            nextRecurType === "weekly"
+              ? (patch.recurDays ?? existing.recurDays ?? []).slice().sort((a, b) => a - b)
+              : undefined,
+          reminderTime:
+            patch.reminderTime === undefined ? existing.reminderTime ?? null : patch.reminderTime,
+        };
+        setState((s) => ({
+          ...s,
+          habits: s.habits.map((habit) => (habit.id === id ? updated : habit)),
+        }));
+        persistHabit(updated);
+      },
+      deleteHabit: (id) => {
+        setState((s) => ({
+          ...s,
+          habits: s.habits.filter((habit) => habit.id !== id),
+          view: {
+            ...s.view,
+            detailHabitId: s.view.detailHabitId === id ? null : s.view.detailHabitId,
+          },
+        }));
+        persistHabitDelete(id);
+      },
       updateSetting: (key, value) => {
         const settings = { ...state.settings, [key]: value };
         setState((s) => ({ ...s, settings }));
@@ -418,10 +556,14 @@ export function JustDoProvider({
     }),
     [
       state,
+      isHydrated,
       updateView,
       persistTask,
       persistTaskDelete,
+      persistCategory,
+      persistCategoryDelete,
       persistHabit,
+      persistHabitDelete,
       persistHabitLog,
       persistSettings,
       syncError,

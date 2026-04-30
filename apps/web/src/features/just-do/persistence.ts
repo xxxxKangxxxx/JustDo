@@ -1,4 +1,5 @@
-import type { AppState, Habit, Settings, Task } from "@/types/domain";
+import type { AppState, Category, Habit, Settings, Task } from "@/types/domain";
+import { defaultCategories } from "./tokens";
 
 export type PersistedView = Pick<
   AppState["view"],
@@ -7,15 +8,20 @@ export type PersistedView = Pick<
 
 export type Persisted = {
   view: PersistedView;
+  categories: AppState["categories"];
   tasks: AppState["tasks"];
   habits: AppState["habits"];
   settings: AppState["settings"];
 };
 
 export type LocalMutation =
+  | { type: "category_upsert"; category: Category }
+  | { type: "category_delete"; id: string }
+  | { type: "preferences_set"; key: "week_start"; value: Settings["weekStart"] }
   | { type: "task_upsert"; task: Task }
   | { type: "task_delete"; id: string }
   | { type: "habit_upsert"; habit: Habit }
+  | { type: "habit_delete"; id: string }
   | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 };
 
 export type QueuedMutation = {
@@ -25,6 +31,8 @@ export type QueuedMutation = {
 };
 
 export type RemoteChange =
+  | { type: "category_upserted"; category: Category }
+  | { type: "category_deleted"; id: string }
   | { type: "task_upserted"; task: Task }
   | { type: "task_deleted"; id: string }
   | { type: "habit_upserted"; habit: Habit }
@@ -51,10 +59,14 @@ export interface JustDoStorage {
   saveSettings(settings: Settings): Promise<void>;
   saveView(view: PersistedView): Promise<void>;
 
+  upsertCategory(category: Category): Promise<void>;
+  deleteCategory(id: string): Promise<void>;
+
   upsertTask(task: Task): Promise<void>;
   deleteTask(id: string): Promise<void>;
 
   upsertHabit(habit: Habit): Promise<void>;
+  deleteHabit(id: string): Promise<void>;
   setHabitLog(habitId: string, iso: string, value: 0 | 1): Promise<void>;
 
   listQueuedMutations?(): Promise<QueuedMutation[]>;
@@ -72,27 +84,106 @@ export const toPersisted = (state: AppState): Persisted => ({
     selectedDate: state.view.selectedDate,
     dark: state.view.dark,
   },
+  categories: state.categories,
   tasks: state.tasks,
   habits: state.habits,
   settings: state.settings,
 });
 
-const normalizeTab = (tab: PersistedView["tab"] | "stats"): AppState["view"]["tab"] =>
-  tab === "stats" ? "settings" : tab;
+const normalizeTab = (
+  tab: PersistedView["tab"] | "stats" | undefined,
+): AppState["view"]["tab"] => {
+  if (tab === "stats") return "settings";
+  if (tab === "home" || tab === "habit" || tab === "settings") return tab;
+  return "home";
+};
 
-export const mergePersisted = (initial: AppState, saved: Persisted): AppState => ({
-  ...initial,
-  tasks: saved.tasks,
-  habits: saved.habits,
-  settings: { ...initial.settings, ...saved.settings },
-  view: {
-    ...initial.view,
-    ...saved.view,
-    tab: normalizeTab(saved.view.tab as PersistedView["tab"] | "stats"),
-    sheet: null,
-    detailTaskId: null,
-  },
-});
+type LegacyTask = Omit<Task, "categoryId"> & {
+  category?: "me" | "ext";
+  categoryId?: string | null;
+};
+type LegacyPersisted = Omit<Partial<Persisted>, "tasks"> & { tasks?: LegacyTask[] };
+type LegacyHabit = Omit<Habit, "recurType" | "recurDays"> & {
+  recurType?: Habit["recurType"];
+  recurDays?: number[];
+  reminderTime?: string | null;
+};
+
+const categoryIdByLegacyName: Record<"me" | "ext", string> = {
+  me: defaultCategories[0].id,
+  ext: defaultCategories[1].id,
+};
+
+const normalizeCategories = (saved: LegacyPersisted) =>
+  saved.categories?.length ? saved.categories : defaultCategories;
+
+const normalizeTasks = (saved: LegacyPersisted): Task[] =>
+  (saved.tasks ?? []).map((task) => {
+    const legacyCategory = task.category;
+    const categoryId =
+      task.categoryId ??
+      (legacyCategory === "me" || legacyCategory === "ext"
+        ? categoryIdByLegacyName[legacyCategory]
+        : defaultCategories[0].id);
+    const rest = { ...task };
+    delete rest.category;
+    return { ...rest, categoryId };
+  });
+
+const normalizeHabits = (habits: Habit[] | undefined): Habit[] =>
+  ((habits ?? []) as LegacyHabit[]).map((habit) => ({
+    ...habit,
+    recurType: habit.recurType === "weekly" ? "weekly" : "daily",
+    recurDays:
+      habit.recurType === "weekly" && habit.recurDays?.length
+        ? habit.recurDays
+        : undefined,
+    reminderTime: habit.reminderTime ?? null,
+  }));
+
+export const mergePersisted = (initial: AppState, saved: Persisted): AppState => {
+  const legacy = saved as LegacyPersisted;
+  return {
+    ...initial,
+    categories: normalizeCategories(legacy),
+    tasks: normalizeTasks(legacy),
+    habits: normalizeHabits(saved.habits),
+    settings: { ...initial.settings, ...saved.settings },
+    view: {
+      ...initial.view,
+      ...saved.view,
+      tab: normalizeTab(saved.view.tab as PersistedView["tab"] | "stats"),
+      sheet: null,
+      detailTaskId: null,
+      detailHabitId: null,
+    },
+  };
+};
+
+const normalizePersistedSnapshot = (saved: Persisted): Persisted => {
+  const legacy = saved as LegacyPersisted;
+  const savedSettings = saved.settings as Partial<Settings> | undefined;
+  return {
+    ...saved,
+    categories: normalizeCategories(legacy),
+    tasks: normalizeTasks(legacy),
+    habits: normalizeHabits(saved.habits),
+    settings: {
+      notify: true,
+      notifyTime: "09:00",
+      weekStart: 0,
+      plan: "free",
+      ...savedSettings,
+    },
+    view: {
+      tab: normalizeTab(saved.view?.tab as PersistedView["tab"] | "stats"),
+      year: saved.view?.year ?? 1970,
+      month: saved.view?.month ?? 1,
+      selectedDate: saved.view?.selectedDate ?? "1970-01-01",
+      dark: saved.view?.dark ?? false,
+    },
+  };
+};
 
 // ---------------------------------------------------------------------------
 // In-memory adapter — used by tests and as a base for the localStorage adapter.
@@ -111,6 +202,7 @@ const ensureSnapshot = (ref: MemoryStateRef): Persisted => {
         selectedDate: "1970-01-01",
         dark: false,
       },
+      categories: defaultCategories,
       tasks: [],
       habits: [],
       settings: {
@@ -121,6 +213,7 @@ const ensureSnapshot = (ref: MemoryStateRef): Persisted => {
       },
     };
   }
+  ref.current = normalizePersistedSnapshot(ref.current);
   return ref.current;
 };
 
@@ -131,10 +224,11 @@ const applyMutation = (
   ref.current = mutate(ensureSnapshot(ref));
 };
 
-const upsertById = <T extends { id: string }>(list: T[], item: T): T[] => {
-  const index = list.findIndex((existing) => existing.id === item.id);
-  if (index === -1) return [...list, item];
-  const next = list.slice();
+const upsertById = <T extends { id: string }>(list: T[] | undefined, item: T): T[] => {
+  const current = list ?? [];
+  const index = current.findIndex((existing) => existing.id === item.id);
+  if (index === -1) return [...current, item];
+  const next = current.slice();
   next[index] = item;
   return next;
 };
@@ -144,7 +238,7 @@ export const createMemoryStorage = (initial: Persisted | null = null): JustDoSto
 
   return {
     async load() {
-      return ref.current;
+      return ref.current ? normalizePersistedSnapshot(ref.current) : null;
     },
 
     async replaceSnapshot(snapshot) {
@@ -157,6 +251,23 @@ export const createMemoryStorage = (initial: Persisted | null = null): JustDoSto
 
     async saveView(view) {
       applyMutation(ref, (snap) => ({ ...snap, view }));
+    },
+
+    async upsertCategory(category) {
+      applyMutation(ref, (snap) => ({
+        ...snap,
+        categories: upsertById(snap.categories, category),
+      }));
+    },
+
+    async deleteCategory(id) {
+      applyMutation(ref, (snap) => ({
+        ...snap,
+        categories: snap.categories.filter((category) => category.id !== id),
+        tasks: snap.tasks.map((task) =>
+          task.categoryId === id ? { ...task, categoryId: null } : task,
+        ),
+      }));
     },
 
     async upsertTask(task) {
@@ -172,6 +283,13 @@ export const createMemoryStorage = (initial: Persisted | null = null): JustDoSto
 
     async upsertHabit(habit) {
       applyMutation(ref, (snap) => ({ ...snap, habits: upsertById(snap.habits, habit) }));
+    },
+
+    async deleteHabit(id) {
+      applyMutation(ref, (snap) => ({
+        ...snap,
+        habits: snap.habits.filter((habit) => habit.id !== id),
+      }));
     },
 
     async setHabitLog(habitId, iso, value) {
@@ -232,7 +350,7 @@ export const createLocalStorageStorage = (
       try {
         const raw = window.localStorage.getItem(key);
         if (!raw) return null;
-        const parsed = JSON.parse(raw) as Persisted;
+        const parsed = normalizePersistedSnapshot(JSON.parse(raw) as Persisted);
         ref.current = parsed;
         return parsed;
       } catch {
@@ -247,12 +365,24 @@ export const createLocalStorageStorage = (
 
     saveSettings: (settings) => mutate((snap) => ({ ...snap, settings })),
     saveView: (view) => mutate((snap) => ({ ...snap, view })),
+    upsertCategory: (category) =>
+      mutate((snap) => ({ ...snap, categories: upsertById(snap.categories, category) })),
+    deleteCategory: (id) =>
+      mutate((snap) => ({
+        ...snap,
+        categories: snap.categories.filter((category) => category.id !== id),
+        tasks: snap.tasks.map((task) =>
+          task.categoryId === id ? { ...task, categoryId: null } : task,
+        ),
+      })),
     upsertTask: (task) =>
       mutate((snap) => ({ ...snap, tasks: upsertById(snap.tasks, task) })),
     deleteTask: (id) =>
       mutate((snap) => ({ ...snap, tasks: snap.tasks.filter((task) => task.id !== id) })),
     upsertHabit: (habit) =>
       mutate((snap) => ({ ...snap, habits: upsertById(snap.habits, habit) })),
+    deleteHabit: (id) =>
+      mutate((snap) => ({ ...snap, habits: snap.habits.filter((habit) => habit.id !== id) })),
     setHabitLog: (habitId, iso, value) =>
       mutate((snap) => ({
         ...snap,
@@ -321,7 +451,7 @@ export const createSnapshotStorage = (
   };
 
   const loadSnapshot = async () => {
-    if (ref.current) return ref.current;
+    if (ref.current) return normalizePersistedSnapshot(ref.current);
     ref.current = await store.read();
     return ensureSnapshot(ref);
   };
@@ -335,7 +465,8 @@ export const createSnapshotStorage = (
 
   return {
     async load() {
-      ref.current = await store.read();
+      const saved = await store.read();
+      ref.current = saved ? normalizePersistedSnapshot(saved) : null;
       return ref.current;
     },
 
@@ -344,8 +475,28 @@ export const createSnapshotStorage = (
       await store.write(snapshot);
     },
 
-    saveSettings: (settings) => mutate((snap) => ({ ...snap, settings })),
+    saveSettings: async (settings) => {
+      const previous = await loadSnapshot();
+      await mutate((snap) => ({ ...snap, settings }));
+      if (previous.settings.weekStart !== settings.weekStart) {
+        await enqueue({ type: "preferences_set", key: "week_start", value: settings.weekStart });
+      }
+    },
     saveView: (view) => mutate((snap) => ({ ...snap, view })),
+    upsertCategory: async (category) => {
+      await mutate((snap) => ({ ...snap, categories: upsertById(snap.categories, category) }));
+      await enqueue({ type: "category_upsert", category });
+    },
+    deleteCategory: async (id) => {
+      await mutate((snap) => ({
+        ...snap,
+        categories: snap.categories.filter((category) => category.id !== id),
+        tasks: snap.tasks.map((task) =>
+          task.categoryId === id ? { ...task, categoryId: null } : task,
+        ),
+      }));
+      await enqueue({ type: "category_delete", id });
+    },
     upsertTask: async (task) => {
       await mutate((snap) => ({ ...snap, tasks: upsertById(snap.tasks, task) }));
       await enqueue({ type: "task_upsert", task });
@@ -357,6 +508,13 @@ export const createSnapshotStorage = (
     upsertHabit: async (habit) => {
       await mutate((snap) => ({ ...snap, habits: upsertById(snap.habits, habit) }));
       await enqueue({ type: "habit_upsert", habit });
+    },
+    deleteHabit: async (id) => {
+      await mutate((snap) => ({
+        ...snap,
+        habits: snap.habits.filter((habit) => habit.id !== id),
+      }));
+      await enqueue({ type: "habit_delete", id });
     },
     setHabitLog: async (habitId, iso, value) => {
       await mutate((snap) => ({
@@ -533,6 +691,20 @@ export const createIndexedDBStorage = (
 
 const applyQueuedMutation = async (storage: JustDoStorage, queued: QueuedMutation) => {
   switch (queued.mutation.type) {
+    case "preferences_set":
+      await storage.saveSettings({
+        notify: true,
+        notifyTime: "09:00",
+        plan: "free",
+        weekStart: queued.mutation.value,
+      });
+      return;
+    case "category_upsert":
+      await storage.upsertCategory(queued.mutation.category);
+      return;
+    case "category_delete":
+      await storage.deleteCategory(queued.mutation.id);
+      return;
     case "task_upsert":
       await storage.upsertTask(queued.mutation.task);
       return;
@@ -541,6 +713,9 @@ const applyQueuedMutation = async (storage: JustDoStorage, queued: QueuedMutatio
       return;
     case "habit_upsert":
       await storage.upsertHabit(queued.mutation.habit);
+      return;
+    case "habit_delete":
+      await storage.deleteHabit(queued.mutation.id);
       return;
     case "habit_log_set":
       await storage.setHabitLog(
@@ -567,6 +742,16 @@ export const flushQueuedMutations = async (
 
 const applyRemoteChangeToSnapshot = (snapshot: Persisted, change: RemoteChange): Persisted => {
   switch (change.type) {
+    case "category_upserted":
+      return { ...snapshot, categories: upsertById(snapshot.categories, change.category) };
+    case "category_deleted":
+      return {
+        ...snapshot,
+        categories: snapshot.categories.filter((category) => category.id !== change.id),
+        tasks: snapshot.tasks.map((task) =>
+          task.categoryId === change.id ? { ...task, categoryId: null } : task,
+        ),
+      };
     case "task_upserted":
       return { ...snapshot, tasks: upsertById(snapshot.tasks, change.task) };
     case "task_deleted":
@@ -620,6 +805,15 @@ export const createSyncedStorage = (
       }
 
       const remote = await remoteStorage.load();
+      if (
+        remote &&
+        local &&
+        remote.settings.weekStart === 0 &&
+        local.settings.weekStart !== 0
+      ) {
+        await remoteStorage.saveSettings(local.settings);
+        remote.settings = { ...remote.settings, weekStart: local.settings.weekStart };
+      }
       if (remote && localStorage.replaceSnapshot) {
         await localStorage.replaceSnapshot(remote);
       }
@@ -630,11 +824,14 @@ export const createSyncedStorage = (
       ? (snapshot) => localStorage.replaceSnapshot?.(snapshot) ?? Promise.resolve()
       : undefined,
 
-    saveSettings: (settings) => localStorage.saveSettings(settings),
+    saveSettings: (settings) => withFlush(localStorage.saveSettings(settings)),
     saveView: (view) => localStorage.saveView(view),
+    upsertCategory: (category) => withFlush(localStorage.upsertCategory(category)),
+    deleteCategory: (id) => withFlush(localStorage.deleteCategory(id)),
     upsertTask: (task) => withFlush(localStorage.upsertTask(task)),
     deleteTask: (id) => withFlush(localStorage.deleteTask(id)),
     upsertHabit: (habit) => withFlush(localStorage.upsertHabit(habit)),
+    deleteHabit: (id) => withFlush(localStorage.deleteHabit(id)),
     setHabitLog: (habitId, iso, value) =>
       withFlush(localStorage.setHabitLog(habitId, iso, value)),
 

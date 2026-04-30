@@ -9,11 +9,11 @@ import {
   weekdayLabels,
   weekdayOfISO,
 } from "@/lib/date";
-import type { Task, TaskCategory } from "@/types/domain";
+import type { Category, Task } from "@/types/domain";
 import { CatDot, CircleCheck, IconButton } from "./primitives";
 import { tasksInRange, tasksOnDate } from "./selectors";
 import { useJustDo } from "./store";
-import { categoryLabel, tokens, type ThemeMode } from "./tokens";
+import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
 
 const baseWeekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
@@ -23,10 +23,14 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
   const { year, month, selectedDate } = s.state.view;
   const selected = parseISO(selectedDate);
   const selectedTasks = tasksOnDate(s.state.tasks, selectedDate);
-  const grouped: Record<TaskCategory, Task[]> = {
-    me: selectedTasks.filter((task) => task.category === "me"),
-    ext: selectedTasks.filter((task) => task.category === "ext"),
-  };
+  const categories = sortedCategories(s.state.categories);
+  const grouped = categories
+    .map((category) => ({
+      category,
+      tasks: selectedTasks.filter((task) => task.categoryId === category.id),
+    }))
+    .filter((group) => group.tasks.length > 0);
+  const uncategorizedTasks = selectedTasks.filter((task) => !task.categoryId);
 
   return (
     <>
@@ -100,11 +104,12 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
           </span>
         </div>
 
-        {(["me", "ext"] as const).map((category) =>
-          grouped[category].length ? (
-            <TaskGroup key={category} category={category} tasks={grouped[category]} mode={mode} />
-          ) : null,
-        )}
+        {grouped.map(({ category, tasks }) => (
+          <TaskGroup key={category.id} category={category} tasks={tasks} mode={mode} />
+        ))}
+        {uncategorizedTasks.length ? (
+          <TaskGroup category={null} tasks={uncategorizedTasks} mode={mode} />
+        ) : null}
       </section>
     </>
   );
@@ -121,6 +126,7 @@ function Calendar({ mode }: { mode: ThemeMode }) {
   const monthStart = isoOf(year, month, 1);
   const monthEnd = isoOf(year, month, days);
   const bars = tasksInRange(s.state.tasks, monthStart, monthEnd).filter((task) => task.startDate !== task.endDate);
+  const categoryById = new Map(s.state.categories.map((category) => [category.id, category]));
   const weeks = Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7));
 
   return (
@@ -175,8 +181,16 @@ function Calendar({ mode }: { mode: ThemeMode }) {
                     {cell.muted ? "" : cell.day}
                   </span>
                   <span className="mt-0.5 flex h-1 gap-0.5">
-                    {dots.some((task) => task.category === "me") ? <CatDot category="me" mode={mode} size={4} /> : null}
-                    {dots.some((task) => task.category === "ext") ? <CatDot category="ext" mode={mode} size={4} /> : null}
+                    {Array.from(new Set(dots.map((task) => task.categoryId)))
+                      .slice(0, 3)
+                      .map((categoryId) => (
+                        <CatDot
+                          key={categoryId ?? "none"}
+                          category={categoryId ? categoryById.get(categoryId) : null}
+                          mode={mode}
+                          size={4}
+                        />
+                      ))}
                   </span>
                 </button>
               );
@@ -192,8 +206,8 @@ function Calendar({ mode }: { mode: ThemeMode }) {
                       left: `calc(${(task.startCol / 7) * 100}% + 2px)`,
                       width: `calc(${((task.endCol - task.startCol + 1) / 7) * 100}% - 4px)`,
                       top: task.lane * 16,
-                      background: t[task.category].soft,
-                      color: t[task.category].ink,
+                      background: categoryStyle(categoryById.get(task.categoryId ?? ""), mode).soft,
+                      color: categoryStyle(categoryById.get(task.categoryId ?? ""), mode).ink,
                     }}
                   >
                     {task.title}
@@ -208,7 +222,7 @@ function Calendar({ mode }: { mode: ThemeMode }) {
   );
 }
 
-function TaskGroup({ category, tasks, mode }: { category: TaskCategory; tasks: Task[]; mode: ThemeMode }) {
+function TaskGroup({ category, tasks, mode }: { category: Category | null; tasks: Task[]; mode: ThemeMode }) {
   return (
     <div className="mt-3.5">
       <GroupTitle category={category} count={tasks.length} mode={mode} />
@@ -219,13 +233,14 @@ function TaskGroup({ category, tasks, mode }: { category: TaskCategory; tasks: T
   );
 }
 
-function GroupTitle({ category, count, mode }: { category: TaskCategory; count: number; mode: ThemeMode }) {
+function GroupTitle({ category, count, mode }: { category: Category | null; count: number; mode: ThemeMode }) {
   const t = tokens[mode];
+  const c = categoryStyle(category, mode);
   return (
     <div className="mb-1 flex items-center gap-1.5">
-      <span className="h-3 w-[3px] rounded-sm" style={{ background: t[category].solid }} />
-      <span className="text-xs font-semibold tracking-[0.2px]" style={{ color: t[category].ink }}>
-        [{categoryLabel[category]}]
+      <span className="h-3 w-[3px] rounded-sm" style={{ background: c.solid }} />
+      <span className="text-xs font-semibold tracking-[0.2px]" style={{ color: c.ink }}>
+        [{category?.name ?? "미분류"}]
       </span>
       <span className="ml-0.5 text-[11px]" style={{ color: t.textTertiary }}>
         {count}
@@ -237,6 +252,7 @@ function GroupTitle({ category, count, mode }: { category: TaskCategory; count: 
 function TaskRow({ task, mode, last }: { task: Task; mode: ThemeMode; last: boolean }) {
   const s = useJustDo();
   const t = tokens[mode];
+  const category = s.state.categories.find((item) => item.id === task.categoryId) ?? null;
   const isRange = task.startDate !== task.endDate;
   const start = parseISO(task.startDate);
   const end = parseISO(task.endDate);
@@ -244,7 +260,7 @@ function TaskRow({ task, mode, last }: { task: Task; mode: ThemeMode; last: bool
   return (
     <div className="flex items-center gap-3 py-3" style={{ borderBottom: last ? "none" : `0.5px solid ${t.divider}` }}>
       <button type="button" onClick={() => s.toggleTask(task.id)}>
-        <CircleCheck checked={task.isCompleted} category={task.category} mode={mode} />
+        <CircleCheck checked={task.isCompleted} category={category} mode={mode} />
       </button>
       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => s.openDetail(task.id)}>
         <div

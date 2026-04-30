@@ -2,7 +2,7 @@
 
 import { addDays, parseISO, weekdayOfISO } from "@/lib/date";
 import { CircleCheck } from "./primitives";
-import { habitStreak } from "./selectors";
+import { habitActiveOn, habitStreak } from "./selectors";
 import { useJustDo } from "./store";
 import { tokens, type ThemeMode } from "./tokens";
 
@@ -14,9 +14,10 @@ export function HabitScreen({ mode }: { mode: ThemeMode }) {
   const selectedDate = s.state.view.selectedDate;
   const selected = parseISO(selectedDate);
   const days7 = Array.from({ length: 7 }, (_, index) => addDays(selectedDate, index - 6));
-  const doneToday = s.state.habits.filter((habit) => habit.log[selectedDate]).length;
-  const completionRate = s.state.habits.length
-    ? Math.round((doneToday / s.state.habits.length) * 100)
+  const activeHabits = s.state.habits.filter((habit) => habitActiveOn(habit, selectedDate));
+  const doneToday = activeHabits.filter((habit) => habit.log[selectedDate]).length;
+  const completionRate = activeHabits.length
+    ? Math.round((doneToday / activeHabits.length) * 100)
     : 0;
 
   return (
@@ -46,7 +47,7 @@ export function HabitScreen({ mode }: { mode: ThemeMode }) {
         <div className="flex items-baseline gap-1.5">
           <span className="text-4xl font-bold tracking-[-1px]">{doneToday}</span>
           <span className="text-[13px] font-medium" style={{ color: t.textSecondary }}>
-            / {s.state.habits.length}개 완료
+            / {activeHabits.length}개 완료
           </span>
           <span className="flex-1" />
           <span className="text-lg font-bold" style={{ color: t.habit.ink }}>
@@ -60,19 +61,23 @@ export function HabitScreen({ mode }: { mode: ThemeMode }) {
 
       <SectionTitle mode={mode}>TODAY</SectionTitle>
       <section className="mb-4 rounded-2xl px-4 py-1" style={{ background: t.surface }}>
-        {s.state.habits.length ? (
-          s.state.habits.map((habit, index) => {
+        {activeHabits.length ? (
+          activeHabits.map((habit, index) => {
             const done = Boolean(habit.log[selectedDate]);
             return (
               <div
                 key={habit.id}
                 className="flex items-center gap-3 py-3"
-                style={{ borderBottom: index === s.state.habits.length - 1 ? "none" : `0.5px solid ${t.divider}` }}
+                style={{ borderBottom: index === activeHabits.length - 1 ? "none" : `0.5px solid ${t.divider}` }}
               >
                 <button type="button" onClick={() => s.toggleHabit(habit.id, selectedDate)} aria-label={`${habit.title} 완료`}>
                   <CircleCheck checked={done} category="habit" mode={mode} />
                 </button>
-                <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => s.openHabitDetail(habit.id)}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <div
                     className="flex min-w-0 items-center gap-1.5 text-[15px] font-medium tracking-[-0.2px]"
                     style={{
@@ -86,13 +91,13 @@ export function HabitScreen({ mode }: { mode: ThemeMode }) {
                   <div className="mt-0.5 text-[11px] font-medium" style={{ color: t.habit.ink }}>
                     {habitStreak(habit, selectedDate)}일째
                   </div>
-                </div>
+                </button>
               </div>
             );
           })
         ) : (
           <div className="py-8 text-center text-[13px] font-medium" style={{ color: t.textTertiary }}>
-            등록된 습관이 없습니다.
+            오늘 활성화된 습관이 없습니다.
           </div>
         )}
       </section>
@@ -109,23 +114,36 @@ export function HabitScreen({ mode }: { mode: ThemeMode }) {
           <div />
         </div>
         {s.state.habits.map((habit) => {
-          const doneDays = days7.map((day) => Boolean(habit.log[day]));
-          const rate = Math.round((doneDays.filter(Boolean).length / 7) * 100);
+          const activeDays = days7.filter((day) => habitActiveOn(habit, day));
+          const rate = activeDays.length
+            ? Math.round((activeDays.filter((day) => habit.log[day]).length / activeDays.length) * 100)
+            : 0;
           return (
             <div key={habit.id} className="mb-2 grid grid-cols-[92px_repeat(7,minmax(0,1fr))_36px] items-center gap-1 last:mb-0">
               <div className="min-w-0 truncate text-xs font-medium" style={{ color: t.textSecondary }}>
                 {habit.emoji} {habit.title}
               </div>
-              {doneDays.map((done, index) => (
-                <button
-                  key={days7[index]}
-                  type="button"
-                  onClick={() => s.toggleHabit(habit.id, days7[index])}
-                  className="h-6 rounded"
-                  style={{ background: done ? t.habit.solid : t.surfaceAlt }}
-                  aria-label={`${habit.title} ${days7[index]} 기록`}
-                />
-              ))}
+              {days7.map((day) => {
+                const active = habitActiveOn(habit, day);
+                const done = Boolean(habit.log[day]);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      if (active) s.toggleHabit(habit.id, day);
+                    }}
+                    disabled={!active}
+                    className="h-6 rounded"
+                    style={{
+                      background: done ? t.habit.solid : t.surfaceAlt,
+                      opacity: active ? 1 : 0.35,
+                      cursor: active ? "pointer" : "default",
+                    }}
+                    aria-label={`${habit.title} ${day} 기록`}
+                  />
+                );
+              })}
               <div className="text-right text-[11px] font-bold" style={{ color: t.habit.ink }}>
                 {rate}%
               </div>

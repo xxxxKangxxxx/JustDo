@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Habit, Task } from "@/types/domain";
 import {
+  categoryDomainToInsert,
+  categoryRowToDomain,
   habitDomainToInsert,
   habitRowToDomain,
   mergeHabitLogs,
-  taskCategoryToName,
   taskDomainToInsert,
   taskRowToDomain,
 } from "./supabase-mapping";
 
+type CategoryRow = Database["public"]["Tables"]["categories"]["Row"];
 type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
 type HabitRow = Database["public"]["Tables"]["habits"]["Row"];
 type HabitLogRow = Database["public"]["Tables"]["habit_logs"]["Row"];
@@ -36,6 +38,17 @@ const taskRow = (over: Partial<TaskRow> = {}): TaskRow => ({
   ...over,
 });
 
+const categoryRow = (over: Partial<CategoryRow> = {}): CategoryRow => ({
+  id: "cat-me",
+  user_id: "u1",
+  name: "나",
+  color: "#4F6FD8",
+  position: 0,
+  is_default: true,
+  created_at: "2026-04-29T00:00:00Z",
+  ...over,
+});
+
 const habitRow = (over: Partial<HabitRow> = {}): HabitRow => ({
   id: "h1",
   user_id: "u1",
@@ -51,10 +64,30 @@ const habitRow = (over: Partial<HabitRow> = {}): HabitRow => ({
   ...over,
 });
 
-describe("taskCategoryToName", () => {
-  it("matches the seed names from the signup trigger", () => {
-    expect(taskCategoryToName.me).toBe("나");
-    expect(taskCategoryToName.ext).toBe("외부");
+describe("category mapping", () => {
+  it("maps category rows into domain categories", () => {
+    expect(categoryRowToDomain(categoryRow())).toEqual({
+      id: "cat-me",
+      name: "나",
+      color: "#4F6FD8",
+      isDefault: true,
+      position: 0,
+    });
+  });
+
+  it("maps domain categories into insert payloads", () => {
+    const insert = categoryDomainToInsert(
+      { id: "cat", name: "Work", color: "#D36A3A", isDefault: false, position: 2 },
+      "u1",
+    );
+    expect(insert).toMatchObject({
+      id: "cat",
+      user_id: "u1",
+      name: "Work",
+      color: "#D36A3A",
+      is_default: false,
+      position: 2,
+    });
   });
 });
 
@@ -65,14 +98,14 @@ describe("taskRowToDomain", () => {
         priority: "high",
         is_completed: true,
         scheduled_time: "14:00",
+        category_id: "cat-ext",
       }),
-      "외부",
       ["#취업", "#면접"],
     );
     expect(task).toEqual<Task>({
       id: "t1",
       title: "title",
-      category: "ext",
+      categoryId: "cat-ext",
       startDate: "2026-04-29",
       endDate: "2026-04-29",
       priority: "high",
@@ -83,27 +116,27 @@ describe("taskRowToDomain", () => {
   });
 
   it("falls back to start_date when end_date is null", () => {
-    const task = taskRowToDomain(taskRow({ end_date: null }), "나");
+    const task = taskRowToDomain(taskRow({ end_date: null }));
     expect(task.endDate).toBe("2026-04-29");
   });
 
   it("drops priority that does not match the enum", () => {
-    const task = taskRowToDomain(taskRow({ priority: "urgent" }), "나");
+    const task = taskRowToDomain(taskRow({ priority: "urgent" }));
     expect(task.priority).toBeUndefined();
   });
 
-  it("defaults to category 'me' when the join is null", () => {
-    const task = taskRowToDomain(taskRow(), null);
-    expect(task.category).toBe("me");
+  it("keeps a null category id when the row is uncategorized", () => {
+    const task = taskRowToDomain(taskRow({ category_id: null }));
+    expect(task.categoryId).toBeNull();
   });
 });
 
 describe("taskDomainToInsert", () => {
-  it("attaches the resolved categoryId and stamps completed_at when completed", () => {
+  it("attaches categoryId and stamps completed_at when completed", () => {
     const task: Task = {
       id: "t1",
       title: "Done",
-      category: "me",
+      categoryId: "cat-me",
       startDate: "2026-04-29",
       endDate: "2026-04-29",
       priority: "low",
@@ -111,7 +144,7 @@ describe("taskDomainToInsert", () => {
       scheduledTime: null,
       tags: [],
     };
-    const insert = taskDomainToInsert(task, "u1", "cat-me");
+    const insert = taskDomainToInsert(task, "u1");
     expect(insert.user_id).toBe("u1");
     expect(insert.category_id).toBe("cat-me");
     expect(insert.priority).toBe("low");
@@ -123,14 +156,14 @@ describe("taskDomainToInsert", () => {
     const task: Task = {
       id: "t2",
       title: "Open",
-      category: "ext",
+      categoryId: null,
       startDate: "",
       endDate: "",
       isCompleted: false,
       scheduledTime: null,
       tags: [],
     };
-    const insert = taskDomainToInsert(task, "u1", null);
+    const insert = taskDomainToInsert(task, "u1");
     expect(insert.completed_at).toBeNull();
     expect(insert.start_date).toBeNull();
     expect(insert.end_date).toBeNull();
@@ -144,7 +177,15 @@ describe("habitRowToDomain / habitDomainToInsert", () => {
     expect(domain.emoji).toBe("🏃");
     expect(domain.category).toBe("habit");
     expect(domain.startedAt).toBe("2026-04-15");
+    expect(domain.recurType).toBe("daily");
+    expect(domain.recurDays).toBeUndefined();
     expect(domain.log).toEqual({});
+  });
+
+  it("maps weekly recurrence from a habit row", () => {
+    const domain = habitRowToDomain(habitRow({ recur_type: "weekly", recur_days: [1, 3, 5] }));
+    expect(domain.recurType).toBe("weekly");
+    expect(domain.recurDays).toEqual([1, 3, 5]);
   });
 
   it("produces an insert payload that carries title, emoji, and recur_type", () => {
@@ -154,6 +195,8 @@ describe("habitRowToDomain / habitDomainToInsert", () => {
       emoji: "📖",
       category: "habit",
       startedAt: "2026-04-01",
+      recurType: "weekly",
+      recurDays: [1, 3, 5],
       log: {},
     };
     const insert = habitDomainToInsert(habit, "u1");
@@ -161,7 +204,8 @@ describe("habitRowToDomain / habitDomainToInsert", () => {
     expect(insert.user_id).toBe("u1");
     expect(insert.title).toBe("Read");
     expect(insert.emoji).toBe("📖");
-    expect(insert.recur_type).toBe("daily");
+    expect(insert.recur_type).toBe("weekly");
+    expect(insert.recur_days).toEqual([1, 3, 5]);
   });
 });
 
@@ -173,6 +217,7 @@ describe("mergeHabitLogs", () => {
       emoji: "🏃",
       category: "habit",
       startedAt: "2026-04-01",
+      recurType: "daily",
       log: {},
     },
     {
@@ -181,6 +226,7 @@ describe("mergeHabitLogs", () => {
       emoji: "📖",
       category: "habit",
       startedAt: "2026-04-01",
+      recurType: "daily",
       log: {},
     },
   ];

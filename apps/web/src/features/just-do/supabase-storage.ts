@@ -1,25 +1,29 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Supabase } from "@/lib/supabase/client";
+import type { Json } from "@/lib/supabase/database.types";
 import type { JustDoStorage, Persisted, RemoteChange } from "./persistence";
 import {
+  categoryDomainToInsert,
+  categoryRowToDomain,
   habitDomainToInsert,
   habitRowToDomain,
   mergeHabitLogs,
-  taskCategoryToName,
   taskDomainToInsert,
   taskRowToDomain,
 } from "./supabase-mapping";
 
-type CategoryCache = Record<string, string>;
 type TaskWithJoins = Parameters<typeof taskRowToDomain>[0] & {
-  categories?: { name: string | null } | null;
   task_tags?: { tags: { name: string | null } | null }[] | null;
 };
+type CategoryRow = Parameters<typeof categoryRowToDomain>[0];
+type LegacyCategoryRow = Omit<CategoryRow, "is_default" | "position"> &
+  Partial<Pick<CategoryRow, "is_default" | "position">>;
 type TaskRow = Parameters<typeof taskRowToDomain>[0];
 type HabitRow = Parameters<typeof habitRowToDomain>[0];
 type HabitLogRow = Parameters<typeof mergeHabitLogs>[1][number];
 type TagRow = { id: string; user_id: string; name: string };
 type TaskTagRow = { task_id: string; tag_id: string };
+type UserPreferences = { week_start?: unknown };
 
 /**
  * Supabase implementation of `JustDoStorage`.
@@ -31,37 +35,11 @@ type TaskTagRow = { task_id: string; tag_id: string };
  *     Once Phase 4-3 lands an account-scoped settings table, replace these
  *     no-ops. Until then localStorage stays the source of truth for UI state.
  *
- * Categories live in their own table; the constructor warms a name→id cache
- * on first access so per-mutation calls don't pay for the lookup.
  */
 export const createSupabaseStorage = (
   client: Supabase,
   userId: string,
 ): JustDoStorage => {
-  let categoryCachePromise: Promise<CategoryCache> | null = null;
-
-  const ensureCategoryCache = (): Promise<CategoryCache> => {
-    if (categoryCachePromise) return categoryCachePromise;
-    categoryCachePromise = (async () => {
-      const { data, error } = await client
-        .from("categories")
-        .select("id, name")
-        .eq("user_id", userId);
-      if (error) throw error;
-      const cache: CategoryCache = {};
-      for (const row of data ?? []) cache[row.name] = row.id;
-      return cache;
-    })();
-    return categoryCachePromise;
-  };
-
-  const categoryIdFor = async (
-    category: keyof typeof taskCategoryToName,
-  ): Promise<string | null> => {
-    const cache = await ensureCategoryCache();
-    return cache[taskCategoryToName[category]] ?? null;
-  };
-
   const normalizeTags = (tags: string[]): string[] =>
     Array.from(
       new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)),
@@ -114,7 +92,6 @@ export const createSupabaseStorage = (
   const taskFromJoinedRow = (row: TaskWithJoins) =>
     taskRowToDomain(
       row,
-      row.categories?.name ?? null,
       (row.task_tags ?? [])
         .map((join) => join.tags?.name)
         .filter((name): name is string => Boolean(name)),
@@ -123,7 +100,7 @@ export const createSupabaseStorage = (
   const loadTaskWithTags = async (taskId: string) => {
     const { data, error } = await client
       .from("tasks")
-      .select("*, categories(name), task_tags(tags(name))")
+      .select("*, task_tags(tags(name))")
       .eq("user_id", userId)
       .eq("id", taskId)
       .maybeSingle();
@@ -168,21 +145,92 @@ export const createSupabaseStorage = (
     callback({ type: "error", error });
   };
 
+  const normalizeCategoryRow = (row: LegacyCategoryRow, index: number): CategoryRow => ({
+    ...row,
+    is_default: row.is_default ?? (row.name === "나" || row.name === "외부"),
+    position: row.position ?? index,
+  });
+
+  const loadCategories = async () => {
+    const result = await client
+      .from("categories")
+      .select("id, user_id, name, color, is_default, position, created_at")
+      .eq("user_id", userId);
+
+    if (!result.error) {
+      return ((result.data ?? []) as CategoryRow[]).map(categoryRowToDomain);
+    }
+
+    if (result.error.code !== "42703") throw result.error;
+
+    const fallback = await client
+      .from("categories")
+      .select("id, user_id, name, color, created_at")
+      .eq("user_id", userId);
+    if (fallback.error) throw fallback.error;
+    return ((fallback.data ?? []) as LegacyCategoryRow[])
+      .map(normalizeCategoryRow)
+      .map(categoryRowToDomain);
+  };
+
+  const loadWeekStartPreference = async (): Promise<0 | 1> => {
+    const { data, error } = await client
+      .from("users")
+      .select("preferences")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) {
+      if (error.code === "42703") return 0;
+      throw error;
+    }
+    const preferences = (data?.preferences ?? {}) as UserPreferences;
+    return preferences.week_start === 1 ? 1 : 0;
+  };
+
+  const saveWeekStartPreference = async (weekStart: 0 | 1) => {
+    const { data, error } = await client
+      .from("users")
+      .select("preferences")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) {
+      if (error.code === "42703") return;
+      throw error;
+    }
+
+    const current =
+      data?.preferences && typeof data.preferences === "object" && !Array.isArray(data.preferences)
+        ? data.preferences
+        : {};
+    const preferences: Json = { ...current, week_start: weekStart };
+    const { error: updateError } = await client
+      .from("users")
+      .update({ preferences })
+      .eq("id", userId);
+    if (updateError) {
+      if (updateError.code === "42703") return;
+      throw updateError;
+    }
+  };
+
   return {
     async load(): Promise<Persisted | null> {
-      const [tasksResult, habitsResult, logsResult] = await Promise.all([
+      const [categoriesResult, tasksResult, habitsResult, logsResult, weekStart] = await Promise.all([
+        loadCategories(),
         client
           .from("tasks")
-          .select("*, categories(name), task_tags(tags(name))")
+          .select("*, task_tags(tags(name))")
           .eq("user_id", userId),
         client.from("habits").select("*").eq("user_id", userId),
         client.from("habit_logs").select("*").eq("user_id", userId),
+        loadWeekStartPreference(),
       ]);
 
       if (tasksResult.error) throw tasksResult.error;
       if (habitsResult.error) throw habitsResult.error;
       if (logsResult.error) throw logsResult.error;
 
+      const categories = categoriesResult;
       const tasks = ((tasksResult.data ?? []) as TaskWithJoins[]).map(taskFromJoinedRow);
       const habitsBare = (habitsResult.data ?? []).map(habitRowToDomain);
       const habits = mergeHabitLogs(habitsBare, logsResult.data ?? []);
@@ -197,31 +245,46 @@ export const createSupabaseStorage = (
           selectedDate: new Date().toISOString().slice(0, 10),
           dark: false,
         },
+        categories,
         tasks,
         habits,
         settings: {
           notify: true,
           notifyTime: "09:00",
-          weekStart: 0,
+          weekStart,
           plan: "free",
         },
       };
     },
 
-    async saveSettings() {
-      // No remote settings table yet — see scope comment above. Local mirror
-      // (localStorage) keeps settings until Phase 4-3.
+    async saveSettings(settings) {
+      await saveWeekStartPreference(settings.weekStart);
     },
 
     async saveView() {
       // View state is intentionally device-local; no remote write.
     },
 
+    async upsertCategory(category) {
+      const { error } = await client
+        .from("categories")
+        .upsert(categoryDomainToInsert(category, userId));
+      if (error) throw error;
+    },
+
+    async deleteCategory(id) {
+      const { error } = await client
+        .from("categories")
+        .delete()
+        .eq("user_id", userId)
+        .eq("id", id);
+      if (error) throw error;
+    },
+
     async upsertTask(task) {
-      const categoryId = await categoryIdFor(task.category);
       const { error } = await client
         .from("tasks")
-        .upsert(taskDomainToInsert(task, userId, categoryId));
+        .upsert(taskDomainToInsert(task, userId));
       if (error) throw error;
       await replaceTaskTags(task.id, task.tags);
     },
@@ -239,6 +302,15 @@ export const createSupabaseStorage = (
       const { error } = await client
         .from("habits")
         .upsert(habitDomainToInsert(habit, userId));
+      if (error) throw error;
+    },
+
+    async deleteHabit(id) {
+      const { error } = await client
+        .from("habits")
+        .delete()
+        .eq("user_id", userId)
+        .eq("id", id);
       if (error) throw error;
     },
 
@@ -299,6 +371,36 @@ export const createSupabaseStorage = (
           }
         });
       channels.push(tasksChannel);
+
+      const categoriesChannel = client
+        .channel(`just-do:${userId}:categories`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "categories",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as Partial<CategoryRow>;
+              if (oldRow.id) emit(callback, { type: "category_deleted", id: oldRow.id });
+              return;
+            }
+
+            emit(callback, {
+              type: "category_upserted",
+              category: categoryRowToDomain(payload.new as CategoryRow),
+            });
+          },
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            emitError(callback, new Error("categories realtime subscription failed"));
+          }
+        });
+      channels.push(categoriesChannel);
 
       const tagsChannel = client
         .channel(`just-do:${userId}:tags`)
