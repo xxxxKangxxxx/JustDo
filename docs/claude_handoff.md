@@ -430,6 +430,8 @@ own checklist in `docs/next_steps.md`. Highlights below.
      `apps/ios/JustDoShared/Sync/MutationQueueSchema.swift`.
    - Initial Core Data model and mappers live in
      `apps/ios/JustDoShared/Storage`.
+   - App Group widget snapshot read/write store lives in
+     `AppGroupWidgetSnapshotStore`.
    - Core Data / App Group split is documented in `docs/ios_phase6_plan.md`.
    - Implement WidgetKit small / medium / large widgets from
      `reference/screens/widgets.jsx`.

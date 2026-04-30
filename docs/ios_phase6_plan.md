@@ -137,5 +137,6 @@ mutations and then requests a timeline reload.
    snapshot and mutation queue. (Done in `apps/ios/Tests/JustDoSharedTests`.)
 3. Implement Core Data model and mappers from Swift domain structs. (Initial
    implementation done in `JustDoShared/Storage`.)
-4. Implement App Group `WidgetSnapshot` read/write.
+4. Implement App Group `WidgetSnapshot` read/write. (Done in
+   `AppGroupWidgetSnapshotStore`.)
 5. Build WidgetKit small/medium/large layouts from `reference/screens/widgets.jsx`.

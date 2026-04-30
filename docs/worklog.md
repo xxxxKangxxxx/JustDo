@@ -1058,3 +1058,19 @@ This document records coordination notes for work done with Codex and Claude Cod
 ### Verification
 
 - `swift test` from `apps/ios` → 9 tests pass.
+
+## 2026-04-30 Phase 6: App Group Widget Snapshot Store
+
+### Codex
+
+- Added `AppGroupWidgetSnapshotStore`.
+  - Production initializer resolves `group.com.justdo.app`.
+  - Test initializer accepts any directory URL.
+  - Reads/writes `widget_snapshot.json`.
+  - Atomic write option used for safer WidgetKit reads.
+  - Missing snapshot returns `nil`.
+- Added store tests for missing file, write/read round-trip, and remove.
+
+### Verification
+
+- `swift test` from `apps/ios` → 12 tests pass.
