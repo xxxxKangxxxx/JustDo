@@ -424,8 +424,8 @@ own checklist in `docs/next_steps.md`. Highlights below.
    - `apps/ios/` exists.
    - Swift Codable mirrors live in
      `apps/ios/JustDoShared/Domain/JustDoModels.swift`.
-   - Add a drift unit test that compares the Swift mirror against
-     `database.types.ts` (or the live REST schema).
+   - Drift fixture tests live in `apps/ios/Tests/JustDoSharedTests` and verify
+     web-shaped snapshot, queue, and widget JSON.
    - Queue event names are mirrored in
      `apps/ios/JustDoShared/Sync/MutationQueueSchema.swift`.
    - Core Data / App Group split is documented in `docs/ios_phase6_plan.md`.

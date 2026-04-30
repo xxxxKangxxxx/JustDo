@@ -1014,3 +1014,24 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - Swift typecheck for the shared contracts passed with `xcrun swiftc`.
 - `git diff --check` → pass.
+
+## 2026-04-30 Phase 6: iOS Drift Fixtures
+
+### Codex
+
+- Added a Swift Package test harness under `apps/ios`.
+- Added drift fixtures:
+  - `app_snapshot.json` for the web persisted snapshot shape.
+  - `queued_mutations.json` for the web local mutation queue shape.
+  - `widget_snapshot.json` for the planned App Group widget snapshot.
+- Added `DriftFixtureTests` to verify:
+  - Swift domain structs decode the web snapshot shape.
+  - Swift mutation enum decodes the web queue shape.
+  - Swift mutation enum encodes back to the expected web-style payload keys.
+  - Widget snapshot fixtures decode successfully.
+- Added explicit `CodingKeys` / custom `Codable` where Swift naming differed
+  from web JSON (`categoryId`, `habitId`, mutation `type`).
+
+### Verification
+
+- `swift test` from `apps/ios` → 4 tests pass.

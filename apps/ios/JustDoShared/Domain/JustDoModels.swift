@@ -71,6 +71,18 @@ public struct Task: Identifiable, Codable, Equatable, Sendable {
         self.scheduledTime = scheduledTime
         self.tags = tags
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case categoryID = "categoryId"
+        case startDate
+        case endDate
+        case priority
+        case isCompleted
+        case scheduledTime
+        case tags
+    }
 }
 
 public struct Habit: Identifiable, Codable, Equatable, Sendable {

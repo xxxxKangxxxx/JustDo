@@ -134,7 +134,7 @@ mutations and then requests a timeline reload.
 
 1. Create Xcode project/targets around `JustDoShared`.
 2. Add drift tests that encode/decode sample JSON matching the web persisted
-   snapshot and mutation queue.
+   snapshot and mutation queue. (Done in `apps/ios/Tests/JustDoSharedTests`.)
 3. Implement Core Data model and mappers from Swift domain structs.
 4. Implement App Group `WidgetSnapshot` read/write.
 5. Build WidgetKit small/medium/large layouts from `reference/screens/widgets.jsx`.

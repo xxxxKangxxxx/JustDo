@@ -7,6 +7,8 @@ The current contents are intentionally project-light:
 - `JustDoShared/Domain/JustDoModels.swift` mirrors the web domain model.
 - `JustDoShared/Sync/MutationQueueSchema.swift` defines the local mutation
   events that the app and WidgetKit should share.
+- `Tests/JustDoSharedTests` verifies the Swift mirror against JSON fixtures
+  shaped like the web persisted snapshot and mutation queue.
 
 Do not treat this as an Xcode project yet. The next implementation step is to
 create the app, widget, and shared framework targets around these contracts.
@@ -39,3 +41,10 @@ The group container should hold:
 Core Data remains the richer local mirror for the main app. Widgets should read
 compact snapshots from the App Group container rather than opening complex app
 state directly.
+
+## Verification
+
+```bash
+cd apps/ios
+swift test
+```
