@@ -971,3 +971,46 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` → 76 tests pass.
 - `npm --prefix apps/web run build` → pass (sandbox Turbopack port 제한으로
   권한 상승 재실행).
+
+## 2026-04-30 Documentation Cleanup: Custom Category Language
+
+### Codex
+
+- `docs/just_do_prd.md` and `docs/just_do_planning.md` no longer describe
+  Task categories as fixed `[나] / [외부]` product concepts.
+- Category language now matches the implementation:
+  - Task uses default categories plus user-created custom categories.
+  - Habit remains separate in the Habit group.
+  - Category colors are user-customizable; Habit keeps the green visual lane.
+- Planning "미결 사항" updated for decisions already closed:
+  - DB schema design done.
+  - Subscription pricing done.
+
+### Verification
+
+- `git diff --check` → pass.
+
+## 2026-04-30 Phase 6: iOS Planning Kickoff
+
+### Codex
+
+- Created `apps/ios/` as the native implementation starting point.
+- Added Swift shared contracts:
+  - `JustDoModels.swift` mirrors the current web domain model.
+  - `MutationQueueSchema.swift` mirrors local/remote mutation semantics for
+    app, sync client, and WidgetKit.
+- Added `docs/ios_phase6_plan.md`:
+  - target layout
+  - web-to-Swift domain mapping
+  - Core Data entity plan
+  - App Group cache file plan
+  - mutation queue semantics
+  - WidgetKit small/medium/large implementation path
+- Updated `docs/widget_sync_strategy.md` so mutation names and current
+  implementation status match the latest web work.
+- Updated root `README.md` with the iOS track entry point.
+
+### Verification
+
+- Swift typecheck for the shared contracts passed with `xcrun swiftc`.
+- `git diff --check` → pass.

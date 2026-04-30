@@ -1,0 +1,140 @@
+# Phase 6 iOS Planning
+
+This document defines the starting contract for the native iOS app and
+WidgetKit implementation.
+
+## Scope
+
+Phase 6 begins after the web domain model has stabilized around:
+
+- dynamic task categories
+- task tags
+- user preference sync for `week_start`
+- habit recurrence: daily and weekly
+- habit reminder time and habit detail/edit
+- local mutation queue with Supabase sync
+
+## Target Structure
+
+```text
+apps/ios/
+  README.md
+  JustDoShared/
+    Domain/
+      JustDoModels.swift
+    Sync/
+      MutationQueueSchema.swift
+```
+
+Future Xcode targets:
+
+```text
+JustDoApp        SwiftUI application
+JustDoWidget     WidgetKit extension
+JustDoShared     Shared domain/storage/sync module
+JustDoTests      Domain and storage tests
+```
+
+## Domain Mapping
+
+| Web Type | Swift Type | Notes |
+|----------|------------|-------|
+| `Category` | `Category` | `id`, `name`, `color`, `isDefault`, `position` |
+| `Task` | `Task` | `categoryId` maps to `categoryID: UUID?` |
+| `Habit` | `Habit` | `recurType`, `recurDays`, `reminderTime`, `log` |
+| `Settings` | `Settings` | `weekStart` is the only synced preference in v1 |
+| `AppState` persisted shape | `AppSnapshot` | session-only UI state is excluded |
+
+Dates and times remain ISO strings in the shared Codable layer:
+
+- date: `YYYY-MM-DD`
+- time: `HH:mm`
+
+SwiftUI views may convert them to `Date` / `DateComponents` at the edge.
+
+## Core Data Plan
+
+Main app local mirror entities:
+
+| Entity | Important Fields |
+|--------|------------------|
+| `CDCategory` | `id`, `name`, `color`, `isDefault`, `position`, `createdAt` |
+| `CDTask` | `id`, `categoryID`, `title`, `priority`, `startDate`, `endDate`, `scheduledTime`, `isCompleted`, `updatedAt`, `createdAt` |
+| `CDTag` | `id`, `name`, `createdAt` |
+| `CDTaskTag` | `taskID`, `tagID` |
+| `CDHabit` | `id`, `title`, `emoji`, `recurType`, `recurDays`, `reminderTime`, `updatedAt`, `createdAt` |
+| `CDHabitLog` | `id`, `habitID`, `logDate`, `isCompleted`, `updatedAt`, `createdAt` |
+| `CDQueuedMutation` | `id`, `updatedAt`, `type`, `payloadJSON` |
+| `CDUserPreference` | `key`, `valueJSON`, `updatedAt` |
+
+Relationships can be represented by UUID fields first. Core Data relationship
+objects may be added later if SwiftUI fetch ergonomics require them.
+
+## App Group Cache
+
+Use App Group:
+
+```text
+group.com.justdo.app
+```
+
+Files:
+
+| File | Purpose |
+|------|---------|
+| `widget_snapshot.json` | Compact `WidgetSnapshot` for WidgetKit timelines |
+| `mutation_queue.jsonl` | Append-friendly fallback queue for widget writes |
+| `sync_meta.json` | Last sync timestamps and lightweight status |
+
+The main app remains responsible for reconciling Core Data and Supabase. The
+widget reads the App Group snapshot and writes a domain mutation through the
+shared mutation queue API.
+
+## Mutation Queue
+
+Shared mutation names mirror the web queue:
+
+- `category_upsert`
+- `category_delete`
+- `preferences_set`
+- `task_upsert`
+- `task_delete`
+- `habit_upsert`
+- `habit_delete`
+- `habit_log_set`
+
+For Swift, the semantic cases are defined in
+`apps/ios/JustDoShared/Sync/MutationQueueSchema.swift`.
+
+Conflict policy for v1:
+
+- local writes are optimistic
+- failed remote writes remain queued
+- queue drains in `updatedAt` order
+- Last Write Wins when remote and local records conflict
+
+## Widget Plan
+
+Widget sizes:
+
+- small: today count + up to 3 items
+- medium: week strip + today items
+- large: month grid + today items
+
+Initial widget actions:
+
+- task complete/uncomplete
+- habit check/uncheck for the displayed date
+- open app detail for task/habit
+
+The widget should not maintain a Supabase Realtime subscription. It writes
+mutations and then requests a timeline reload.
+
+## Next Implementation Steps
+
+1. Create Xcode project/targets around `JustDoShared`.
+2. Add drift tests that encode/decode sample JSON matching the web persisted
+   snapshot and mutation queue.
+3. Implement Core Data model and mappers from Swift domain structs.
+4. Implement App Group `WidgetSnapshot` read/write.
+5. Build WidgetKit small/medium/large layouts from `reference/screens/widgets.jsx`.

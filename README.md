@@ -49,3 +49,15 @@ npm run db:reset-local-app-data
 ```
 
 See `docs/local_dev.md` for the local reset procedure and browser data notes.
+
+## iOS App
+
+The iOS track starts in `apps/ios/`.
+
+Current iOS files are planning/contracts only:
+
+- Swift domain model mirror
+- Swift mutation queue schema
+- Phase 6 iOS/Core Data/App Group plan
+
+See `docs/ios_phase6_plan.md`.

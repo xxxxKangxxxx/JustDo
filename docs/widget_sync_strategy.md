@@ -108,9 +108,13 @@ Web implementation note:
 
 Shared mutation names:
 
+- `category_upsert`
+- `category_delete`
+- `preferences_set`
 - `task_upsert`
 - `task_delete`
 - `habit_upsert`
+- `habit_delete`
 - `habit_log_set`
 
 Web queue entries use this shape:
@@ -120,9 +124,13 @@ type QueuedMutation = {
   id: string;
   updatedAt: string;
   mutation:
+    | { type: "category_upsert"; category: Category }
+    | { type: "category_delete"; id: string }
+    | { type: "preferences_set"; key: "week_start"; value: Settings["weekStart"] }
     | { type: "task_upsert"; task: Task }
     | { type: "task_delete"; id: string }
     | { type: "habit_upsert"; habit: Habit }
+    | { type: "habit_delete"; id: string }
     | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 };
 };
 ```
@@ -172,19 +180,22 @@ across web/app clients:
 - Web storage interface has `JustDoStorage.subscribe(callback)`.
 - Supabase Realtime is enabled for `tasks`, `habits`, `habit_logs`.
 - Web store applies `task_upserted`, `task_deleted`, `habit_upserted`,
-  `habit_deleted`, `habit_log_set`.
-- `task_tags` / `tags` realtime is not implemented yet.
-- iOS app, App Group cache, mutation queue, and WidgetKit targets are not
-  implemented yet.
+  `habit_deleted`, `habit_log_set`, `category_upserted`, and
+  `category_deleted`.
+- Web realtime reloads affected tasks when `task_tags` / `tags` change.
+- iOS `apps/ios/JustDoShared` now has initial Swift domain and mutation queue
+  contracts, but the Xcode app, App Group cache implementation, Core Data
+  store, and WidgetKit targets are not implemented yet.
 
-## Next Decisions
+## Next Steps
 
-- Decide iOS local cache shape: Core Data only vs Core Data plus App Group
-  snapshot files for WidgetKit.
-- Decide whether widget App Intents may perform network writes directly or must
-  enqueue and let the main app/sync client drain.
-- Decide which widget actions ship first:
+- Implement iOS local cache shape: Core Data mirror plus App Group snapshot
+  files for WidgetKit.
+- Implement widget App Intents so they write through the shared mutation queue.
+  They may attempt an immediate sync, but queued local mutation is the durable
+  fallback.
+- Ship these widget actions first:
   - task complete/uncomplete
   - habit check/uncheck
   - open detail in app
-- Define mutation queue schema before iOS implementation starts.
+- Add drift tests for Swift domain JSON and web persisted snapshot samples.

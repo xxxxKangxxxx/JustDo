@@ -135,14 +135,15 @@ Suggested commit grouping (next session may split or combine):
   - Plus follow-up: Task tag chip UI in Add/Edit sheet, automated
     offline→online sync regression tests, manual cloud verification
     checklist in `docs/local_dev.md`.
-- Phase 5.5 Category Management — core implementation done. Button reorder
-  and drag reorder are both supported; fixed me/ext PRD/planning prose cleanup
-  remains.
+- Phase 5.5 Category Management — done. Button reorder and drag reorder are
+  both supported, and PRD/planning category prose now reflects custom
+  categories.
 - Phase 5.6 User Preferences Sync — done.
 - Phase 5.7 Habit Recurrence (daily + weekly) — done for new habit creation,
   storage/sync, selectors, Habit screen, Stats screen, and Habit detail/edit.
-- Phase 6 iOS / Widget — strategy docs exist; web domain is now stable enough
-  to start iOS planning after final verification/commit.
+- Phase 6 iOS / Widget — planning kickoff done. `apps/ios/` now contains
+  Swift shared domain and mutation queue contracts; `docs/ios_phase6_plan.md`
+  defines Core Data, App Group cache, and WidgetKit next steps.
 
 ## v1 Open Decisions — all closed
 
@@ -393,8 +394,8 @@ own checklist in `docs/next_steps.md`. Highlights below.
      `20260430090000_category_management.sql` applied. Schema checks confirmed
      `categories.position` and `categories.is_default` in both databases.
    - Settings category reorder supports both up/down buttons and drag reorder.
-   - Update `just_do_prd.md` / `just_do_planning.md` to drop remaining
-     fixed me/ext language.
+   - `just_do_prd.md` / `just_do_planning.md` fixed me/ext language has been
+     updated to custom categories.
    - Manually verify category CRUD + offline queue against hosted Supabase.
 
 2. **Phase 5.7 — Habit Recurrence (daily + weekly, ~2-3d)**
@@ -420,12 +421,13 @@ own checklist in `docs/next_steps.md`. Highlights below.
      ready.
 
 5. **Phase 6 — iOS / Widget (after 5.5/5.6/5.7)**
-   - Create `apps/ios/`.
-   - Hand-write Swift Codable mirrors of the (post-5.5/5.6/5.7) schema
-     in something like `apps/ios/Sources/Models/Database.swift`.
+   - `apps/ios/` exists.
+   - Swift Codable mirrors live in
+     `apps/ios/JustDoShared/Domain/JustDoModels.swift`.
    - Add a drift unit test that compares the Swift mirror against
      `database.types.ts` (or the live REST schema).
-   - Mirror queue event names from `docs/widget_sync_strategy.md`.
-   - Decide App Group cache shape and Core Data / App Group split.
+   - Queue event names are mirrored in
+     `apps/ios/JustDoShared/Sync/MutationQueueSchema.swift`.
+   - Core Data / App Group split is documented in `docs/ios_phase6_plan.md`.
    - Implement WidgetKit small / medium / large widgets from
      `reference/screens/widgets.jsx`.

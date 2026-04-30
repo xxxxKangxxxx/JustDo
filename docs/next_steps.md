@@ -20,8 +20,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   rationale in `docs/worklog.md` 2026-04-29 entries.
 - Phase 5.5 Category Management, Phase 5.6 User Preferences Sync, and
   Phase 5.7 Habit Recurrence (daily + weekly) are implemented. The web
-  domain model is now ready for Phase 6 iOS planning, aside from remaining
-  PRD/planning prose cleanup and optional category drag reorder polish.
+  domain model is now ready for Phase 6 iOS planning.
 
 ## Phase 1: Repository Baseline
 
@@ -136,7 +135,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Button reorder 유지 + drag reorder interaction 추가.
 
 ### 5.5-5. 문서 / 회귀
-- [ ] `just_do_prd.md`, `just_do_planning.md` 의 me/ext 서술 갱신.
+- [x] `just_do_prd.md`, `just_do_planning.md` 의 me/ext 서술 갱신.
 - [x] `just_do_db_schema.md` 의 me/ext 서술 갱신.
 - [x] 게스트 (비로그인) localStorage 의 기존 `category: "me"|"ext"` 데이터 hydration 처리: 기본 시드 카테고리 생성 + legacy enum 매핑.
 - [x] `npm --prefix apps/web run lint / test / build` 통과.
@@ -198,10 +197,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Phase 6: iOS Planning
 
-- [ ] Create `apps/ios/` once the web domain model is stable.
-- [ ] Map the shared domain model to Swift/SwiftUI.
-- [ ] Plan Core Data entities from the Supabase schema.
-- [ ] Define iOS App Group cache and mutation queue for WidgetKit actions.
+- [x] Create `apps/ios/` once the web domain model is stable.
+- [x] Map the shared domain model to Swift/SwiftUI.
+- [x] Plan Core Data entities from the Supabase schema.
+- [x] Define iOS App Group cache and mutation queue for WidgetKit actions.
 - [ ] Implement WidgetKit small, medium, and large widgets based on `reference/screens/widgets.jsx`.
 
 ## UX / UI Backlog
