@@ -1102,3 +1102,56 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Updated the recommended next work to focus on Xcode app/widget/shared target
   creation and wiring the existing SwiftPM shared code into a real WidgetKit
   extension.
+
+## 2026-04-30 Phase 6: Xcode App and Widget Targets
+
+### Claude Code
+
+- Created `apps/ios/JustDoApp/JustDoApp.xcodeproj` with two product targets:
+  - `JustDoApp` — SwiftUI iOS app, bundle ID `com.justdo.app`.
+  - `JustDoWidgetExtension` — WidgetKit extension, bundle ID `com.justdo.app.widget`.
+- Added existing SwiftPM `JustDoShared` library as a Local Package
+  dependency on both targets so the Xcode and CLI tracks consume the same
+  source.
+- App Group `group.com.justdo.app` enabled on both targets via Signing &
+  Capabilities. Entitlement files live at:
+  - `apps/ios/JustDoApp/JustDoApp/JustDoApp.entitlements`
+  - `apps/ios/JustDoApp/JustDoWidgetExtension.entitlements`
+- Both targets set to Minimum Deployments iOS 17.0 to match
+  `Package.swift`.
+- Removed the auto-generated `JustDoWidgetControl.swift` (Control Widget
+  is iOS 18-only and out of scope for v1) and dropped its reference from
+  `JustDoWidgetBundle.swift`.
+- Bundle ID note: Xcode initially named the widget `com.justdo.app.JustDoWidget`;
+  changed to `com.justdo.app.widget` for consistency.
+- Added Xcode/SwiftPM ignore patterns to root `.gitignore`
+  (`xcuserdata/`, `*.xcuserstate`, `DerivedData/`, `.build/`, `.swiftpm/`,
+  etc).
+
+### Verification
+
+- Xcode `⌘B` succeeded for both `JustDoApp` and `JustDoWidgetExtension`
+  schemes against iPhone 17 Pro simulator.
+- `cd apps/ios && swift test` → 15 tests pass (SwiftPM track unaffected).
+
+### Known Provisioning Warnings (ignorable)
+
+- "Communication with Apple failed / Your team has no devices..." appears
+  on Personal Team because no iPhone is registered. Affects real-device
+  builds only — simulator builds work without provisioning profiles.
+- "No profiles for 'com.justdo.app.widget' were found" is the same root
+  cause. Resolves automatically when a real iPhone is connected.
+
+### Notes
+
+- Xcode created an extra `JustDoApp.swift` placeholder alongside the
+  `@main` `JustDoAppApp.swift` entry point. Both kept as-is to avoid
+  rename collision; safe to clean up later.
+- `Supported Destinations` for `JustDoApp` currently includes iPad / Mac
+  Designed for iPad / Apple Vision. iPhone-only is the v1 scope but
+  trimming was deferred to avoid risking signing/build state right after
+  scaffolding.
+- WidgetKit code in `JustDoApp/JustDoWidget/JustDoWidget.swift` is still
+  the default Xcode template. Wiring it to `JustDoWidgetView` +
+  `JustDoWidgetDisplayModelFactory` + `AppGroupWidgetSnapshotStore` is
+  the next Phase 6 step.

@@ -7,3 +7,16 @@ build/
 .env.local
 .env.*.local
 
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.build/
+Packages/
+.swiftpm/
+

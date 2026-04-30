@@ -13,14 +13,21 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 ## Where We Are (2026-04-30)
 
 - Phase 1–5 done. Phase 5 follow-up (Task tag UI, offline sync regression
-  tests, manual verification doc) shipped in this session — see working
-  tree state in `docs/claude_handoff.md`.
-- All v1 open decisions closed in this session. Decision matrix lives in
+  tests, manual verification doc) shipped earlier — see working tree
+  state in `docs/claude_handoff.md`.
+- All v1 open decisions closed. Decision matrix lives in
   `docs/claude_handoff.md` ("v1 Open Decisions — all closed") with full
   rationale in `docs/worklog.md` 2026-04-29 entries.
 - Phase 5.5 Category Management, Phase 5.6 User Preferences Sync, and
-  Phase 5.7 Habit Recurrence (daily + weekly) are implemented. The web
-  domain model is now ready for Phase 6 iOS planning.
+  Phase 5.7 Habit Recurrence (daily + weekly) are implemented.
+- Phase 6 SwiftPM shared track shipped: domain, mutation queue, drift
+  tests, Core Data model/mappers, App Group snapshot store, SwiftUI
+  widget layouts.
+- Phase 6 Xcode track started: `apps/ios/JustDoApp/JustDoApp.xcodeproj`
+  hosts `JustDoApp` and `JustDoWidgetExtension` targets; both depend on
+  the SwiftPM `JustDoShared` library and share App Group
+  `group.com.justdo.app`. Default Xcode widget template still in place —
+  wiring to shared layouts is the next step.
 
 ## Phase 1: Repository Baseline
 
@@ -205,7 +212,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Implement initial Core Data model and domain mappers.
 - [x] Implement App Group `WidgetSnapshot` read/write store.
 - [x] Implement WidgetKit small, medium, and large widget layouts based on `reference/screens/widgets.jsx`.
-- [ ] Create Xcode app/widget/shared targets that host the SwiftPM shared code.
+- [x] Create Xcode app/widget/shared targets that host the SwiftPM shared code.
+- [ ] Wire WidgetKit extension to shared `JustDoWidgetView` + `AppGroupWidgetSnapshotStore`.
+- [ ] Implement widget App Intents (task complete/uncomplete, habit check/uncheck, deep link to detail).
+- [ ] Manual offline sync verification on hosted Supabase (`docs/local_dev.md`).
 
 ## UX / UI Backlog
 

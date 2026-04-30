@@ -118,15 +118,18 @@ At handoff, the intent is to leave `main` clean and pushed. If `git status -sb`
 shows local changes, they should be reviewed against the latest worklog entry
 before continuing.
 
-Latest pushed commits in this session:
+Latest pushed commits in this session (Claude Code, 2026-04-30):
 
 ```text
+<pending> feat(ios): scaffold xcode app and widget targets
+f3e1b05 feat(ios): add widget layouts
 e5f0144 feat(ios): add widget snapshot store
 da793b2 feat(ios): add core data mappers
 21a093c test(ios): add drift fixtures
 cdd5b1f docs(ios): start phase 6 planning
-18af974 feat(web): finalize category and habit workflows
 ```
+
+Note: replace `<pending>` with the actual SHA after push.
 
 ## Current Status
 
@@ -150,6 +153,15 @@ cdd5b1f docs(ios): start phase 6 planning
   - Initial Core Data model/mappers.
   - App Group `WidgetSnapshot` read/write store.
   - Initial small/medium/large SwiftUI widget layouts.
+- Phase 6 iOS / Widget — Xcode track started (2026-04-30):
+  - `apps/ios/JustDoApp/JustDoApp.xcodeproj` created via Xcode GUI.
+  - Targets: `JustDoApp` (iOS app), `JustDoWidgetExtension` (WidgetKit).
+  - Bundle IDs: `com.justdo.app` / `com.justdo.app.widget`.
+  - Both targets depend on local `JustDoShared` SwiftPM package.
+  - Both targets share App Group `group.com.justdo.app`.
+  - Auto-generated `JustDoWidgetControl` (iOS 18-only) removed.
+  - Default Xcode widget template in `JustDoApp/JustDoWidget/JustDoWidget.swift`
+    still in place — not yet wired to shared widget layouts.
 
 ## v1 Open Decisions — all closed
 
@@ -413,27 +425,42 @@ Cloud manual checks already performed by the user/Codex:
 
 ## Recommended Next Work
 
-Phase 5.5, 5.6, and 5.7 are implemented. The next useful work is now Phase 6
-iOS/Xcode integration.
+Phase 6 Xcode scaffolding is done. The next useful work is wiring the
+existing SwiftPM shared code into the new Xcode targets.
 
-1. **Create Xcode app/widget/shared targets**
-   - Host the existing SwiftPM shared code from `apps/ios`.
-   - Planned targets: `JustDoApp`, `JustDoWidget`, `JustDoShared`,
-     `JustDoTests`.
-   - Add App Group entitlement placeholder for `group.com.justdo.app`.
-
-2. **Wire WidgetKit extension to shared layouts**
-   - Use `AppGroupWidgetSnapshotStore` to read `widget_snapshot.json`.
-   - Convert snapshot with `JustDoWidgetDisplayModelFactory`.
+1. **Wire WidgetKit extension to shared layouts** ← start here
+   - Replace the default Xcode template in
+     `apps/ios/JustDoApp/JustDoWidget/JustDoWidget.swift`.
+   - Use `AppGroupWidgetSnapshotStore` (in `JustDoShared`) to read
+     `widget_snapshot.json` from `group.com.justdo.app`.
+   - Convert the snapshot with `JustDoWidgetDisplayModelFactory`.
    - Render `JustDoWidgetView` for small/medium/large families.
+   - Provide a fallback placeholder when no snapshot exists yet.
+   - The `@main` `JustDoWidgetBundle` should expose just the single
+     `JustDoWidget()` (Control Widget was removed).
+
+2. **App-side snapshot writer**
+   - The main app needs to start producing `widget_snapshot.json` so the
+     widget has data. Suggested location: a small adapter inside
+     `JustDoApp` that calls into `JustDoShared` and writes via
+     `AppGroupWidgetSnapshotStore`.
+   - Trigger after task/habit/category mutations and on app foreground.
 
 3. **Implement widget App Intents**
    - Task complete/uncomplete.
    - Habit check/uncheck.
-   - Open task/habit detail in app.
+   - Open task/habit detail in app (deep link).
    - Write through the shared mutation queue before trying network sync.
 
 4. **Manual Offline Sync Verification (cloud, one-time)**
    - Steps live in `docs/local_dev.md` → "Manual Offline Sync
      Verification". Run once on hosted Supabase before declaring v1
-     ready.
+     ready. Independent of the Xcode work above — can be done in
+     parallel.
+
+5. **Xcode polish (defer until needed)**
+   - Trim `JustDoApp` Supported Destinations to iPhone-only for v1.
+   - Decide whether to consolidate `JustDoApp.swift` placeholder file
+     with `JustDoAppApp.swift` entry point.
+   - Configure real iPhone for device testing (resolves the Personal
+     Team provisioning warnings).
