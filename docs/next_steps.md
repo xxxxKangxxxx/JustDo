@@ -26,8 +26,14 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Phase 6 Xcode track started: `apps/ios/JustDoApp/JustDoApp.xcodeproj`
   hosts `JustDoApp` and `JustDoWidgetExtension` targets; both depend on
   the SwiftPM `JustDoShared` library and share App Group
-  `group.com.justdo.app`. Default Xcode widget template still in place —
-  wiring to shared layouts is the next step.
+  `group.com.justdo.app`. The WidgetKit extension now reads the App Group
+  snapshot, builds shared display models, and renders the shared small /
+  medium / large layouts. The main app now seeds the Core Data mirror once,
+  writes `widget_snapshot.json` from that native mirror on launch/foreground,
+  and has a Supabase REST read-sync scaffold for replacing the mirror with
+  account data. The app lifecycle now attempts that read sync when session
+  values are available from Keychain, then falls back to seeded mirror data.
+  Minimal PKCE OAuth sign-in and refresh-token handling are in place.
 
 ## Phase 1: Repository Baseline
 
@@ -213,8 +219,19 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Implement App Group `WidgetSnapshot` read/write store.
 - [x] Implement WidgetKit small, medium, and large widget layouts based on `reference/screens/widgets.jsx`.
 - [x] Create Xcode app/widget/shared targets that host the SwiftPM shared code.
-- [ ] Wire WidgetKit extension to shared `JustDoWidgetView` + `AppGroupWidgetSnapshotStore`.
-- [ ] Implement widget App Intents (task complete/uncomplete, habit check/uncheck, deep link to detail).
+- [x] Wire WidgetKit extension to shared `JustDoWidgetView` + `AppGroupWidgetSnapshotStore`.
+- [x] Add app-side `widget_snapshot.json` writer path.
+- [x] Route widget snapshot source through the Core Data mirror.
+- [x] Add Supabase REST read-sync client for categories, tasks, tags, habits, and habit logs.
+- [x] Trigger Supabase read-sync from the iOS app lifecycle when session values are available.
+- [x] Replace temporary access-token injection with Keychain-backed iOS session storage.
+- [x] Implement user-facing iOS Supabase OAuth login and token refresh.
+- [x] Implement widget App Intents for task complete/uncomplete and habit check/uncheck.
+- [x] Drain widget App Group mutation queue from the app into Core Data.
+- [x] Flush queued Core Data writes to Supabase.
+- [x] Implement widget deep-link routing for task/habit rows.
+- [x] Render native task/habit detail panels from widget deep links.
+- [ ] Replace the scaffold inline detail panel with NavigationStack push-detail routes.
 - [ ] Manual offline sync verification on hosted Supabase (`docs/local_dev.md`).
 
 ## UX / UI Backlog

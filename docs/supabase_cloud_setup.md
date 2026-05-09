@@ -124,6 +124,41 @@ http://localhost:3000/callback
 For hosted deployments, add the production app callback URL in Supabase Auth URL
 Configuration once the web app has a deployed domain.
 
+## iOS OAuth Redirect Setup
+
+The native iOS app uses `ASWebAuthenticationSession` with PKCE and expects this
+callback URL:
+
+```text
+justdo://auth-callback
+```
+
+Add that URL to Supabase Auth URL Configuration before testing native Google or
+Apple sign-in. The iOS OAuth client reads:
+
+- `JUSTDO_SUPABASE_URL`
+- `JUSTDO_SUPABASE_ANON_KEY`
+
+from the generated app Info.plist. Those values are injected by Xcode
+configuration files:
+
+```text
+apps/ios/JustDoApp/Config/Debug.xcconfig
+apps/ios/JustDoApp/Config/Release.xcconfig
+apps/ios/JustDoApp/Config/Local.xcconfig
+```
+
+`Local.xcconfig` is gitignored and should contain the real local anon public
+key:
+
+```xcconfig
+JUSTDO_SUPABASE_URL = https:/$()/cohkxnwsbhrsfmsjqdpa.supabase.co
+JUSTDO_SUPABASE_ANON_KEY = <anon public key>
+```
+
+Do not put access tokens in app configuration; runtime user sessions are stored
+in Keychain.
+
 ## Verifying Hosted Auth Fanout
 
 After `.env.local` points to cloud and Google provider is configured:

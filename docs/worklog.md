@@ -1155,3 +1155,367 @@ This document records coordination notes for work done with Codex and Claude Cod
   the default Xcode template. Wiring it to `JustDoWidgetView` +
   `JustDoWidgetDisplayModelFactory` + `AppGroupWidgetSnapshotStore` is
   the next Phase 6 step.
+
+## 2026-05-07 README Refresh and WidgetKit Shared Layout Wiring
+
+### Codex
+
+- Updated `README.md` so it no longer describes the repository as references
+  only. It now reflects the implemented web app, Supabase workspace, active
+  iOS track, and current WidgetKit status.
+- Replaced the default Xcode widget template in
+  `apps/ios/JustDoApp/JustDoWidget/JustDoWidget.swift`.
+  - The widget now uses `StaticConfiguration`.
+  - It reads `widget_snapshot.json` through `AppGroupWidgetSnapshotStore`.
+  - It converts snapshots with `JustDoWidgetDisplayModelFactory`.
+  - It renders `JustDoWidgetView` for small, medium, and large widget
+    families.
+  - It falls back to a placeholder snapshot when the App Group snapshot is not
+    available yet.
+- Removed the unused default "Favorite Emoji" configuration intent body from
+  `AppIntent.swift`; widget action intents remain the next Phase 6 step.
+- Updated `docs/next_steps.md`, `docs/ios_phase6_plan.md`,
+  `docs/claude_handoff.md`, and `docs/widget_sync_strategy.md` so the next
+  work is the app-side `widget_snapshot.json` writer.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 15 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoWidgetExtension -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+## 2026-05-07 Phase 6: App-side Widget Snapshot Writer
+
+### Codex
+
+- Added `WidgetSnapshotFactory` in `JustDoShared`.
+  - Converts `AppSnapshot` to compact `WidgetSnapshot`.
+  - Keeps tasks active on the selected date.
+  - Keeps daily habits and weekly habits active on the selected weekday.
+  - Sorts categories by user position.
+- Added `WidgetSnapshotFactoryTests` for selected-date task filtering and
+  weekly habit activity filtering.
+- Added app target `WidgetSnapshotWriter`.
+  - Writes through `AppGroupWidgetSnapshotStore`.
+  - Reloads WidgetKit timelines after a successful write.
+- Connected `JustDoAppApp` to write a bootstrap widget snapshot on launch and
+  foreground.
+- Replaced the placeholder `ContentView` with a simple status view explaining
+  that bootstrap widget snapshot writing is active until the native data layer
+  is connected.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 16 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- The writer path is in place, but the source data is still a bootstrap
+  snapshot. The next Phase 6 step is replacing
+  `WidgetSnapshotBootstrap.makeAppSnapshot()` with real native app state from
+  Core Data/Supabase sync.
+
+## 2026-05-07 Phase 6: Core Data-backed Widget Snapshot Source
+
+### Codex
+
+- Added `CoreDataAppSnapshotStore` in `JustDoShared/Storage`.
+  - Loads categories, tasks, and habits from the Core Data mirror into an
+    `AppSnapshot`.
+  - Replaces mirror rows for bootstrap/sync refreshes.
+  - Provides default view/settings helpers for native snapshot reads.
+- Added `CoreDataAppSnapshotStoreTests`.
+  - Round-trips a full `AppSnapshot` through Core Data.
+  - Verifies replacement removes stale rows.
+- Changed the app-side widget writer flow:
+  - Seed Core Data once if the mirror is empty.
+  - Load `AppSnapshot` from Core Data.
+  - Write `widget_snapshot.json` through `WidgetSnapshotWriter`.
+- Updated `ContentView` status copy to describe the Core Data-backed writer.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 18 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- The widget snapshot source now goes through the native Core Data mirror, but
+  the mirror is still locally seeded. The next Phase 6 step is implementing
+  iOS Supabase sync so account data populates Core Data.
+
+## 2026-05-07 Phase 6: Supabase REST Read Sync Scaffold
+
+### Codex
+
+- Added `JustDoShared/Sync/SupabaseRestSync.swift`.
+  - Defines `SupabaseCredentials`, `SupabaseRestTransport`, and
+    `URLSessionSupabaseRestTransport`.
+  - Adds `SupabaseSnapshotClient` for REST reads from categories, tags,
+    task_tags, tasks, habits, and habit_logs.
+  - Maps Supabase rows into the shared `AppSnapshot` domain model, including
+    task tags and habit logs.
+  - Adds `SupabaseCoreDataSync` to replace the native Core Data mirror through
+    `CoreDataAppSnapshotStore`.
+- Added `SupabaseRestSyncTests`.
+  - Verifies Supabase row mapping into `AppSnapshot`.
+  - Verifies sync replacement updates the Core Data mirror.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 20 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- The REST read-sync client is implemented and tested, but it is not yet wired
+  to iOS Supabase Auth/session state. The next Phase 6 step is passing real
+  session credentials into `SupabaseSnapshotClient`, running
+  `SupabaseCoreDataSync`, then refreshing `widget_snapshot.json`.
+
+## 2026-05-07 Phase 6: App Lifecycle Sync Coordinator
+
+### Codex
+
+- Added `JustDoApp/AppSyncCoordinator.swift`.
+  - Loads temporary Supabase session values from environment or Info.plist
+    keys: `JUSTDO_SUPABASE_URL`, `JUSTDO_SUPABASE_ANON_KEY`,
+    `JUSTDO_SUPABASE_ACCESS_TOKEN`, and `JUSTDO_SUPABASE_USER_ID`.
+  - Runs `SupabaseCoreDataSync` when those values exist.
+  - Falls back to the seeded Core Data mirror when no session values are
+    present.
+  - Writes the widget snapshot after either path.
+- Updated `JustDoAppApp` so launch and foreground refresh use
+  `AppSyncCoordinator`.
+- Updated the app status copy and docs to make the remaining boundary clear:
+  real native Supabase Auth/session storage is still pending.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 20 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- The app can now exercise read-sync with injected session values, but this is
+  not a user-facing login flow. The next Phase 6 step is native Supabase
+  Auth/session persistence, then widget App Intents.
+
+## 2026-05-07 Phase 6: Keychain-backed iOS Session Store
+
+### Codex
+
+- Reworked `AppSyncCoordinator` session wiring.
+  - `JUSTDO_SUPABASE_URL` and `JUSTDO_SUPABASE_ANON_KEY` now provide only app
+    configuration through environment or Info.plist keys.
+  - Access token, refresh token, user ID, and expiry are represented by
+    `SupabaseStoredSession`.
+  - `KeychainSupabaseSessionStore` persists the session as a generic password
+    item using `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
+  - Expired stored sessions are ignored by the sync coordinator.
+- `AppSyncCoordinator` now builds `SupabaseCredentials` from app configuration
+  plus a valid stored Keychain session, then runs `SupabaseCoreDataSync`.
+- The seeded Core Data mirror remains the fallback when configuration or a
+  valid stored session is absent.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 20 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- Native session persistence is in place, but no user-facing login flow writes
+  into it yet. The next Phase 6 step is iOS Supabase OAuth login and token
+  refresh, followed by widget App Intents.
+
+## 2026-05-07 Phase 6: iOS OAuth Login and Refresh
+
+### Codex
+
+- Added `SupabaseAuthClient`.
+  - Builds Supabase `/auth/v1/authorize` URLs for Google/Apple OAuth.
+  - Uses PKCE (`code_challenge_method=s256`) with `ASWebAuthenticationSession`.
+  - Exchanges callback codes through `/auth/v1/token?grant_type=pkce`.
+  - Refreshes sessions through `/auth/v1/token?grant_type=refresh_token`.
+  - Maps token responses into `SupabaseStoredSession`.
+- Added `AuthViewModel`.
+  - Tracks missing configuration, signed-out, signed-in, working, and failed
+    states.
+  - Saves successful sign-in sessions through `KeychainSupabaseSessionStore`.
+  - Clears the Keychain session on sign-out.
+- Updated `ContentView`.
+  - Shows minimal Google/Apple sign-in controls when signed out.
+  - Shows sign-out when a valid Keychain session exists.
+  - Triggers widget snapshot refresh after sign-in/sign-out.
+- Updated `AppSyncCoordinator`.
+  - Refreshes expired stored sessions before attempting Supabase read-sync.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 20 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- Supabase Auth URL Configuration must allow `justdo://auth-callback` before
+  native OAuth can be tested end-to-end.
+- The next Phase 6 step is widget App Intents for task/habit actions.
+
+## 2026-05-07 Phase 6: iOS Supabase Build Config
+
+### Codex
+
+- Added Xcode config files under `apps/ios/JustDoApp/Config`.
+  - `Debug.xcconfig` and `Release.xcconfig` provide shared public client
+    settings and inject them into generated Info.plist keys.
+  - `Local.xcconfig.example` documents the local override format.
+  - `Local.xcconfig` is gitignored and is the place for the real local anon
+    public key.
+- Connected the `JustDoApp` target Debug/Release build configurations to the
+  new xcconfig files.
+- Added `.gitignore` coverage for `apps/ios/JustDoApp/Config/Local.xcconfig`.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 20 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- The app now reads Supabase URL/anon key through the same Info.plist path for
+  local runs and archive builds. The user only needs to fill
+  `apps/ios/JustDoApp/Config/Local.xcconfig` locally.
+
+## 2026-05-07 Phase 6: Widget App Intents and App Group Mutation Queue
+
+### Codex
+
+- Added `AppGroupMutationQueueStore`.
+  - Appends queued mutations as JSON lines in App Group
+    `mutation_queue.jsonl`.
+  - Supports list/remove/clear helpers for the app-side drain path.
+- Added `WidgetMutationController`.
+  - Optimistically updates `widget_snapshot.json` for task completion and
+    habit log changes.
+  - Enqueues matching task upsert and habit-log set mutations.
+- Added widget `AppIntent` implementations for task complete/uncomplete and
+  habit check/uncheck.
+- Updated widget layouts to use interactive intent buttons for task and habit
+  rows.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 23 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- Widget route handling and detail rendering remain next.
+- The widget queue is durable in App Group storage. The next Phase 6 step is
+  draining it into the app's Core Data queue.
+
+## 2026-05-09 Phase 6: App-side Widget Mutation Queue Drain
+
+### Codex
+
+- Added `AppGroupMutationQueueDrainer`.
+  - Reads App Group `mutation_queue.jsonl`.
+  - Applies drained mutations to the Core Data app mirror.
+  - Moves each drained mutation into `CDQueuedMutation`.
+  - Removes each successfully drained mutation from the App Group queue.
+- Extended `CoreDataAppSnapshotStore`.
+  - Applies local task/category/habit/preference mutations.
+  - Applies habit-log mutations by updating the mirrored habit log.
+  - Exposes queued mutation reads for verification and future flush work.
+- Updated `AppSyncCoordinator`.
+  - Drains widget mutations during widget snapshot refresh.
+  - Drains after remote read-sync so local widget actions stay visible in the
+    refreshed widget snapshot.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 24 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- Supabase write flush for `CDQueuedMutation` is still pending.
+- Widget deep links to task/habit detail are still pending.
+
+## 2026-05-09 Phase 6: Supabase Queued Mutation Flush
+
+### Codex
+
+- Added Supabase REST mutation support.
+  - `URLSessionSupabaseRestTransport` now supports upsert, patch, and delete
+    requests in addition to reads.
+  - `SupabaseMutationClient` maps queued domain mutations to Supabase rows.
+  - Habit log value `1` upserts `habit_logs`; value `0` deletes the matching
+    habit log row.
+- Added `SupabaseQueuedMutationFlusher`.
+  - Reads `CDQueuedMutation` in `updatedAt` order.
+  - Sends each mutation to Supabase.
+  - Removes the Core Data queue row only after the remote write succeeds.
+- Updated `AppSyncCoordinator` ordering.
+  - Drain App Group widget queue first.
+  - Flush `CDQueuedMutation` when a valid session exists.
+  - Then run remote read-sync and write the widget snapshot.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 26 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+### Notes
+
+- Task tag joins are intentionally not rewritten by iOS task upsert. Widget
+  task intents only change completion state, so existing remote tag joins should
+  remain untouched.
+- Widget deep links to task/habit detail are still pending.
+
+## 2026-05-09 Phase 6: Widget Deep-link Routing
+
+### Codex
+
+- Added `JustDoDeepLink`.
+  - Builds `justdo://task/<id>` and `justdo://habit/<id>` URLs.
+  - Parses supported URLs back into typed task/habit routes.
+  - Ignores unsupported `justdo` URLs such as the OAuth callback.
+- Updated the widget row layout.
+  - The check dot remains an App Intent button.
+  - The row text is now a `Link` that opens the matching task/habit deep link.
+- Registered the app's `justdo` URL scheme in `JustDoApp/Info.plist`.
+- Updated `ContentView` to handle `onOpenURL`, resolve the linked task/habit
+  from the Core Data mirror, and render native detail fields.
+- Added `CoreDataAppSnapshotStore.task(id:)` and `habit(id:)` lookup helpers.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 30 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+- Verified the built app Info.plist contains the `justdo` URL scheme and the
+  Supabase configuration keys.
+
+### Notes
+
+- This is still a compact detail panel inside the current scaffold app. A fuller
+  app shell can later promote the same route into a pushed detail screen.
+
+## 2026-05-09 Phase 6: Status and Release Notes
+
+### Codex
+
+- Added `docs/ios_phase6_status.md`.
+  - Summarizes completed iOS Phase 6 sync, widget, OAuth, queue, and deep-link
+    work.
+  - Documents the current UX gap: detail is an inline scaffold panel, while the
+    production app should use `NavigationStack` push routes.
+  - Captures manual testing steps for OAuth, widget actions, queue flush, and
+    deep links.
+  - Captures deployment checks for Supabase config, App Group entitlement, URL
+    scheme, and release Info.plist values.
+  - Lists the next work: NavigationStack detail routing, hosted sync
+    verification, sync status UI, and deep-link UI tests.
+- Updated README, next steps, handoff, and widget sync strategy docs to point to
+  the new status document and make the NavigationStack improvement explicit.

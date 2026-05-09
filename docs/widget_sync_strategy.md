@@ -183,19 +183,41 @@ across web/app clients:
   `habit_deleted`, `habit_log_set`, `category_upserted`, and
   `category_deleted`.
 - Web realtime reloads affected tasks when `task_tags` / `tags` change.
-- iOS `apps/ios/JustDoShared` now has initial Swift domain and mutation queue
-  contracts, but the Xcode app, App Group cache implementation, Core Data
-  store, and WidgetKit targets are not implemented yet.
+- iOS `apps/ios/JustDoShared` now has Swift domain and mutation queue
+  contracts, Core Data model/mappers, App Group widget snapshot storage, and
+  shared WidgetKit layouts.
+- The Xcode app/widget targets exist, and the WidgetKit extension now hosts
+  the shared widget view from the App Group snapshot.
+- The main iOS app has a `WidgetSnapshotWriter` and writes
+  `widget_snapshot.json` from the Core Data mirror on launch/foreground. The
+  mirror is currently seeded locally.
+- `JustDoShared/Sync` has a Supabase REST read-sync scaffold that fetches
+  categories, tasks, tags/task_tags, habits, and habit logs for a signed-in
+  user, maps them to `AppSnapshot`, and replaces the Core Data mirror. It is
+  wired into the app lifecycle through `AppSyncCoordinator`. Supabase project
+  configuration comes from environment or Info.plist keys, while user sessions
+  come from a Keychain-backed session store.
+- The iOS app has a minimal `ASWebAuthenticationSession` PKCE OAuth flow for
+  Google/Apple. Successful auth stores access token, refresh token, user ID,
+  and expiry in Keychain; expired sessions are refreshed before sync.
+- Widget App Intents now support task complete/uncomplete and habit
+  check/uncheck. They optimistically update `widget_snapshot.json`, append a
+  durable mutation to App Group `mutation_queue.jsonl`, and request a timeline
+  reload.
+- The app drains App Group `mutation_queue.jsonl` during widget snapshot
+  refresh. Drained mutations are applied to the Core Data mirror and preserved
+  in `CDQueuedMutation`.
+- When a valid Supabase session is available, the app flushes `CDQueuedMutation`
+  in `updatedAt` order. Successfully written rows are removed from the local
+  queue after the remote write succeeds.
+- Widget task/habit row text links open `justdo://task/<id>` or
+  `justdo://habit/<id>`. The app registers the `justdo` URL scheme and parses
+  those links into native deep-link state, then renders task/habit detail from
+  the Core Data mirror.
 
 ## Next Steps
 
-- Implement iOS local cache shape: Core Data mirror plus App Group snapshot
-  files for WidgetKit.
-- Implement widget App Intents so they write through the shared mutation queue.
-  They may attempt an immediate sync, but queued local mutation is the durable
-  fallback.
-- Ship these widget actions first:
-  - task complete/uncomplete
-  - habit check/uncheck
-  - open detail in app
+- Replace the scaffold inline detail panel with NavigationStack push-detail
+  routes.
+- Run manual hosted Supabase OAuth/offline sync verification.
 - Add drift tests for Swift domain JSON and web persisted snapshot samples.
