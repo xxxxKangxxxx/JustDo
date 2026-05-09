@@ -1519,3 +1519,22 @@ This document records coordination notes for work done with Codex and Claude Cod
     verification, sync status UI, and deep-link UI tests.
 - Updated README, next steps, handoff, and widget sync strategy docs to point to
   the new status document and make the NavigationStack improvement explicit.
+
+## 2026-05-09 Phase 6: NavigationStack Detail Routing
+
+### Codex
+
+- Replaced the root-screen inline deep-link detail panel with a SwiftUI
+  `NavigationStack`.
+- Added an app-local `DetailRoute` enum for task and habit detail routes.
+- Updated `onOpenURL` so `JustDoDeepLink` appends the matching pushed route
+  instead of mutating inline detail state.
+- Split task and habit detail rendering into pushed `TaskDetailScreen` and
+  `HabitDetailScreen` views backed by the Core Data mirror lookup helpers.
+- Updated Phase 6 status and next-step docs so the remaining iOS priority is
+  hosted OAuth/offline sync verification, not navigation structure.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 30 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.

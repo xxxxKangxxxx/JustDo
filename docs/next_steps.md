@@ -231,7 +231,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Flush queued Core Data writes to Supabase.
 - [x] Implement widget deep-link routing for task/habit rows.
 - [x] Render native task/habit detail panels from widget deep links.
-- [ ] Replace the scaffold inline detail panel with NavigationStack push-detail routes.
+- [x] Replace the scaffold inline detail panel with NavigationStack push-detail routes.
 - [ ] Manual offline sync verification on hosted Supabase (`docs/local_dev.md`).
 
 ## UX / UI Backlog
