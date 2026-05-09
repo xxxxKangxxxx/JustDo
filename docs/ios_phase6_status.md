@@ -29,24 +29,21 @@ implementation gaps, and checks to run before testing or shipping.
   - `justdo://task/<task-id>`
   - `justdo://habit/<habit-id>`
 - The app registers the `justdo` URL scheme and renders native task/habit detail
-  panels from the Core Data mirror.
+  screens from the Core Data mirror.
+- Deep-linked task/habit screens are pushed with a SwiftUI `NavigationStack`
+  route instead of being rendered inline on the root scaffold.
 
-## Known UX Gap
+## App Shell Gap
 
-The current app shell is still a scaffold. Deep-linked task/habit detail is
-rendered as an inline panel on the main screen. The preferred production UX is a
-`NavigationStack` route:
+The root app shell is still a scaffold. Deep-linked task/habit detail now uses
+`NavigationStack`, but the root screen should still grow into the real app shell:
 
 - Root screen: signed-in status, sync state, today summary, and entry points.
-- Navigation path enum:
-  - `taskDetail(UUID)`
-  - `habitDetail(UUID)`
-- `onOpenURL` should resolve `JustDoDeepLink` and append the matching route to
-  the navigation path.
-- Detail views should be separate SwiftUI screens that fetch from the Core Data
-  mirror and can later host edit actions.
-- The existing `JustDoDeepLink` and `CoreDataAppSnapshotStore.task(id:)` /
-  `habit(id:)` helpers are the right routing/data boundary for this upgrade.
+- Detail screens currently display read-only fields from the Core Data mirror.
+- Later edit actions should live on those pushed detail screens.
+- The existing `JustDoDeepLink`, `DetailRoute`, and
+  `CoreDataAppSnapshotStore.task(id:)` / `habit(id:)` helpers are the current
+  routing/data boundary.
 
 ## Before Manual Testing
 
@@ -105,7 +102,6 @@ swift test
 
 ## Next Work
 
-- Replace the inline detail panel with a `NavigationStack` push-detail app shell.
 - Run hosted OAuth/offline sync verification.
 - Add app-facing sync status/error UI so failed queue flushes are visible.
 - Add UI tests for deep-link opening once the app shell is more complete.

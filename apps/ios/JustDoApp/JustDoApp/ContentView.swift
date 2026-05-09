@@ -10,36 +10,42 @@ import JustDoShared
 
 struct ContentView: View {
     @StateObject private var auth = AuthViewModel()
-    @State private var detail: DeepLinkDetail?
+    @State private var navigationPath = NavigationPath()
     var snapshotStore: CoreDataAppSnapshotStore?
     var onSessionChanged: () async -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Just Do")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-            Text("Widget snapshot writer is active.")
-                .font(.headline)
-            Text("The app syncs the native Core Data mirror when a valid Keychain session is available, then writes the App Group widget snapshot on launch and foreground.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            deepLinkSection
-            authSection
+        NavigationStack(path: $navigationPath) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Just Do")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                    Text("Widget snapshot writer is active.")
+                        .font(.headline)
+                    Text("The app syncs the native Core Data mirror when a valid Keychain session is available, then writes the App Group widget snapshot on launch and foreground.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    authSection
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(24)
+            }
+            .navigationTitle("Just Do")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: DetailRoute.self) { route in
+                switch route {
+                case .task(let id):
+                    TaskDetailScreen(id: id, snapshotStore: snapshotStore)
+                case .habit(let id):
+                    HabitDetailScreen(id: id, snapshotStore: snapshotStore)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(24)
         .task {
             auth.reload()
         }
         .onOpenURL { url in
             open(url)
-        }
-    }
-
-    @ViewBuilder
-    private var deepLinkSection: some View {
-        if let detail {
-            DeepLinkDetailView(detail: detail)
         }
     }
 
@@ -100,8 +106,18 @@ struct ContentView: View {
         guard let link = JustDoDeepLink(url: url) else {
             return
         }
-        detail = DeepLinkDetail(link: link, snapshotStore: snapshotStore)
+        switch link {
+        case .task(let id):
+            navigationPath.append(DetailRoute.task(id))
+        case .habit(let id):
+            navigationPath.append(DetailRoute.habit(id))
+        }
     }
+}
+
+private enum DetailRoute: Hashable {
+    case task(UUID)
+    case habit(UUID)
 }
 
 private enum DeepLinkDetail: Equatable {
@@ -137,14 +153,43 @@ private enum DeepLinkDetail: Equatable {
     }
 }
 
-private struct DeepLinkDetailView: View {
-    let detail: DeepLinkDetail
+private struct TaskDetailScreen: View {
+    let id: UUID
+    let snapshotStore: CoreDataAppSnapshotStore?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        DetailScreenScaffold(title: "Task Detail") {
             switch detail {
             case .task(let task):
                 TaskDetailContent(task: task)
+            case .missing(let link):
+                FallbackDetailContent(
+                    title: "Detail not found",
+                    message: "No local mirror row exists for \(link.description). Sync may need to refresh first."
+                )
+            case .unavailable(let link):
+                FallbackDetailContent(
+                    title: "Detail unavailable",
+                    message: "The app could not access the local mirror for \(link.description)."
+                )
+            case .habit:
+                EmptyView()
+            }
+        }
+    }
+
+    private var detail: DeepLinkDetail {
+        DeepLinkDetail(link: .task(id), snapshotStore: snapshotStore)
+    }
+}
+
+private struct HabitDetailScreen: View {
+    let id: UUID
+    let snapshotStore: CoreDataAppSnapshotStore?
+
+    var body: some View {
+        DetailScreenScaffold(title: "Habit Detail") {
+            switch detail {
             case .habit(let habit):
                 HabitDetailContent(habit: habit)
             case .missing(let link):
@@ -157,12 +202,31 @@ private struct DeepLinkDetailView: View {
                     title: "Detail unavailable",
                     message: "The app could not access the local mirror for \(link.description)."
                 )
+            case .task:
+                EmptyView()
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var detail: DeepLinkDetail {
+        DeepLinkDetail(link: .habit(id), snapshotStore: snapshotStore)
+    }
+}
+
+private struct DetailScreenScaffold<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
