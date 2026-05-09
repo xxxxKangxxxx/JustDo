@@ -158,8 +158,27 @@ cdd5b1f docs(ios): start phase 6 planning
   - Both targets depend on local `JustDoShared` SwiftPM package.
   - Both targets share App Group `group.com.justdo.app`.
   - Auto-generated `JustDoWidgetControl` (iOS 18-only) removed.
-  - Default Xcode widget template in `JustDoApp/JustDoWidget/JustDoWidget.swift`
-    still in place — not yet wired to shared widget layouts.
+  - `JustDoWidget.swift` now reads `widget_snapshot.json` from the App Group,
+    converts it with `JustDoWidgetDisplayModelFactory`, and renders
+    `JustDoWidgetView` for small / medium / large widget families.
+  - The main app has `WidgetSnapshotWriter` and writes
+    `widget_snapshot.json` on launch/foreground from the Core Data mirror.
+    The mirror is currently seeded locally until the app wires Supabase Auth
+    credentials into sync.
+  - `JustDoShared/Sync/SupabaseRestSync.swift` contains the first Supabase REST
+    read-sync client for categories, tasks, tags/task_tags, habits, and habit
+    logs. It maps account rows into `AppSnapshot` and replaces the Core Data
+    mirror through `CoreDataAppSnapshotStore`.
+  - `JustDoApp/AppSyncCoordinator.swift` now triggers that read sync from app
+    launch/foreground. Project URL/anon key come from environment or Info.plist
+    keys, while user access token/user ID come from a Keychain-backed session
+    store. Without a valid stored session, it keeps the seeded local Core Data
+    mirror fallback.
+  - `JustDoApp/SupabaseAuthClient.swift` implements a minimal REST/PKCE OAuth
+    flow using `ASWebAuthenticationSession`, plus refresh-token exchange.
+  - `JustDoApp/AuthViewModel.swift` and `ContentView.swift` expose minimal
+    Google/Apple sign-in and sign-out controls. Successful sign-in writes the
+    Keychain session and triggers the existing widget snapshot refresh path.
 
 ## v1 Open Decisions — all closed
 
@@ -423,40 +442,32 @@ Cloud manual checks already performed by the user/Codex:
 
 ## Recommended Next Work
 
-Phase 6 Xcode scaffolding is done. The next useful work is wiring the
-existing SwiftPM shared code into the new Xcode targets.
+Phase 6 Xcode scaffolding, initial WidgetKit hosting, the Core Data-backed
+widget snapshot writer path, the Supabase REST read-sync scaffold, the app
+lifecycle sync trigger, Keychain-backed session storage, and minimal iOS OAuth
+login/refresh are done. Widget task/habit toggle App Intents are also done and
+write durable entries to App Group `mutation_queue.jsonl`. The app now drains
+that App Group queue into the Core Data mirror and `CDQueuedMutation`, then
+flushes queued Core Data mutations to Supabase when a valid session is
+available. Widget row text links now open the iOS app through
+`justdo://task/<id>` and `justdo://habit/<id>` deep links. The app registers
+the `justdo` URL scheme and renders task/habit detail panels from the Core Data
+mirror. Current status, test checklist, deployment notes, and remaining UX gaps
+are summarized in `docs/ios_phase6_status.md`.
 
-1. **Wire WidgetKit extension to shared layouts** ← start here
-   - Replace the default Xcode template in
-     `apps/ios/JustDoApp/JustDoWidget/JustDoWidget.swift`.
-   - Use `AppGroupWidgetSnapshotStore` (in `JustDoShared`) to read
-     `widget_snapshot.json` from `group.com.justdo.app`.
-   - Convert the snapshot with `JustDoWidgetDisplayModelFactory`.
-   - Render `JustDoWidgetView` for small/medium/large families.
-   - Provide a fallback placeholder when no snapshot exists yet.
-   - The `@main` `JustDoWidgetBundle` should expose just the single
-     `JustDoWidget()` (Control Widget was removed).
+1. **NavigationStack detail routing** ← start here
+   - Replace the scaffold inline detail panel with pushed task/habit detail
+     routes.
+   - Keep using `JustDoDeepLink` and `CoreDataAppSnapshotStore.task(id:)` /
+     `habit(id:)` as the route/data boundary.
 
-2. **App-side snapshot writer**
-   - The main app needs to start producing `widget_snapshot.json` so the
-     widget has data. Suggested location: a small adapter inside
-     `JustDoApp` that calls into `JustDoShared` and writes via
-     `AppGroupWidgetSnapshotStore`.
-   - Trigger after task/habit/category mutations and on app foreground.
-
-3. **Implement widget App Intents**
-   - Task complete/uncomplete.
-   - Habit check/uncheck.
-   - Open task/habit detail in app (deep link).
-   - Write through the shared mutation queue before trying network sync.
-
-4. **Manual Offline Sync Verification (cloud, one-time)**
+2. **Manual Offline Sync Verification (cloud, one-time)**
    - Steps live in `docs/local_dev.md` → "Manual Offline Sync
      Verification". Run once on hosted Supabase before declaring v1
-     ready. Independent of the Xcode work above — can be done in
+     ready. Independent of the Xcode work above, so it can be done in
      parallel.
 
-5. **Xcode polish (defer until needed)**
+3. **Xcode polish (defer until needed)**
    - Trim `JustDoApp` Supported Destinations to iPhone-only for v1.
    - Decide whether to consolidate `JustDoApp.swift` placeholder file
      with `JustDoAppApp.swift` entry point.

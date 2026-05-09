@@ -123,12 +123,14 @@ Widget sizes:
 
 Initial widget actions:
 
-- task complete/uncomplete
-- habit check/uncheck for the displayed date
-- open app detail for task/habit
+- [x] task complete/uncomplete
+- [x] habit check/uncheck for the displayed date
+- [x] open app route for task/habit deep links
+- [x] native task/habit detail panels for deep-link targets
 
 The widget should not maintain a Supabase Realtime subscription. It writes
-mutations and then requests a timeline reload.
+mutations, requests a timeline reload, and lets the app drain App Group
+`mutation_queue.jsonl` into Core Data on app refresh.
 
 ## Next Implementation Steps
 
@@ -141,4 +143,7 @@ mutations and then requests a timeline reload.
    `AppGroupWidgetSnapshotStore`.)
 5. Build WidgetKit small/medium/large layouts from `reference/screens/widgets.jsx`.
    (Initial SwiftUI layouts done in `JustDoShared/Widgets`; Xcode widget
-   extension target still needs to host them.)
+   extension now hosts them through `AppGroupWidgetSnapshotStore` and
+   `JustDoWidgetDisplayModelFactory`.)
+6. Add app-side `widget_snapshot.json` writer. (Done with a bootstrap snapshot
+   source; real native app data wiring remains.)

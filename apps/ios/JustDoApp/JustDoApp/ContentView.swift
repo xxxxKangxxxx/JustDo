@@ -6,16 +6,267 @@
 //
 
 import SwiftUI
+import JustDoShared
 
 struct ContentView: View {
+    @StateObject private var auth = AuthViewModel()
+    @State private var detail: DeepLinkDetail?
+    var snapshotStore: CoreDataAppSnapshotStore?
+    var onSessionChanged: () async -> Void = {}
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Just Do")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+            Text("Widget snapshot writer is active.")
+                .font(.headline)
+            Text("The app syncs the native Core Data mirror when a valid Keychain session is available, then writes the App Group widget snapshot on launch and foreground.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            deepLinkSection
+            authSection
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(24)
+        .task {
+            auth.reload()
+        }
+        .onOpenURL { url in
+            open(url)
+        }
+    }
+
+    @ViewBuilder
+    private var deepLinkSection: some View {
+        if let detail {
+            DeepLinkDetailView(detail: detail)
+        }
+    }
+
+    @ViewBuilder
+    private var authSection: some View {
+        switch auth.status {
+        case .loading:
+            ProgressView()
+        case .missingConfiguration:
+            Text("Supabase URL and anon key are not configured.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case .signedOut:
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(SupabaseAuthProvider.allCases) { provider in
+                    Button(provider.title) {
+                        signIn(with: provider)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        case .signedIn:
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Signed in. Core Data sync is enabled.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button("Sign out") {
+                    auth.signOut()
+                    _Concurrency.Task {
+                        await onSessionChanged()
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+        case .working:
+            ProgressView()
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 10) {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                Button("Try Google again") {
+                    signIn(with: .google)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func signIn(with provider: SupabaseAuthProvider) {
+        _Concurrency.Task {
+            await auth.signIn(with: provider)
+            await onSessionChanged()
+        }
+    }
+
+    private func open(_ url: URL) {
+        guard let link = JustDoDeepLink(url: url) else {
+            return
+        }
+        detail = DeepLinkDetail(link: link, snapshotStore: snapshotStore)
+    }
+}
+
+private enum DeepLinkDetail: Equatable {
+    case task(Task)
+    case habit(Habit)
+    case missing(JustDoDeepLink)
+    case unavailable(JustDoDeepLink)
+
+    init(link: JustDoDeepLink, snapshotStore: CoreDataAppSnapshotStore?) {
+        guard let snapshotStore else {
+            self = .unavailable(link)
+            return
+        }
+
+        do {
+            switch link {
+            case .task(let id):
+                if let task = try snapshotStore.task(id: id) {
+                    self = .task(task)
+                } else {
+                    self = .missing(link)
+                }
+            case .habit(let id):
+                if let habit = try snapshotStore.habit(id: id) {
+                    self = .habit(habit)
+                } else {
+                    self = .missing(link)
+                }
+            }
+        } catch {
+            self = .missing(link)
+        }
+    }
+}
+
+private struct DeepLinkDetailView: View {
+    let detail: DeepLinkDetail
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch detail {
+            case .task(let task):
+                TaskDetailContent(task: task)
+            case .habit(let habit):
+                HabitDetailContent(habit: habit)
+            case .missing(let link):
+                FallbackDetailContent(
+                    title: "Detail not found",
+                    message: "No local mirror row exists for \(link.description). Sync may need to refresh first."
+                )
+            case .unavailable(let link):
+                FallbackDetailContent(
+                    title: "Detail unavailable",
+                    message: "The app could not access the local mirror for \(link.description)."
+                )
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct TaskDetailContent: View {
+    let task: Task
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Task", systemImage: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(task.isCompleted ? .green : .secondary)
+            Text(task.title)
+                .font(.title3.weight(.semibold))
+            DetailGrid(rows: [
+                ("Status", task.isCompleted ? "Completed" : "Open"),
+                ("Date", dateRange),
+                ("Time", task.scheduledTime ?? "-"),
+                ("Priority", task.priority?.rawValue.capitalized ?? "-"),
+                ("Tags", task.tags.isEmpty ? "-" : task.tags.joined(separator: ", ")),
+            ])
+        }
+    }
+
+    private var dateRange: String {
+        task.startDate == task.endDate ? task.startDate : "\(task.startDate) - \(task.endDate)"
+    }
+}
+
+private struct HabitDetailContent: View {
+    let habit: Habit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Habit", systemImage: "repeat.circle.fill")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.green)
+            Text("\(habit.emoji) \(habit.title)")
+                .font(.title3.weight(.semibold))
+            DetailGrid(rows: [
+                ("Started", habit.startedAt),
+                ("Repeat", repeatDescription),
+                ("Reminder", habit.reminderTime ?? "-"),
+                ("Logged days", "\(habit.log.filter { $0.value == 1 }.count)"),
+            ])
+        }
+    }
+
+    private var repeatDescription: String {
+        switch habit.recurType {
+        case .daily:
+            return "Daily"
+        case .weekly:
+            if let recurDays = habit.recurDays, !recurDays.isEmpty {
+                return "Weekly: \(recurDays.map(String.init).joined(separator: ", "))"
+            }
+            return "Weekly"
+        }
+    }
+}
+
+private struct DetailGrid: View {
+    let rows: [(String, String)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(rows, id: \.0) { label, value in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(label)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 82, alignment: .leading)
+                    Text(value)
+                        .font(.footnote)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+    }
+}
+
+private struct FallbackDetailContent: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.headline)
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+private extension JustDoDeepLink {
+    var description: String {
+        switch self {
+        case .task(let id):
+            "task \(id.uuidString.lowercased())"
+        case .habit(let id):
+            "habit \(id.uuidString.lowercased())"
+        }
     }
 }
 

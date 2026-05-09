@@ -14,9 +14,9 @@ xcuserdata/
 DerivedData/
 *.xcscmblueprint
 *.xccheckout
+apps/ios/JustDoApp/Config/Local.xcconfig
 
 # Swift Package Manager
 .build/
 Packages/
 .swiftpm/
-

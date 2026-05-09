@@ -7,12 +7,68 @@
 
 import WidgetKit
 import AppIntents
+import Foundation
+import JustDoShared
 
-struct ConfigurationAppIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource { "Configuration" }
-    static var description: IntentDescription { "This is an example widget." }
+struct ToggleTaskCompletionIntent: AppIntent {
+    static var title: LocalizedStringResource = "Toggle Task Completion"
 
-    // An example configurable parameter.
-    @Parameter(title: "Favorite Emoji", default: "😃")
-    var favoriteEmoji: String
+    @Parameter(title: "Task ID")
+    var taskID: String
+
+    @Parameter(title: "Completed")
+    var isCompleted: Bool
+
+    init() {}
+
+    init(taskID: String, isCompleted: Bool) {
+        self.taskID = taskID
+        self.isCompleted = isCompleted
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let id = UUID(uuidString: taskID) else {
+            return .result()
+        }
+        try WidgetMutationController().setTaskCompletion(
+            taskID: id,
+            isCompleted: isCompleted
+        )
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
+}
+
+struct SetHabitLogIntent: AppIntent {
+    static var title: LocalizedStringResource = "Set Habit Log"
+
+    @Parameter(title: "Habit ID")
+    var habitID: String
+
+    @Parameter(title: "Date")
+    var iso: String
+
+    @Parameter(title: "Value")
+    var value: Int
+
+    init() {}
+
+    init(habitID: String, iso: String, value: Int) {
+        self.habitID = habitID
+        self.iso = iso
+        self.value = value
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let id = UUID(uuidString: habitID) else {
+            return .result()
+        }
+        try WidgetMutationController().setHabitLog(
+            habitID: id,
+            iso: iso,
+            value: value
+        )
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
 }
