@@ -20,3 +20,6 @@ apps/ios/JustDoApp/Config/Local.xcconfig
 .build/
 Packages/
 .swiftpm/
+
+# Local verification artifacts (simulator screenshots, etc.)
+tmp-*.png
