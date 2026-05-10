@@ -1684,3 +1684,82 @@ This document records coordination notes for work done with Codex and Claude Cod
   진행 가능.
 - Phase 7 prototype 자산은 사용자가 `reference/web-proto/` 에 추가 예정. 도착 전
   까지는 디자인 결정 (사이드바/네비/단축키 등)을 보류.
+
+## 2026-05-10 Phase 7: Web Desktop Redesign Kickoff
+
+### Codex
+
+- Started the web-only Phase 7 redesign from the newly provided
+  `reference/web_proto/` and `Just Do - Web Prototype.html` visual/UX reference.
+- Replaced the `apps/web` entry shell that previously used the mobile
+  `PhoneFrame` / bottom tab / bottom sheet composition with a desktop app shell:
+  sidebar navigation, glass header, calendar workspace, optional today side
+  panel, modal task detail, inline task creation, command palette, bulk action
+  bar, stats dashboard, and desktop settings surface.
+- Kept the real web domain/storage layer intact:
+  `Task.categoryId`, custom categories, `Priority = high | medium | low`,
+  habit recurrence, IndexedDB queue, Supabase sync, auth, and realtime adapter
+  paths remain the source of truth.
+- Treated the prototype code as design reference only. Prototype variable names
+  and sample structures such as `cat: me/ext` and `priority: mid` were not
+  copied into the production domain model.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 76 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; the
+  sandboxed run failed because Turbopack attempted to bind a local helper port.
+- `git diff --check` — pass.
+
+### Notes
+
+- Local dev server is running at `http://localhost:3000` for review.
+- This is the first implementation pass. Remaining polish should compare the
+  live UI against `reference/web_proto/` page by page, especially category
+  management, habit management, and mobile web 안내 페이지 behavior.
+
+## 2026-05-10 Phase 7: Web Desktop UI Iteration
+
+### Codex
+
+- Iterated on the first desktop web shell based on user review.
+- Changed the add flow from quick title-only Task creation to a full desktop
+  modal with Task/Habit tabs.
+  - Task: title, date range, time, category, priority, tag chips.
+  - Habit: title, emoji, daily/weekly recurrence, weekday picker, reminder time.
+- Removed duplicate add entry points from the Today side panel; the top
+  `새 Task` button is now the single Task/Habit creation entry.
+- Changed month calendar date-cell behavior:
+  - clicking a date only selects it and updates the Today side panel.
+  - adding from a date now requires the small hover `+` button.
+- Updated Today side panel:
+  - Task and Habit completion buttons align on the right.
+  - Task check buttons are vertically centered in the card.
+  - completed Tasks remain in the same Task list with checkbox/strikethrough;
+    no separate completed section is created.
+- Added web Settings management surfaces:
+  - category add / rename / color edit / delete.
+  - habit delete (habit add lives in the global add modal).
+  - settings left menu now renders only the selected section.
+  - subscription section with Pro monthly/yearly upgrade entry and a placeholder
+    upgrade modal. Real checkout / webhook / `user_subscriptions` update is
+    intentionally not implemented yet.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 76 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; sandbox
+  still blocks Turbopack helper port binding.
+
+### Remaining Follow-up
+
+- Add desktop UI interaction tests for the new app shell.
+- Implement mobile web 안내 page / viewport fallback.
+- Restore category reorder in the desktop Settings surface.
+- Add Habit edit flow beyond add/delete.
+- Add Task edit modal tag editing.
+- Implement real Pro checkout backend and webhook-driven subscription update.
+- Run manual offline sync verification on the new web UI.
+- Perform visual checks at 1024 / 1280 / 1440 / 1920 widths.

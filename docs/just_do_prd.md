@@ -24,7 +24,7 @@
 
 | 플랫폼 | v1 위치 | 형태 | UI Reference |
 |--------|---------|------|--------------|
-| **Web** | v1 출시 | **데스크탑 productivity hub** (사이드바 nav, 멀티 컬럼 레이아웃, 키보드 단축키, 드래그앤드롭, 큰 dashboard) | `reference/web-proto/` (별도 자산) |
+| **Web** | v1 출시 | **데스크탑 productivity hub** (사이드바 nav, 멀티 컬럼 레이아웃, 키보드 단축키, 드래그앤드롭, 큰 dashboard) | `reference/web_proto/` + `reference/Just Do - Web Prototype.html` |
 | **iOS** | v1 출시 | **모바일 네이티브** (하단 탭바, 단일 컬럼, bottom sheet add 플로우, 위젯) | `reference/proto/` |
 | **Android** | v3 출시 | 모바일 네이티브 — 출시 전까지 모바일 사용자는 iOS 앱 또는 데스크탑 web 사용 권장 | (v3 결정 시점에 정의) |
 
@@ -43,7 +43,7 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 
 ### 디자인 분기의 함의
 
-- `reference/proto/`는 **모바일/iOS 전용** reference. 데스크탑 web prototype은 `reference/web-proto/`에 별도로 둔다.
+- `reference/proto/`는 **모바일/iOS 전용** reference. 데스크탑 web prototype은 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`에 별도로 둔다.
 - iOS와 Web은 동일한 *기능*을 다른 *형태*로 제공한다. 예: Stats가 iOS에서는 별도 탭, Web에서는 dashboard 뷰일 수 있음.
 - 일부 기능은 플랫폼 전용일 수 있다 (예: 위젯 = iOS 전용, 드래그앤드롭 = Web 전용, 키보드 단축키 = Web 우선).
 
@@ -324,7 +324,7 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 | 폼팩터 | 데스크탑 가정 (≥ 1024px). 좁은 윈도우/모바일 진입 시 안내 페이지 |
 | 네비게이션 | 사이드바 또는 상단 톱바 (재디자인 단계에서 확정) |
 | Add 플로우 | 모달 또는 인라인 |
-| UI Reference | `reference/web-proto/` (Phase 7에 추가 예정) |
+| UI Reference | `reference/web_proto/` + `reference/Just Do - Web Prototype.html` |
 | 데스크탑 가치 | 멀티 컬럼, 키보드 단축키, 드래그앤드롭, 큰 dashboard |
 
 ---
@@ -333,7 +333,7 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 
 | 단계 | 내용 |
 |------|------|
-| **v1** | iOS 앱 + Web (데스크탑 productivity hub) 동시 출시. Task/Habit CRUD, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림, Trial/구독. **Web Desktop Redesign (Phase 7) v1 차단 항목** — `reference/web-proto/` 도착 후 구현, 출시 전 완료 필요 |
+| **v1** | iOS 앱 + Web (데스크탑 productivity hub) 동시 출시. Task/Habit CRUD, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림, Trial/구독. **Web Desktop Redesign (Phase 7) v1 차단 항목** — 데스크탑 reference 도착 후 구현 진행 중, 출시 전 완료 필요 |
 | **v2** | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, 공유/협업, 통계 고도화, 이메일 회원가입 |
 | **v3** | Android 앱 출시 — v3 출시 전까지 Android 사용자는 데스크탑 web 사용 |
 

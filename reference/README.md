@@ -6,7 +6,7 @@ Per the Platform Strategy decision (2026-05-10, see `docs/just_do_prd.md` §1.5)
 mobile and desktop targets follow **different** UI references:
 
 - `proto/` → **mobile/iOS** reference (also used by Android in v3).
-- `web-proto/` → **desktop web** reference (to be added).
+- `web_proto/` + `Just Do - Web Prototype.html` → **desktop web** reference.
 
 The shared domain model (Task, Habit, Category, Settings) and Supabase schema
 are common across both platforms; only the UI/UX layer diverges.
@@ -30,15 +30,16 @@ Run/view with:
 interactive-prototype.html
 ```
 
-## Desktop Web Reference (`web-proto/`)
+## Desktop Web Reference (`web_proto/`)
 
-`web-proto/` will host the desktop-native web prototype (sidebar nav,
-multi-pane layout, keyboard shortcuts, etc.). The web app under `apps/web/`
+`web_proto/` hosts the desktop-native web prototype modules (sidebar nav,
+multi-pane layout, keyboard shortcuts, etc.). `Just Do - Web Prototype.html`
+is the browser entry file for that reference. The web app under `apps/web/`
 should follow this reference, not `proto/`.
 
-Until `web-proto/` is populated, the web app is in a transitional state
-mirroring the mobile prototype; see `docs/next_steps.md` Phase 7 for the
-redesign track.
+The production web implementation must keep using the real domain/storage
+layers in `apps/web/`; prototype variable names and sample data shapes are
+visual/UX reference only.
 
 ## Supporting Design Reference
 

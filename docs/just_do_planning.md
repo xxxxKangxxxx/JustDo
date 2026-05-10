@@ -158,7 +158,7 @@ Task와 별도 카테고리로 분리 관리.
 
 ### 10-1. 네비게이션 구조 (iOS 기준)
 
-> Web의 네비게이션 구조는 Platform Strategy (`just_do_prd.md` §1.5)에 따라 다름. 데스크탑 productivity hub로서 사이드바/멀티 컬럼 형태로 별도 설계됨 (`reference/web-proto/` 참고, Phase 7).
+> Web의 네비게이션 구조는 Platform Strategy (`just_do_prd.md` §1.5)에 따라 다름. 데스크탑 productivity hub로서 사이드바/멀티 컬럼 형태로 별도 설계됨 (`reference/web_proto/` 및 `reference/Just Do - Web Prototype.html` 참고, Phase 7).
 
 ```
 하단 탭 바 (iOS)

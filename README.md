@@ -7,12 +7,14 @@ Supabase workspace, and the native iOS implementation track.
 
 - **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일
   네이티브, Android=v3. 자세한 내용: `docs/just_do_prd.md` §1.5.
-- **Phase 7 Web Desktop Redesign** is the v1 출시 차단 항목. `reference/web-proto/`
-  도착 대기. 자세한 punch list: `docs/next_steps.md` Phase 7.
+- **Phase 7 Web Desktop Redesign** is the v1 출시 차단 항목. 데스크탑
+  reference는 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`.
+  첫 구현 패스가 `apps/web/`에 반영됨. 자세한 punch list:
+  `docs/next_steps.md` Phase 7.
 - iOS Phase 6 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7과
   독립적으로 병렬 진행.
-- 현재 `apps/web/` 은 모바일 prototype 모방의 *transitional* 상태이며 Phase 7에서
-  데스크탑 productivity hub 로 재디자인됨.
+- 현재 `apps/web/` 은 데스크탑 productivity hub shell로 재작성 중이며,
+  도메인/sync 레이어는 기존 구현을 유지함.
 - Product and handoff documents live in `docs/`.
 - Original UI references remain in `reference/`.
 
@@ -21,7 +23,8 @@ Supabase workspace, and the native iOS implementation track.
 UI reference는 플랫폼별로 다름:
 
 - `reference/proto/` — 모바일 / iOS reference (또한 v3 Android).
-- `reference/web-proto/` — 데스크탑 web reference (사용자 추가 예정).
+- `reference/web_proto/` 및 `reference/Just Do - Web Prototype.html` —
+  데스크탑 web reference.
 
 `reference/screens/` 와 `reference/design-board.html` 은 시각 지원용. Production
 code는 `reference/` 안에 작성하지 않음.
