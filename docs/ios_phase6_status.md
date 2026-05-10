@@ -145,7 +145,11 @@ swift test
 
 ## Next Work
 
-- Run hosted OAuth/offline sync verification.
+> 2026-05-10 Platform Strategy 결정으로 web 측은 Phase 7 (Web Desktop Redesign)이
+> v1 출시 차단 항목이지만, iOS 잔여 작업은 Phase 7과 독립적으로 병렬 진행 가능.
+> Hosted offline sync verification 은 Phase 7 완료 후 새 web UI 위에서 한 번에
+> 회귀 검증하는 게 효율적이라 지금은 우선순위가 낮음.
+
 - Verify signed-in iOS root home, add sheet, stats, and settings visually
   against `reference/proto/`.
 - Add app-facing sync status/error UI so failed queue flushes are visible.
@@ -153,3 +157,5 @@ swift test
 - Add UI tests for deep-link opening once the app shell is more complete.
 - Consider a narrower Supabase task completion patch endpoint in iOS if full
   task upsert starts carrying fields that should remain remote-owned.
+- (Phase 7 완료 후) Run hosted OAuth/offline sync verification on the new web
+  UI; iOS-specific Manual Test Checklist 는 위에서 그대로 적용.

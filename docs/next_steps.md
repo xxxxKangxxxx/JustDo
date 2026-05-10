@@ -10,6 +10,12 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
+## Where We Are (2026-05-10)
+
+- **Platform Strategy 결정** (`just_do_prd.md` §1.5): Web=데스크탑 productivity hub, iOS=모바일 네이티브, Android=v3. Web과 iOS는 도메인/스키마만 공유하고 UI/UX는 분기.
+- 그 결과 **Phase 7: Web Desktop Redesign**이 v1 출시 차단 항목으로 추가됨 (`reference/web-proto/` 도착 후 구현).
+- 이전 단계의 "App Shape Now"(handoff)는 *iOS 기준*으로만 유효. Web은 transitional 상태이며 Phase 7에서 재디자인됨.
+
 ## Where We Are (2026-04-30)
 
 - Phase 1–5 done. Phase 5 follow-up (Task tag UI, offline sync regression
@@ -248,6 +254,46 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [ ] Add app-facing sync status/error UI for failed queue flushes.
 - [ ] Prepare production domain/AWS deployment work (`docs/deployment_domain_aws_plan.md`).
 
+## Phase 7: Web Desktop Redesign
+
+> 2026-05-10 결정. v1 출시 차단 항목. Platform Strategy (`just_do_prd.md` §1.5)에 따라 web은 데스크탑 productivity hub로 재디자인.
+
+### 7-1. 자산 / 가드레일
+- [ ] `reference/web-proto/` 디렉토리에 데스크탑 prototype 추가 (사용자 제공 예정).
+- [x] `reference/README.md` 업데이트 — `proto/` = 모바일/iOS, `web-proto/` = 데스크탑 web.
+- [x] `just_do_prd.md` §1.5 Platform Strategy 섹션 추가.
+- [x] `just_do_prd.md` §5 디자인 가이드라인을 공통 / iOS / Web 으로 분리.
+- [x] `just_do_planning.md` §9, §10-1, §14 갱신.
+- [ ] `claude_handoff.md` "App Shape Now" → iOS / Web 분리 갱신.
+
+### 7-2. 디자인 결정 (prototype 도착 후)
+- [ ] 네비게이션: 사이드바 vs 상단 톱바 결정.
+- [ ] 레이아웃: 2-pane (네비 | 메인) vs 3-pane (네비 | 캘린더+리스트 | 디테일) 결정.
+- [ ] Stats 위치: 별도 페이지 vs 홈 우측 패널 vs dashboard 페이지 결정.
+- [ ] 데스크탑 핵심 가치 1~2개 우선순위 (키보드 단축키 / 드래그앤드롭 / 멀티 컬럼 / 큰 dashboard / 다중 선택 중).
+- [ ] 좁은 윈도우 (< 1024px) 폴백 정책 — 안내 페이지로 redirect 또는 단순 축소.
+
+### 7-3. 구현
+- [ ] `apps/web/src/features/just-do/` 레이아웃 구조 재작성 (현재 모바일 모방 구조 → 데스크탑).
+- [ ] 사이드바/상단 nav 컴포넌트.
+- [ ] 캘린더의 데스크탑 사이즈 재설계 (월간/주간/일간).
+- [ ] Add/Edit Task — bottom sheet 대신 modal/drawer.
+- [ ] Stats 데스크탑 dashboard화.
+- [ ] Settings 데스크탑 레이아웃 (좌측 카테고리 / 우측 콘텐츠 분할 등).
+- [ ] 키보드 단축키 (결정된 것).
+- [ ] 드래그앤드롭 (결정된 것).
+- [ ] 색상/타이포 토큰은 그대로 재사용 (도메인 토큰은 공유).
+
+### 7-4. 모바일 진입 페이지
+- [ ] User-Agent 또는 viewport 기반 모바일 진입 감지.
+- [ ] 안내 페이지: "데스크탑 권장 + iOS 앱 다운로드 링크 + Android 앱 출시 알림 대기 가입".
+- [ ] OAuth 콜백 등 *진입 후 화면*에서도 모바일이면 안내 페이지로 폴백.
+
+### 7-5. 회귀 / 검증
+- [ ] 기존 76개 web 테스트 중 view 의존 테스트 갱신, 도메인/sync 테스트는 그대로 유효한지 확인.
+- [ ] Manual offline sync verification (`docs/local_dev.md`)을 새 UI로 다시 통과.
+- [ ] 데스크탑/노트북 해상도 (1024 / 1280 / 1440 / 1920)에서 시각 검증.
+
 ## UX / UI Backlog
 
 - [x] Home calendar scope: 캘린더 dot/list 는 Task 중심으로 유지하고 Habit은 전용 탭에서 관리.
@@ -261,6 +307,15 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Widget sync strategy documented in `docs/widget_sync_strategy.md`.
 - [x] Define shared mutation event names that both web and iOS can implement.
 - [x] Design iOS mutation queue schema for widget/offline writes.
+
+## Android Roadmap (v3)
+
+> Platform Strategy (`just_do_prd.md` §1.5): v3까지 Android 사용자는 데스크탑 web 사용. v3에 네이티브 Android 앱 출시.
+
+- [ ] 기술 선택 (React Native / Flutter / Compose Multiplatform / 네이티브 Kotlin) — v2 종료 시점에 결정.
+- [ ] 도메인 모델 공유 방식 결정 (Supabase 클라이언트 직접 사용 vs 공유 SDK 작성).
+- [ ] iOS 앱과의 기능 동등성 범위 (위젯, 알림, App Group 대응 등).
+- [ ] 모바일 web 안내 페이지에 Android 출시 시점 업데이트.
 
 ## Deployment Backlog
 

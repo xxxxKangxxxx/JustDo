@@ -1,12 +1,18 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-04-30
+Date: 2026-05-10
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
 This handoff is written so the next session can continue without replaying the
 chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 `docs/next_steps.md`.
+
+> **2026-05-10 Platform Strategy 결정** — Web과 iOS의 UI/UX는 의도적으로 분기.
+> Web=데스크탑 productivity hub, iOS=모바일 네이티브, Android=v3.
+> **Phase 7 Web Desktop Redesign**이 v1 출시 차단 항목으로 신설됨.
+> 자세한 내용: `just_do_prd.md` §1.5 / `next_steps.md` Phase 7 / 본 문서
+> "App Shape Now" 섹션 / `worklog.md` 2026-05-10 엔트리.
 
 ## Resume Work — cold-start checklist
 
@@ -145,6 +151,13 @@ cdd5b1f docs(ios): start phase 6 planning
 - Phase 5.6 User Preferences Sync — done.
 - Phase 5.7 Habit Recurrence (daily + weekly) — done for new habit creation,
   storage/sync, selectors, Habit screen, Stats screen, and Habit detail/edit.
+- **Phase 7 Web Desktop Redesign — open (v1 출시 차단 항목, 2026-05-10 신설)**.
+  - 사용자가 `reference/web-proto/`에 데스크탑 prototype 추가 예정 (도착 대기).
+  - prototype 도착 후 디자인 결정 (사이드바/멀티 컬럼/단축키 등) → 구현 → 모바일 진입 페이지 → 회귀 검증.
+  - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
+  - 자세한 punch list: `next_steps.md` Phase 7.
+  - 현재 web (`apps/web/`)은 모바일 prototype을 모방한 *transitional* 상태이므로
+    Phase 7 작업 전까지 web UI 변경은 보수적으로 (도메인/sync 레이어는 그대로 유효).
 - Phase 6 iOS / Widget — SwiftPM shared-code track is underway:
   - Swift domain and mutation queue contracts.
   - Drift JSON fixtures.
@@ -207,23 +220,31 @@ cdd5b1f docs(ios): start phase 6 planning
 
 ## App Shape Now
 
-- Bottom tabs are `홈 / 습관 / 설정`.
-- Home/calendar is Task-focused only.
-  - Calendar dots show Task categories only.
-  - Habit dots/lists were intentionally removed from Home.
-- Habit has its own tab:
-  - daily completion summary,
-  - habit checklist for selected date,
-  - recent 7-day completion grid.
-- Stats is no longer a bottom tab.
-  - It is now Settings -> `리포트` -> `활동 요약`.
-- Add/Edit Task date range guard is implemented:
-  - if start date moves after end date, end date is clamped to start date.
-- Add/Edit Task sheet has a tag chip input:
-  - Enter / comma / blur commits the draft tag.
-  - Backspace on empty input removes the trailing chip.
-  - Clicking a chip removes it.
-  - Chip color follows the selected category (`me` / `ext`).
+> 2026-05-10 Platform Strategy 결정 이후 web과 iOS의 UI는 의도적으로 분기. `just_do_prd.md` §1.5 참고. 아래는 플랫폼별 현재 상태.
+
+### App Shape — iOS (current native root, proto-aligned)
+
+- Bottom tabs are `홈 / 통계 / 설정` (proto = `reference/proto/tabbar.jsx` 기준).
+- Home/calendar shows both Task and Habit (proto `home.jsx`의 `[Habit]` 섹션 포함).
+- Stats has its own tab.
+- Settings owns dark mode and habit/category management entry points.
+- Add 플로우는 partial-height bottom sheet.
+- Auth 랜딩은 Apple/Google/Kakao/Email 4 버튼 + "Just Do" 워드마크 (`reference/proto/auth.jsx`, `auth-button.jsx`).
+
+### App Shape — Web (transitional, Phase 7 redesign 대기)
+
+> 현재 web은 모바일 prototype을 모방한 transitional 상태. Platform Strategy에 따라 `reference/web-proto/` 도착 후 데스크탑 productivity hub로 재디자인 예정 (`docs/next_steps.md` Phase 7).
+
+현재 transitional 구현:
+
+- Bottom tabs are `홈 / 습관 / 설정` (이전 결정 잔존; Phase 7에 사이드바/상단 nav로 대체 예정).
+- Home/calendar is Task-focused only — calendar dots/lists에서 Habit은 의도적으로 제외, 별도 Habit 탭에 분리.
+- Habit has its own tab: daily completion summary, habit checklist for selected date, recent 7-day completion grid.
+- Stats는 별도 탭이 아님 — Settings → `리포트` → `활동 요약`.
+- Add/Edit Task date range guard: 시작일이 종료일 이후로 이동하면 종료일도 시작일로 클램프.
+- Add/Edit Task sheet 의 tag chip input: Enter/comma/blur로 commit, Backspace로 삭제, chip 클릭 시 제거, chip 색은 선택된 카테고리 기반.
+
+> Phase 7 재디자인에서 위 항목들의 *형태*는 바뀌지만 *기능 동등성*은 유지한다. 데이터 레이어 (offline sync, IndexedDB 큐, Supabase flush)는 UI와 무관하게 그대로.
 
 ## Supabase / Cloud State
 
@@ -442,35 +463,44 @@ Cloud manual checks already performed by the user/Codex:
 
 ## Recommended Next Work
 
-Phase 6 Xcode scaffolding, WidgetKit hosting, Core Data-backed widget snapshot
-writer path, Supabase REST read/write sync, app lifecycle sync, Keychain-backed
-session storage, native OAuth, widget App Intents, widget queue drain/flush,
-deep-link routing, and `NavigationStack` task/habit detail routing are done.
-The signed-in native root now has Home / Stats / Settings tabs, a proto-based
-calendar home, task/habit add sheet, settings-owned dark mode, and habit/category
-management entry points. A launch crash caused by overlapping Core Data sync
-writes was fixed by serializing store access through the managed object context
-and updating existing mirror rows in place. Current status, test checklist,
-deployment notes, and remaining UX gaps are summarized in
-`docs/ios_phase6_status.md`.
+> 2026-05-10 Platform Strategy 결정으로 우선순위가 재정렬됨. Phase 7 Web Desktop
+> Redesign이 v1 출시 차단 항목이며, iOS 잔여 작업은 Phase 7과 독립적으로 병렬
+> 진행 가능. Manual offline sync verification 은 Phase 7 완료 후 새 web UI 위에서
+> 회귀 검증으로 흡수됨 (`next_steps.md` Phase 7-5).
 
-1. **Manual Offline Sync Verification (cloud, one-time)** ← start here
-   - Steps live in `docs/local_dev.md` → "Manual Offline Sync
-     Verification". Run once on hosted Supabase before declaring v1
-     ready. Independent of the Xcode work above, so it can be done in
-     parallel.
+1. **Phase 7 Web Desktop Redesign** ← v1 출시 차단 항목, 시작점
+   - 0단계: `reference/web-proto/` 도착 대기 (사용자 추가 예정).
+   - 도착 전: `next_steps.md` Phase 7-1 자산/가드레일 항목만 진행 가능 (대부분 done).
+   - 도착 후: 7-2 디자인 결정 → 7-3 구현 → 7-4 모바일 진입 페이지 → 7-5 회귀 검증.
+   - 자세한 punch list: `next_steps.md` Phase 7.
 
-2. **Native detail editing**
-   - Add edit/delete actions from pushed task/habit detail screens.
-   - Reuse the add sheet structure for task edit where practical.
+2. **iOS 잔여 작업** (Phase 7과 독립, 병렬 가능)
+   - Native detail editing (edit/delete from pushed task/habit detail screens).
+   - Sync status UI (Settings 또는 root status surface 에 큐 flush 에러 노출).
+   - 나머지: `ios_phase6_status.md` "Next Work" 참고.
 
-3. **Sync status UI**
-   - Add app-facing sync state and queued-write error visibility in Settings or
-     a compact root status surface.
+3. **Manual Offline Sync Verification** (지금이 아닌 Phase 7 완료 후)
+   - 절차 자체는 `docs/local_dev.md` → "Manual Offline Sync Verification".
+   - 데이터 레이어와 UI 레이어가 독립이라 *지금 통과해도 의미가 있지만*, web UI가
+     Phase 7에서 재작성될 예정이라 그 전 검증은 회귀 가치가 낮음. Phase 7 끝난
+     뒤 새 UI 위에서 한 번에 통과시키는 게 효율적.
 
-4. **Xcode polish (defer until needed)**
+4. **배포 트랙** (Phase 7 후속)
+   - Gabia 도메인, Route 53, Amplify Hosting, Supabase production callback URL
+     등록, smoke test. 절차: `docs/deployment_domain_aws_plan.md`.
+
+5. **Xcode polish (defer until needed)**
    - Trim `JustDoApp` Supported Destinations to iPhone-only for v1.
    - Decide whether to consolidate `JustDoApp.swift` placeholder file
      with `JustDoAppApp.swift` entry point.
    - Configure real iPhone for device testing (resolves the Personal
      Team provisioning warnings).
+
+### Codex 세션을 재개하는 경우
+
+- 가장 먼저: `docs/just_do_prd.md` §1.5 와 `next_steps.md` Phase 7 읽기.
+- `reference/web-proto/` 디렉토리 존재 여부 확인. 있으면 Phase 7-2 디자인 결정 단계.
+  없으면 사용자에게 도착 시점 확인 후 iOS 잔여 작업으로 우회 (위 #2).
+- `apps/web/` 의 현재 모양은 모바일 prototype 모방이라 *Phase 7 전 까지 큰 web UI
+  변경은 지양*. 도메인/sync 레이어 (persistence, supabase-mapping, store) 변경은
+  무관하게 진행 가능.

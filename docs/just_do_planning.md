@@ -144,19 +144,24 @@ Task와 별도 카테고리로 분리 관리.
 
 ## 9. 플랫폼별 우선순위 & 개발 단계
 
-| 단계 | 플랫폼 | 주요 목표 |
-|------|--------|-----------|
-| v1 | iOS + 웹앱 | 핵심 기능 구현 (Task, Habit, 캘린더, 위젯, 소셜 로그인, 동기화) |
-| v2 | iOS + 웹앱 | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, 이메일 회원가입 |
-| v3 | Android | Android 앱 출시 |
+> Platform Strategy 결정 (2026-05-10): Web과 iOS는 도메인/스키마는 공유하지만 UI/UX는 분기. 자세한 내용은 `just_do_prd.md` §1.5 참고.
+
+| 단계 | 플랫폼 | 형태 | 주요 목표 |
+|------|--------|------|-----------|
+| v1 | iOS + 웹앱 | iOS=모바일 네이티브, Web=데스크탑 productivity hub | 핵심 기능 구현 (Task, Habit, 캘린더, 위젯[iOS], 소셜 로그인, 동기화). Web Desktop Redesign (Phase 7)이 v1 출시 차단 항목 |
+| v2 | iOS + 웹앱 | (동일) | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, 이메일 회원가입 |
+| v3 | Android | 모바일 네이티브 | Android 앱 출시 — v3 전까지 Android 사용자는 데스크탑 web으로 우회 |
 
 ---
 
 ## 10. 화면 설계 (iOS 기준)
 
-### 10-1. 네비게이션 구조
+### 10-1. 네비게이션 구조 (iOS 기준)
+
+> Web의 네비게이션 구조는 Platform Strategy (`just_do_prd.md` §1.5)에 따라 다름. 데스크탑 productivity hub로서 사이드바/멀티 컬럼 형태로 별도 설계됨 (`reference/web-proto/` 참고, Phase 7).
+
 ```
-하단 탭 바
+하단 탭 바 (iOS)
 ├── 🗓 홈 (캘린더 뷰) — 기본 진입 화면
 ├── 📊 통계
 └── ⚙️ 설정
@@ -326,11 +331,13 @@ Just Do
 
 ## 14. 개발 로드맵
 
+> Platform Strategy 및 v1 차단 항목은 `just_do_prd.md` §1.5 / §6 참고.
+
 | 단계 | 플랫폼 | 주요 내용 |
 |------|--------|-----------|
-| **v1** | iOS + 웹 | Task/Habit 핵심 기능, 캘린더 뷰, 위젯 3종, 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림 |
+| **v1** | iOS (모바일) + 웹 (데스크탑 productivity hub) | Task/Habit 핵심 기능, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림. **Web Desktop Redesign (Phase 7)이 v1 출시 차단 항목** |
 | **v2** | iOS + 웹 | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, 공유/협업 기능, 통계 리포트, 이메일 회원가입 |
-| **v3** | Android | Android 앱 출시 |
+| **v3** | Android | Android 앱 출시 — v3 전까지 Android 사용자는 데스크탑 web으로 우회 |
 
 ---
 

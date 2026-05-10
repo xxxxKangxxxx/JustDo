@@ -12,8 +12,40 @@
 | 앱 이름 | Just Do |
 | 컨셉 | 할일과 일정을 하나의 항목(Task)으로 통합 관리하는 캘린더 기반 To-Do 앱 |
 | 플랫폼 | iOS (Swift + SwiftUI), 웹앱 (Next.js + TypeScript) |
+| 플랫폼 전략 | Web = 데스크탑 productivity hub / iOS = 모바일 네이티브 / Android = v3. 자세한 내용은 §1.5 참고 |
 | 백엔드 (v1) | Supabase (Auth, PostgreSQL, Realtime, Edge Functions) — 추후 자체 백엔드로 이전 가능성 열어둠. 자세한 운영 원칙은 `backend_strategy.md` 참고 |
 | 개발 우선순위 | iOS + 웹앱 동시 개발 (v1), Android (v3) |
+
+---
+
+## 1.5. Platform Strategy
+
+> 2026-05-10 결정. Web과 iOS는 도메인 모델/Supabase 스키마는 공유하지만 UI/UX는 의도적으로 분기한다.
+
+| 플랫폼 | v1 위치 | 형태 | UI Reference |
+|--------|---------|------|--------------|
+| **Web** | v1 출시 | **데스크탑 productivity hub** (사이드바 nav, 멀티 컬럼 레이아웃, 키보드 단축키, 드래그앤드롭, 큰 dashboard) | `reference/web-proto/` (별도 자산) |
+| **iOS** | v1 출시 | **모바일 네이티브** (하단 탭바, 단일 컬럼, bottom sheet add 플로우, 위젯) | `reference/proto/` |
+| **Android** | v3 출시 | 모바일 네이티브 — 출시 전까지 모바일 사용자는 iOS 앱 또는 데스크탑 web 사용 권장 | (v3 결정 시점에 정의) |
+
+### 핵심 원칙
+
+- **공유**: 도메인 모델 (Task / Habit / Category / Settings), Supabase 스키마/RLS, 색상 토큰, 카테고리 색상 시스템
+- **분기**: 레이아웃, 네비게이션 구조, 인터랙션 패턴, 화면 구성
+
+### 모바일 웹 진입 처리
+
+Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 Android, iOS 앱 미설치) 진입 시 안내 페이지로 분기한다:
+
+- iOS 사용자: iOS 앱 다운로드 안내
+- Android 사용자: 데스크탑 web 사용 권장 + Android 앱 출시 알림 대기 가입 (선택)
+- 데스크탑 권장 메시지
+
+### 디자인 분기의 함의
+
+- `reference/proto/`는 **모바일/iOS 전용** reference. 데스크탑 web prototype은 `reference/web-proto/`에 별도로 둔다.
+- iOS와 Web은 동일한 *기능*을 다른 *형태*로 제공한다. 예: Stats가 iOS에서는 별도 탭, Web에서는 dashboard 뷰일 수 있음.
+- 일부 기능은 플랫폼 전용일 수 있다 (예: 위젯 = iOS 전용, 드래그앤드롭 = Web 전용, 키보드 단축키 = Web 우선).
 
 ---
 
@@ -263,13 +295,37 @@
 
 ## 5. 디자인 가이드라인
 
+> Web과 iOS의 디자인 분기 원칙은 §1.5 Platform Strategy 참고. 아래는 양 플랫폼이 **공유**하는 가이드라인과 **플랫폼별** 가이드라인을 분리해 표기한다.
+
+### 공통 (Web + iOS)
+
 | 항목 | 내용 |
 |------|------|
 | 톤앤매너 | 미니멀, 깔끔 (흰 배경 고정 아님) |
 | 다크모드 | 지원 |
 | 기본 캘린더 뷰 | 월간 (주간/일간 전환 가능) |
 | 카테고리 색상 | 사용자 카테고리별 커스텀 색상 / Habit은 그린 계열 |
-| iOS 네이티브 | SwiftUI 기본 컴포넌트 적극 활용 |
+| 디자인 토큰 | 색상/타이포 토큰은 양 플랫폼이 공유 |
+
+### iOS
+
+| 항목 | 내용 |
+|------|------|
+| 폼팩터 | 모바일 단일 컬럼 |
+| 네비게이션 | 하단 탭바 (홈 / 통계 / 설정) |
+| Add 플로우 | bottom sheet (partial detent) |
+| UI Reference | `reference/proto/` |
+| 네이티브 | SwiftUI 기본 컴포넌트 적극 활용 |
+
+### Web (데스크탑)
+
+| 항목 | 내용 |
+|------|------|
+| 폼팩터 | 데스크탑 가정 (≥ 1024px). 좁은 윈도우/모바일 진입 시 안내 페이지 |
+| 네비게이션 | 사이드바 또는 상단 톱바 (재디자인 단계에서 확정) |
+| Add 플로우 | 모달 또는 인라인 |
+| UI Reference | `reference/web-proto/` (Phase 7에 추가 예정) |
+| 데스크탑 가치 | 멀티 컬럼, 키보드 단축키, 드래그앤드롭, 큰 dashboard |
 
 ---
 
@@ -277,9 +333,9 @@
 
 | 단계 | 내용 |
 |------|------|
-| **v1** | Task/Habit CRUD, 캘린더 뷰, 위젯 3종, 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림, Trial/구독 |
+| **v1** | iOS 앱 + Web (데스크탑 productivity hub) 동시 출시. Task/Habit CRUD, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림, Trial/구독. **Web Desktop Redesign (Phase 7) v1 차단 항목** — `reference/web-proto/` 도착 후 구현, 출시 전 완료 필요 |
 | **v2** | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, 공유/협업, 통계 고도화, 이메일 회원가입 |
-| **v3** | Android 앱 출시 |
+| **v3** | Android 앱 출시 — v3 출시 전까지 Android 사용자는 데스크탑 web 사용 |
 
 ---
 

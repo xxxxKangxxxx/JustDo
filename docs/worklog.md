@@ -1623,3 +1623,64 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `gh auth status` currently reports no GitHub CLI login. Git push can still
   proceed through the repository's configured git remote/credentials, but PR
   creation through `gh` would require `gh auth login`.
+
+## 2026-05-10 Platform Strategy Decision
+
+### Claude Code (with user)
+
+- Discovered divergence between `claude_handoff.md` "App Shape Now" (web 기준,
+  `홈 / 습관 / 설정` 탭, Stats를 Settings 안에) and `reference/proto/` +
+  iOS simulator (5/10 작업, `홈 / 통계 / 설정` 탭, Home에 Task+Habit 통합,
+  Stats 별도 탭). proto가 5/10 commit `16ff8d2 Modifying the Header Design_v2`
+  에서 갱신됐고 iOS는 그걸 따라간 반면 web은 이전 결정을 그대로 유지하고 있어
+  발생한 모순.
+- Web이 iOS prototype을 그대로 모방하면서 데스크탑 환경에서 어색한 모양 (좁은
+  컨테이너, 모바일 패턴 하단 탭, 큰 화면 미활용) 으로 보이는 문제를 사용자가
+  지적.
+- 4가지 방향 (반응형 / 데스크탑 전용 / proto 정렬 / 점진적) 검토 후, 사용자가
+  **데스크탑 전용 web** 방향을 선택.
+
+### Decision
+
+| 플랫폼 | v1 | 형태 | UI Reference |
+|--------|----|------|--------------|
+| Web | 출시 | 데스크탑 productivity hub | `reference/web-proto/` (별도 자산) |
+| iOS | 출시 | 모바일 네이티브 | `reference/proto/` |
+| Android | v3 | 모바일 네이티브 | (v3 결정 시점에 정의) |
+
+- 도메인 모델 / Supabase 스키마 / 색상 토큰은 양 플랫폼 **공유**.
+- 레이아웃 / 네비게이션 / 인터랙션 패턴은 플랫폼별로 **분기**.
+- 모바일 web 진입 시 안내 페이지 분기 (iOS 앱 다운로드 / Android 출시 알림 / 데스크탑 권장).
+- v3 까지 Android 사용자는 데스크탑 web 으로 우회.
+- **Phase 7: Web Desktop Redesign**이 v1 출시 차단 항목으로 신설. `reference/web-proto/` 도착 후 구현, Amplify 배포는 재디자인 후.
+
+### Documentation Updates
+
+- `reference/README.md` — proto = 모바일/iOS, web-proto = 데스크탑 web 분리.
+- `docs/just_do_prd.md` — §1 표에 "플랫폼 전략" 행 추가, 새 §1.5 Platform Strategy
+  섹션, §5 디자인 가이드라인을 공통 / iOS / Web 으로 분리, §6 로드맵에 v1 차단
+  항목 명시.
+- `docs/just_do_planning.md` — §9 표 갱신, §10-1 네비게이션을 iOS 기준임을 명시,
+  §14 로드맵 갱신.
+- `docs/next_steps.md` — 새 "Where We Are (2026-05-10)" 헤더, 새 Phase 7 (자산/
+  디자인 결정/구현/모바일 진입/회귀 검증), Android Roadmap 백로그.
+- `docs/claude_handoff.md` — Date 헤더를 2026-05-10 으로 갱신, 상단에 Platform
+  Strategy 결정 노트 추가, Current Status 에 Phase 7 항목 추가, "App Shape Now"
+  를 iOS (current) / Web (transitional) 로 분리, Recommended Next Work 를
+  Phase 7 우선 + iOS 잔여 작업 병렬 + sync verification 후순위 + Codex 세션
+  재개 가이드 형태로 재작성.
+- `docs/ios_phase6_status.md` — Next Work 에 Phase 7 컨텍스트 노트 추가,
+  hosted offline sync verification 을 Phase 7 완료 후 항목으로 이동.
+- `README.md` — Current Focus 와 Project Layout 갱신 (Platform Strategy
+  요약 + reference 디렉토리 분리 명시 + 마지막 iOS 단락의 next iOS work 표현
+  Phase 7 정렬).
+
+### Notes
+
+- Manual offline sync verification (`docs/local_dev.md`) 은 본 결정의 결과로
+  잠시 보류. UI 디자인과 데이터 레이어가 독립이라 검증 자체는 여전히 유효하지만,
+  새 web 디자인이 도착하면 그 위에서 다시 회귀 검증할 예정 (Phase 7-5).
+- iOS 측 작업 (detail edit/delete, sync status UI)은 web 재디자인과 독립적으로
+  진행 가능.
+- Phase 7 prototype 자산은 사용자가 `reference/web-proto/` 에 추가 예정. 도착 전
+  까지는 디자인 결정 (사이드바/네비/단축키 등)을 보류.

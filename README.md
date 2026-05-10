@@ -5,16 +5,26 @@ Supabase workspace, and the native iOS implementation track.
 
 ## Current Focus
 
-- Web v1 is implemented in `apps/web/`.
-- Phase 6 iOS work is active in `apps/ios/`.
+- **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일
+  네이티브, Android=v3. 자세한 내용: `docs/just_do_prd.md` §1.5.
+- **Phase 7 Web Desktop Redesign** is the v1 출시 차단 항목. `reference/web-proto/`
+  도착 대기. 자세한 punch list: `docs/next_steps.md` Phase 7.
+- iOS Phase 6 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7과
+  독립적으로 병렬 진행.
+- 현재 `apps/web/` 은 모바일 prototype 모방의 *transitional* 상태이며 Phase 7에서
+  데스크탑 productivity hub 로 재디자인됨.
 - Product and handoff documents live in `docs/`.
 - Original UI references remain in `reference/`.
 
 ## Project Layout
 
-Use `reference/proto/` as the main behavior and UI reference. Use
-`reference/screens/` and `reference/design-board.html` as visual support only.
-Do not build production code inside `reference/`.
+UI reference는 플랫폼별로 다름:
+
+- `reference/proto/` — 모바일 / iOS reference (또한 v3 Android).
+- `reference/web-proto/` — 데스크탑 web reference (사용자 추가 예정).
+
+`reference/screens/` 와 `reference/design-board.html` 은 시각 지원용. Production
+code는 `reference/` 안에 작성하지 않음.
 
 ```text
 apps/
@@ -115,8 +125,8 @@ check/uncheck through an App Group mutation queue, and the app drains that
 queue into Core Data on refresh. Queued Core Data mutations now flush to
 Supabase when a valid session is available. Widget rows deep-link back into the
 iOS app through the `justdo` URL scheme and render native task/habit detail
-screens from the Core Data mirror. The next iOS work is hosted OAuth/offline
-sync verification, visual polish against `reference/proto/`, and app-facing
-sync status/error UI. See
-`docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`, and
-`docs/claude_handoff.md`.
+screens from the Core Data mirror. The next iOS work is detail edit/delete and
+app-facing sync status/error UI; visual polish against `reference/proto/` and
+hosted OAuth/offline sync verification 은 Phase 7 (`docs/next_steps.md`)
+일정과 함께 정리됨. 자세한 내용: `docs/ios_phase6_plan.md`,
+`docs/ios_phase6_status.md`, `docs/claude_handoff.md`.
