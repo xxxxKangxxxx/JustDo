@@ -442,32 +442,33 @@ Cloud manual checks already performed by the user/Codex:
 
 ## Recommended Next Work
 
-Phase 6 Xcode scaffolding, initial WidgetKit hosting, the Core Data-backed
-widget snapshot writer path, the Supabase REST read-sync scaffold, the app
-lifecycle sync trigger, Keychain-backed session storage, and minimal iOS OAuth
-login/refresh are done. Widget task/habit toggle App Intents are also done and
-write durable entries to App Group `mutation_queue.jsonl`. The app now drains
-that App Group queue into the Core Data mirror and `CDQueuedMutation`, then
-flushes queued Core Data mutations to Supabase when a valid session is
-available. Widget row text links now open the iOS app through
-`justdo://task/<id>` and `justdo://habit/<id>` deep links. The app registers
-the `justdo` URL scheme and renders task/habit detail panels from the Core Data
-mirror. Current status, test checklist, deployment notes, and remaining UX gaps
-are summarized in `docs/ios_phase6_status.md`.
+Phase 6 Xcode scaffolding, WidgetKit hosting, Core Data-backed widget snapshot
+writer path, Supabase REST read/write sync, app lifecycle sync, Keychain-backed
+session storage, native OAuth, widget App Intents, widget queue drain/flush,
+deep-link routing, and `NavigationStack` task/habit detail routing are done.
+The signed-in native root now has Home / Stats / Settings tabs, a proto-based
+calendar home, task/habit add sheet, settings-owned dark mode, and habit/category
+management entry points. A launch crash caused by overlapping Core Data sync
+writes was fixed by serializing store access through the managed object context
+and updating existing mirror rows in place. Current status, test checklist,
+deployment notes, and remaining UX gaps are summarized in
+`docs/ios_phase6_status.md`.
 
-1. **NavigationStack detail routing** ← start here
-   - Replace the scaffold inline detail panel with pushed task/habit detail
-     routes.
-   - Keep using `JustDoDeepLink` and `CoreDataAppSnapshotStore.task(id:)` /
-     `habit(id:)` as the route/data boundary.
-
-2. **Manual Offline Sync Verification (cloud, one-time)**
+1. **Manual Offline Sync Verification (cloud, one-time)** ← start here
    - Steps live in `docs/local_dev.md` → "Manual Offline Sync
      Verification". Run once on hosted Supabase before declaring v1
      ready. Independent of the Xcode work above, so it can be done in
      parallel.
 
-3. **Xcode polish (defer until needed)**
+2. **Native detail editing**
+   - Add edit/delete actions from pushed task/habit detail screens.
+   - Reuse the add sheet structure for task edit where practical.
+
+3. **Sync status UI**
+   - Add app-facing sync state and queued-write error visibility in Settings or
+     a compact root status surface.
+
+4. **Xcode polish (defer until needed)**
    - Trim `JustDoApp` Supported Destinations to iPhone-only for v1.
    - Decide whether to consolidate `JustDoApp.swift` placeholder file
      with `JustDoAppApp.swift` entry point.

@@ -15,12 +15,16 @@ public enum CoreDataMappers {
         in context: NSManagedObjectContext
     ) throws -> NSManagedObject {
         let object = try makeObject("CDCategory", in: context)
+        updateCategory(category, object: object)
+        return object
+    }
+
+    public static func updateCategory(_ category: Category, object: NSManagedObject) {
         object.setValue(category.id, forKey: "id")
         object.setValue(category.name, forKey: "name")
         object.setValue(category.color, forKey: "color")
         object.setValue(category.isDefault, forKey: "isDefault")
         object.setValue(Int64(category.position), forKey: "position")
-        return object
     }
 
     public static func category(from object: NSManagedObject) -> Category {
@@ -38,6 +42,11 @@ public enum CoreDataMappers {
         in context: NSManagedObjectContext
     ) throws -> NSManagedObject {
         let object = try makeObject("CDTask", in: context)
+        try updateTask(task, object: object)
+        return object
+    }
+
+    public static func updateTask(_ task: Task, object: NSManagedObject) throws {
         object.setValue(task.id, forKey: "id")
         object.setValue(task.categoryID, forKey: "categoryID")
         object.setValue(task.title, forKey: "title")
@@ -47,7 +56,6 @@ public enum CoreDataMappers {
         object.setValue(task.scheduledTime, forKey: "scheduledTime")
         object.setValue(task.isCompleted, forKey: "isCompleted")
         object.setValue(try encoder.encode(task.tags), forKey: "tagsJSON")
-        return object
     }
 
     public static func task(from object: NSManagedObject) throws -> Task {
@@ -77,6 +85,11 @@ public enum CoreDataMappers {
         in context: NSManagedObjectContext
     ) throws -> NSManagedObject {
         let object = try makeObject("CDHabit", in: context)
+        try updateHabit(habit, object: object)
+        return object
+    }
+
+    public static func updateHabit(_ habit: Habit, object: NSManagedObject) throws {
         object.setValue(habit.id, forKey: "id")
         object.setValue(habit.title, forKey: "title")
         object.setValue(habit.emoji, forKey: "emoji")
@@ -85,7 +98,6 @@ public enum CoreDataMappers {
         object.setValue(try habit.recurDays.map { try encoder.encode($0) }, forKey: "recurDaysJSON")
         object.setValue(habit.reminderTime, forKey: "reminderTime")
         object.setValue(try encoder.encode(habit.log), forKey: "logJSON")
-        return object
     }
 
     public static func habit(from object: NSManagedObject) throws -> Habit {
@@ -114,11 +126,15 @@ public enum CoreDataMappers {
         in context: NSManagedObjectContext
     ) throws -> NSManagedObject {
         let object = try makeObject("CDQueuedMutation", in: context)
+        try updateQueuedMutation(queued, object: object)
+        return object
+    }
+
+    public static func updateQueuedMutation(_ queued: QueuedMutation, object: NSManagedObject) throws {
         object.setValue(queued.id, forKey: "id")
         object.setValue(queued.updatedAt, forKey: "updatedAt")
         object.setValue(queued.mutation.typeName, forKey: "type")
         object.setValue(try encoder.encode(queued.mutation), forKey: "payloadJSON")
-        return object
     }
 
     public static func queuedMutation(from object: NSManagedObject) throws -> QueuedMutation {

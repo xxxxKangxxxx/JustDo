@@ -88,6 +88,14 @@ Current status:
   `ASWebAuthenticationSession`. Successful sign-in writes access token, refresh
   token, user ID, and expiry into Keychain; expired sessions are refreshed
   before read-sync.
+- The signed-in iOS root now renders the native calendar home, stats, and
+  settings tabs based on `reference/proto/`, including task/habit add flows,
+  habit/category management entry points, and pushed task/habit detail routes.
+- The settings tab owns the dark-mode toggle. The home header keeps only the
+  add button, matching the current native interaction model.
+- Core Data mirror writes are serialized through the managed object context,
+  and Supabase snapshot replacement updates existing rows in place to avoid
+  launch-time Core Data observer crashes.
 
 Useful checks:
 
@@ -107,7 +115,8 @@ check/uncheck through an App Group mutation queue, and the app drains that
 queue into Core Data on refresh. Queued Core Data mutations now flush to
 Supabase when a valid session is available. Widget rows deep-link back into the
 iOS app through the `justdo` URL scheme and render native task/habit detail
-panels from the Core Data mirror. The next iOS work is manual OAuth/offline
-sync verification and NavigationStack-based detail routing. See
+screens from the Core Data mirror. The next iOS work is hosted OAuth/offline
+sync verification, visual polish against `reference/proto/`, and app-facing
+sync status/error UI. See
 `docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`, and
 `docs/claude_handoff.md`.

@@ -32,18 +32,43 @@ implementation gaps, and checks to run before testing or shipping.
   screens from the Core Data mirror.
 - Deep-linked task/habit screens are pushed with a SwiftUI `NavigationStack`
   route instead of being rendered inline on the root scaffold.
+- The signed-in root shell now renders native Home / Stats / Settings tabs
+  based on `reference/proto/`.
+- The Home tab includes the month calendar, selected-day panel, task/habit
+  rows, add button, and bottom tab bar.
+- The add flow uses a partial-height bottom sheet with Task/Habit modes,
+  task date/time/category/priority fields, and habit emoji entry.
+- Settings owns dark-mode control. The home header no longer has a separate
+  dark/light button.
+- Settings exposes habit and category management entry points.
+- Core Data mirror operations are serialized on the context queue, and
+  snapshot/upsert paths update existing rows in place where possible.
 
-## App Shell Gap
+## Resolved Issues
 
-The root app shell is still a scaffold. Deep-linked task/habit detail now uses
-`NavigationStack`, but the root screen should still grow into the real app shell:
+- **Launch crash after signed-in sync.** The app could terminate on launch with
+  Core Data exceptions such as `Collection <__NSCFSet> was mutated while being
+  enumerated`, followed by an `EXC_BAD_ACCESS` in habit updates. Root cause:
+  overlapping app lifecycle sync tasks used the same `viewContext` while the
+  store was deleting and re-inserting objects during snapshot replacement and
+  upsert. Fix: public Core Data store methods now run through
+  `context.performAndWait`, snapshot replacement reconciles existing rows, and
+  category/task/habit/queued mutation upserts update existing managed objects.
+- **Dark mode split control.** The home header toggle and settings toggle had
+  separate local states. Fix: settings owns the single `isDarkMode` binding,
+  and the home header button was removed.
+- **Add sheet height.** The add sheet previously used a full-height `.large`
+  detent. Fix: it now uses a partial-height detent and proto-like bottom-sheet
+  layout.
 
-- Root screen: signed-in status, sync state, today summary, and entry points.
+## Remaining App Gaps
+
 - Detail screens currently display read-only fields from the Core Data mirror.
-- Later edit actions should live on those pushed detail screens.
-- The existing `JustDoDeepLink`, `DetailRoute`, and
-  `CoreDataAppSnapshotStore.task(id:)` / `habit(id:)` helpers are the current
-  routing/data boundary.
+- Later edit actions should live on the pushed detail screens.
+- App-facing sync status/error UI is still minimal; failed queue flushes should
+  be visible to the user.
+- Native UI still needs another visual pass against `reference/proto/` after
+  task/habit CRUD coverage settles.
 
 ## Before Manual Testing
 
@@ -67,8 +92,24 @@ swift test
 
 ## Manual Test Checklist
 
-- Launch app on simulator.
+- Signed-out root shell:
+  - Expected: auth landing matches `reference/proto/auth.jsx`.
+  - Expected: Apple, Google, Kakao, and email buttons match
+    `reference/proto/auth-button.jsx` styling and icons.
 - Sign in with Google.
+- Signed-in root shell:
+  - Expected: app switches to the calendar home screen based on
+    `reference/proto/home.jsx`.
+  - Expected: month header, calendar grid, selected-day panel, task/habit rows,
+    and bottom tab bar render without overlap.
+  - Expected: home header has a `+` add button only; dark mode is controlled
+    from Settings.
+  - Expected: `+` opens a partial-height bottom sheet, not a full-screen sheet.
+  - Expected: Settings > 다크모드 changes the whole app color scheme.
+- Manage data from Settings:
+  - Expected: Settings > 습관 관리 supports add/delete.
+  - Expected: Settings > 카테고리 관리 supports add/delete.
+- Launch app on simulator.
 - Confirm the app writes a Keychain session and refreshes the widget snapshot.
 - Add the widget to the simulator home screen.
 - Tap a task check dot in the widget.
@@ -97,13 +138,18 @@ swift test
   and hosted apple-app-site-association configuration.
 - Confirm App Group entitlement `group.com.justdo.app` exists for both app and
   widget extension in the Apple Developer portal for the release bundle IDs.
+- For web deployment and custom domain work, follow
+  `docs/deployment_domain_aws_plan.md`.
 - Run hosted OAuth/offline sync verification once before declaring v1 sync
   stable.
 
 ## Next Work
 
 - Run hosted OAuth/offline sync verification.
+- Verify signed-in iOS root home, add sheet, stats, and settings visually
+  against `reference/proto/`.
 - Add app-facing sync status/error UI so failed queue flushes are visible.
+- Implement edit/delete from pushed task/habit detail screens.
 - Add UI tests for deep-link opening once the app shell is more complete.
 - Consider a narrower Supabase task completion patch endpoint in iOS if full
   task upsert starts carrying fields that should remain remote-owned.

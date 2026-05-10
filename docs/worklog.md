@@ -1538,3 +1538,88 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - `cd apps/ios && swift test` -> 30 tests pass.
 - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+
+## 2026-05-10 Deployment Planning
+
+### Codex
+
+- Added `docs/deployment_domain_aws_plan.md`.
+  - Captures Gabia domain purchase notes.
+  - Captures DNS options: Route 53 delegation or Gabia DNS records.
+  - Captures AWS setup items: MFA, IAM, budgets, Amplify Hosting, environment
+    variables, custom domain, TLS, and production smoke tests.
+  - Captures Supabase and Google OAuth callback updates required after domain
+    connection.
+- Updated `docs/next_steps.md` with domain/AWS deployment backlog items.
+- Updated `docs/ios_phase6_status.md` with a clearer manual verification
+  checklist for signed-out auth landing and signed-in home root.
+
+### Notes
+
+- The current preferred web deployment path is AWS Amplify Hosting for
+  `apps/web`, with Route 53 DNS hosting after purchasing the domain from Gabia.
+- If DNS stays in Gabia, records must be added in Gabia DNS management instead
+  of Route 53, and apex-domain support needs to be checked before making
+  `https://<domain>` canonical.
+
+## 2026-05-10 Phase 6: Native Root UI, Management, and Stability Fixes
+
+### Codex
+
+- Replaced the signed-in iOS scaffold with a native root shell based on
+  `reference/proto/`.
+  - Added Home / Stats / Settings bottom tabs.
+  - Added the calendar month view, selected-day panel, task rows, and habit
+    rows on Home.
+  - Kept task/habit detail as pushed `NavigationStack` routes.
+- Updated the signed-out iOS auth landing to match the prototype direction.
+  - Added Just Do wordmark treatment.
+  - Added Apple, Google, Kakao, and email-style auth buttons.
+- Added native task/habit creation from the Home `+` button.
+  - Task mode captures title, start date, end date, time, category, and
+    priority.
+  - Habit mode captures title and emoji.
+  - The add flow now uses a partial-height bottom sheet instead of a full-height
+    sheet.
+- Added Settings entry points for data management.
+  - Habit management supports add/delete.
+  - Category management supports add/delete.
+- Cleaned up dark mode ownership.
+  - Removed the Home header dark/light button.
+  - Wired Settings > 다크모드 to the actual root `isDarkMode` binding.
+  - Converted core UI colors to adaptive light/dark colors.
+- Fixed the signed-in launch crash seen after simulator login.
+  - Observed crash logs: Core Data `NSGenericException` with
+    `Collection <__NSCFSet> was mutated while being enumerated`, followed by a
+    later `EXC_BAD_ACCESS` while updating habits.
+  - Root cause: overlapping app lifecycle refresh tasks shared the same
+    `viewContext`, while snapshot replacement/upsert code deleted and
+    re-inserted Core Data rows.
+  - Fix: `CoreDataAppSnapshotStore` public reads/writes now run through
+    `context.performAndWait`; category/task/habit/queued mutation upserts
+    update existing managed objects; snapshot replacement reconciles stale rows
+    instead of deleting and recreating everything.
+- Updated README, iOS status, and next-step docs with the current root UI,
+  crash fix, deployment plan, and remaining work.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 30 tests pass.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build` -> pass.
+- Installed the built `JustDoApp.app` into the booted simulator with
+  `xcrun simctl install booted ...`.
+- Launched the app with `xcrun simctl launch booted com.justdo.app`.
+- Confirmed the Home header no longer shows the dark/light button after
+  install; only the `+` button remains.
+- Checked simulator logs after the Core Data fix; no new JustDoApp crash report
+  was generated during the final launch check.
+
+### Notes
+
+- `reference/proto/*` contains user/prototype updates and was not treated as
+  production code during this pass.
+- Untracked simulator screenshots are local verification artifacts and should
+  not be committed.
+- `gh auth status` currently reports no GitHub CLI login. Git push can still
+  proceed through the repository's configured git remote/credentials, but PR
+  creation through `gh` would require `gh auth login`.

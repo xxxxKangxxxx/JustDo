@@ -33,7 +33,12 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   and has a Supabase REST read-sync scaffold for replacing the mirror with
   account data. The app lifecycle now attempts that read sync when session
   values are available from Keychain, then falls back to seeded mirror data.
-  Minimal PKCE OAuth sign-in and refresh-token handling are in place.
+  Minimal PKCE OAuth sign-in and refresh-token handling are in place. The
+  signed-in native root now includes Home / Stats / Settings tabs, proto-based
+  auth and home styling, task/habit add flows, settings-owned dark mode, and
+  habit/category management entry points. A launch-time Core Data crash caused
+  by overlapping sync writes has been fixed by serializing store access and
+  updating existing mirror rows in place.
 
 ## Phase 1: Repository Baseline
 
@@ -232,7 +237,16 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Implement widget deep-link routing for task/habit rows.
 - [x] Render native task/habit detail panels from widget deep links.
 - [x] Replace the scaffold inline detail panel with NavigationStack push-detail routes.
+- [x] Implement signed-in iOS root Home / Stats / Settings tabs based on `reference/proto/`.
+- [x] Implement native task/habit add bottom sheet with proto-aligned fields.
+- [x] Add Settings entry points for habit/category management.
+- [x] Move dark-mode ownership to Settings and remove the home-header theme button.
+- [x] Fix launch-time Core Data crash from overlapping sync writes.
 - [ ] Manual offline sync verification on hosted Supabase (`docs/local_dev.md`).
+- [ ] Signed-in iOS root visual verification against `reference/proto/`.
+- [ ] Implement edit/delete actions from pushed task/habit detail screens.
+- [ ] Add app-facing sync status/error UI for failed queue flushes.
+- [ ] Prepare production domain/AWS deployment work (`docs/deployment_domain_aws_plan.md`).
 
 ## UX / UI Backlog
 
@@ -247,6 +261,17 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Widget sync strategy documented in `docs/widget_sync_strategy.md`.
 - [x] Define shared mutation event names that both web and iOS can implement.
 - [x] Design iOS mutation queue schema for widget/offline writes.
+
+## Deployment Backlog
+
+- [ ] Purchase production domain in Gabia.
+- [ ] Decide DNS mode: delegate to Route 53 or manage records in Gabia DNS.
+- [ ] Create Route 53 hosted zone if using AWS DNS hosting.
+- [ ] Connect `apps/web` to AWS Amplify Hosting.
+- [ ] Add production Supabase env vars in Amplify.
+- [ ] Connect custom domain and verify AWS-managed TLS certificate.
+- [ ] Add production OAuth callback URLs in Supabase and Google OAuth settings.
+- [ ] Run production smoke test after deployment.
 
 ## Open Decisions
 

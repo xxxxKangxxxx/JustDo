@@ -1,7 +1,7 @@
 import CoreData
 import Foundation
 
-public final class CoreDataAppSnapshotStore {
+public final class CoreDataAppSnapshotStore: @unchecked Sendable {
     private let context: NSManagedObjectContext
 
     public init(context: NSManagedObjectContext) {
@@ -12,68 +12,81 @@ public final class CoreDataAppSnapshotStore {
         view: ViewState = AppSnapshotDefaults.viewState(),
         settings: Settings = AppSnapshotDefaults.settings()
     ) throws -> AppSnapshot {
-        AppSnapshot(
-            view: view,
-            categories: try fetchCategories(),
-            tasks: try fetchTasks(),
-            habits: try fetchHabits(),
-            settings: settings
-        )
+        try performSynchronously {
+            AppSnapshot(
+                view: view,
+                categories: try fetchCategories(),
+                tasks: try fetchTasks(),
+                habits: try fetchHabits(),
+                settings: settings
+            )
+        }
     }
 
     public func replaceSnapshot(_ snapshot: AppSnapshot) throws {
-        try deleteAll(entityNames: ["CDCategory", "CDTask", "CDHabit"])
-        for category in snapshot.categories {
-            _ = try CoreDataMappers.insertCategory(category, in: context)
-        }
-        for task in snapshot.tasks {
-            _ = try CoreDataMappers.insertTask(task, in: context)
-        }
-        for habit in snapshot.habits {
-            _ = try CoreDataMappers.insertHabit(habit, in: context)
-        }
-        if context.hasChanges {
-            try context.save()
+        try performSynchronously {
+            try replaceCategories(snapshot.categories)
+            try replaceTasks(snapshot.tasks)
+            try replaceHabits(snapshot.habits)
+            if context.hasChanges {
+                try context.save()
+            }
         }
     }
 
     public func hasMirrorData() throws -> Bool {
-        try count("CDCategory") + count("CDTask") + count("CDHabit") > 0
+        try performSynchronously {
+            try count("CDCategory") + count("CDTask") + count("CDHabit") > 0
+        }
     }
 
     public func applyAndEnqueue(_ queued: QueuedMutation) throws {
-        try apply(queued.mutation)
-        try upsertQueuedMutation(queued)
-        if context.hasChanges {
-            try context.save()
+        try performSynchronously {
+            try apply(queued.mutation)
+            try upsertQueuedMutation(queued)
+            if context.hasChanges {
+                try context.save()
+            }
         }
     }
 
     public func queuedMutations() throws -> [QueuedMutation] {
-        try fetchObjects("CDQueuedMutation")
-            .map(CoreDataMappers.queuedMutation(from:))
-            .sorted { $0.updatedAt < $1.updatedAt }
+        try performSynchronously {
+            try fetchObjects("CDQueuedMutation")
+                .map(CoreDataMappers.queuedMutation(from:))
+                .sorted { $0.updatedAt < $1.updatedAt }
+        }
     }
 
     public func removeQueuedMutation(id: UUID) throws {
-        try deleteObject("CDQueuedMutation", id: id)
-        if context.hasChanges {
-            try context.save()
+        try performSynchronously {
+            try deleteObject("CDQueuedMutation", id: id)
+            if context.hasChanges {
+                try context.save()
+            }
         }
     }
 
     public func task(id: UUID) throws -> Task? {
-        guard let object = try fetchObject("CDTask", id: id) else {
-            return nil
+        try performSynchronously {
+            guard let object = try fetchObject("CDTask", id: id) else {
+                return nil
+            }
+            return try CoreDataMappers.task(from: object)
         }
-        return try CoreDataMappers.task(from: object)
     }
 
     public func habit(id: UUID) throws -> Habit? {
-        guard let object = try fetchObject("CDHabit", id: id) else {
-            return nil
+        try performSynchronously {
+            guard let object = try fetchObject("CDHabit", id: id) else {
+                return nil
+            }
+            return try CoreDataMappers.habit(from: object)
         }
-        return try CoreDataMappers.habit(from: object)
+    }
+
+    private func performSynchronously<T>(_ work: @Sendable () throws -> T) throws -> T {
+        try context.performAndWait(work)
     }
 
     private func fetchCategories() throws -> [Category] {
@@ -122,6 +135,45 @@ public final class CoreDataAppSnapshotStore {
         }
     }
 
+    private func replaceCategories(_ categories: [Category]) throws {
+        let incomingIDs = Set(categories.map(\.id))
+        for object in try fetchObjects("CDCategory") {
+            guard let id = object.value(forKey: "id") as? UUID, incomingIDs.contains(id) else {
+                context.delete(object)
+                continue
+            }
+        }
+        for category in categories {
+            try upsertCategory(category)
+        }
+    }
+
+    private func replaceTasks(_ tasks: [Task]) throws {
+        let incomingIDs = Set(tasks.map(\.id))
+        for object in try fetchObjects("CDTask") {
+            guard let id = object.value(forKey: "id") as? UUID, incomingIDs.contains(id) else {
+                context.delete(object)
+                continue
+            }
+        }
+        for task in tasks {
+            try upsertTask(task)
+        }
+    }
+
+    private func replaceHabits(_ habits: [Habit]) throws {
+        let incomingIDs = Set(habits.map(\.id))
+        for object in try fetchObjects("CDHabit") {
+            guard let id = object.value(forKey: "id") as? UUID, incomingIDs.contains(id) else {
+                context.delete(object)
+                continue
+            }
+        }
+        for habit in habits {
+            try upsertHabit(habit)
+        }
+    }
+
     private func apply(_ mutation: LocalMutation) throws {
         switch mutation {
         case .categoryUpsert(let category):
@@ -144,18 +196,27 @@ public final class CoreDataAppSnapshotStore {
     }
 
     private func upsertCategory(_ category: Category) throws {
-        try deleteObject("CDCategory", id: category.id)
-        _ = try CoreDataMappers.insertCategory(category, in: context)
+        if let object = try fetchObject("CDCategory", id: category.id) {
+            CoreDataMappers.updateCategory(category, object: object)
+        } else {
+            _ = try CoreDataMappers.insertCategory(category, in: context)
+        }
     }
 
     private func upsertTask(_ task: Task) throws {
-        try deleteObject("CDTask", id: task.id)
-        _ = try CoreDataMappers.insertTask(task, in: context)
+        if let object = try fetchObject("CDTask", id: task.id) {
+            try CoreDataMappers.updateTask(task, object: object)
+        } else {
+            _ = try CoreDataMappers.insertTask(task, in: context)
+        }
     }
 
     private func upsertHabit(_ habit: Habit) throws {
-        try deleteObject("CDHabit", id: habit.id)
-        _ = try CoreDataMappers.insertHabit(habit, in: context)
+        if let object = try fetchObject("CDHabit", id: habit.id) {
+            try CoreDataMappers.updateHabit(habit, object: object)
+        } else {
+            _ = try CoreDataMappers.insertHabit(habit, in: context)
+        }
     }
 
     private func setHabitLog(habitID: UUID, iso: String, value: Int) throws {
@@ -164,13 +225,15 @@ public final class CoreDataAppSnapshotStore {
         }
         var habit = try CoreDataMappers.habit(from: object)
         habit.log[iso] = value
-        context.delete(object)
-        _ = try CoreDataMappers.insertHabit(habit, in: context)
+        try CoreDataMappers.updateHabit(habit, object: object)
     }
 
     private func upsertQueuedMutation(_ queued: QueuedMutation) throws {
-        try deleteObject("CDQueuedMutation", id: queued.id)
-        _ = try CoreDataMappers.insertQueuedMutation(queued, in: context)
+        if let object = try fetchObject("CDQueuedMutation", id: queued.id) {
+            try CoreDataMappers.updateQueuedMutation(queued, object: object)
+        } else {
+            _ = try CoreDataMappers.insertQueuedMutation(queued, in: context)
+        }
     }
 
     private func upsertPreference(key: PreferenceKey, value: Int) throws {
