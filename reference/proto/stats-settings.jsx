@@ -128,7 +128,7 @@ const PSettingsScreen = () => {
         <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.6, fontFamily: JD_DISPLAY, padding: '12px 20px 18px' }}>설정</div>
 
         <SettingGroup label="계정" dark={dark}>
-          <SettingRow dark={dark} avatar title="지민" detail="프로필 편집" chevron last />
+          <SettingRow dark={dark} avatar title="지민" detail={s.state.auth.provider ? `${s.state.auth.provider} 로그인` : '프로필 편집'} chevron last />
         </SettingGroup>
 
         <SettingGroup label="알림" dark={dark}>
@@ -152,7 +152,9 @@ const PSettingsScreen = () => {
         <SettingGroup label="데이터" dark={dark}>
           <SettingRow dark={dark} title="데이터 내보내기" chevron />
           <SettingRow dark={dark} title="모든 데이터 초기화" danger
-            onClick={() => { if (confirm('모든 Task와 습관을 초기화할까요?')) s.reset(); }} last />
+            onClick={() => { if (confirm('모든 Task와 습관을 초기화할까요?')) s.reset(); }} />
+          <SettingRow dark={dark} title="로그아웃" danger
+            onClick={() => { if (confirm('로그아웃 하시겠어요?')) s.signOut(); }} last />
         </SettingGroup>
 
         <SettingGroup label="앱 정보" dark={dark}>

@@ -2,6 +2,7 @@
 // so they get clipped by the phone's rounded frame.
 const PApp = () => {
   const s = useStore();
+  if (!s.state.auth.signedIn) return <PAuthScreen />;
   const tab = s.state.view.tab;
   return (
     <>

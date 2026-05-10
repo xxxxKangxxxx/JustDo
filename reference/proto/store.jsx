@@ -53,6 +53,7 @@ const initialState = () => ({
       log: { '2026-04-15': 1, '2026-04-17': 1, '2026-04-18': 1, '2026-04-19': 1, '2026-04-20': 1, '2026-04-21': 1, '2026-04-14': 1 } },
   ],
   settings: { notify: true, notifyTime: '09:00', weekStart: 0, plan: 'free' },
+  auth: { signedIn: false, provider: null },
 });
 
 const loadState = () => {
@@ -107,6 +108,8 @@ function StoreProvider({ children }) {
     })),
     addHabit: (habit) => update(s => ({ ...s, habits: [...s.habits, { id: 'h_' + Math.random().toString(36).slice(2, 8), log: {}, cat: 'habit', startedAt: TODAY_ISO, ...habit }] })),
     updateSetting: (k, v) => update(s => ({ ...s, settings: { ...s.settings, [k]: v } })),
+    signIn: (provider) => update(s => ({ ...s, auth: { signedIn: true, provider } })),
+    signOut: () => update(s => ({ ...s, auth: { signedIn: false, provider: null } })),
     reset: () => setState(initialState()),
   }), [state]);
 
