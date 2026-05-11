@@ -1762,6 +1762,14 @@ function CategoryManagementPanel({ mode }: { mode: ThemeMode }) {
     s.addCategory({ name: draftName.trim(), color: draftColor });
     setDraftName("");
   };
+  const moveCategory = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    const current = categories[index];
+    const target = categories[targetIndex];
+    if (!current || !target) return;
+    s.updateCategory(current.id, { position: target.position });
+    s.updateCategory(target.id, { position: current.position });
+  };
 
   return (
     <Panel mode={mode} title="카테고리 관리" subtitle="Task 분류에 쓰는 카테고리를 추가, 수정, 삭제합니다.">
@@ -1816,12 +1824,16 @@ function CategoryManagementPanel({ mode }: { mode: ThemeMode }) {
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        {categories.map((category) => (
+        {categories.map((category, index) => (
           <CategoryManagementRow
             key={category.id}
             mode={mode}
             category={category}
+            canMoveUp={index > 0}
+            canMoveDown={index < categories.length - 1}
             canDelete={categories.length > 1}
+            onMoveUp={() => moveCategory(index, -1)}
+            onMoveDown={() => moveCategory(index, 1)}
           />
         ))}
       </div>
@@ -1832,11 +1844,19 @@ function CategoryManagementPanel({ mode }: { mode: ThemeMode }) {
 function CategoryManagementRow({
   mode,
   category,
+  canMoveUp,
+  canMoveDown,
   canDelete,
+  onMoveUp,
+  onMoveDown,
 }: {
   mode: ThemeMode;
   category: { id: string; name: string; color: string };
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   canDelete: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
 }) {
   const s = useJustDo();
   const t = webTokens(mode);
@@ -1884,6 +1904,28 @@ function CategoryManagementRow({
           style={{ color: t.text }}
           aria-label={`${category.name} 이름`}
         />
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={!canMoveUp}
+            onClick={onMoveUp}
+            className="flex h-7 w-7 items-center justify-center rounded-md border text-[12px] font-bold disabled:opacity-30"
+            style={{ borderColor: t.divider, color: t.textSecondary }}
+            aria-label={`${category.name} 위로 이동`}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            disabled={!canMoveDown}
+            onClick={onMoveDown}
+            className="flex h-7 w-7 items-center justify-center rounded-md border text-[12px] font-bold disabled:opacity-30"
+            style={{ borderColor: t.divider, color: t.textSecondary }}
+            aria-label={`${category.name} 아래로 이동`}
+          >
+            ↓
+          </button>
+        </div>
         <button
           type="button"
           disabled={!canDelete}

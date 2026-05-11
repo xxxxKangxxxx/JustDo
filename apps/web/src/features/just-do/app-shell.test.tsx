@@ -235,6 +235,27 @@ describe("desktop app shell interactions", () => {
     expect(screen.queryByText("프로필")).not.toBeInTheDocument();
   });
 
+  it("reorders categories from desktop settings", async () => {
+    renderApp();
+
+    click(await screen.findByRole("button", { name: "설정" }));
+    click(screen.getByRole("button", { name: "카테고리" }));
+    expect(await screen.findByText("카테고리 관리")).toBeInTheDocument();
+
+    const categoryInputsBefore = screen.getAllByRole("textbox", { name: /이름/ });
+    expect(categoryInputsBefore.map((input) => (input as HTMLInputElement).value)).toEqual(["나", "외부"]);
+
+    expect(screen.getByRole("button", { name: "나 위로 이동" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "외부 아래로 이동" })).toBeDisabled();
+
+    click(screen.getByRole("button", { name: "외부 위로 이동" }));
+
+    await waitFor(() => {
+      const categoryInputsAfter = screen.getAllByRole("textbox", { name: /이름/ });
+      expect(categoryInputsAfter.map((input) => (input as HTMLInputElement).value)).toEqual(["외부", "나"]);
+    });
+  });
+
   it("edits a habit from desktop settings", async () => {
     renderApp();
 

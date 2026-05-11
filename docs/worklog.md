@@ -1901,3 +1901,24 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` — 7 files / 85 tests pass.
 - `npm --prefix apps/web run build` — pass when run outside the sandbox; the
   sandbox still blocks Turbopack helper port binding.
+
+## 2026-05-11 Phase 7: Desktop Category Reorder
+
+### Codex
+
+- Restored category reorder in the desktop Settings → 카테고리 관리 surface.
+- Added up/down controls to each category row.
+  - First row disables `위로 이동`.
+  - Last row disables `아래로 이동`.
+- Reorder swaps the two affected categories' `position` values through the
+  existing `s.updateCategory(id, { position })` path, so storage/sync behavior
+  stays aligned with the existing category model.
+- Added app-shell interaction coverage for moving `외부` above `나` and checking
+  disabled edge controls.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 86 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; the
+  sandbox still blocks Turbopack helper port binding.

@@ -20,9 +20,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   remains a separate implementation track.
 - Desktop UI interaction tests now cover the Phase 7 shell's key add/check/date
   selection/settings flows. Task detail modal tag editing and desktop Habit
-  editing are implemented. Next Phase 7 work should focus on category reorder,
-  Pro checkout backend design/implementation, offline sync verification on the
-  new UI, and visual checks across desktop widths.
+  editing are implemented. Category reorder is restored in desktop Settings.
+  Next Phase 7 work should focus on Pro checkout backend design/implementation,
+  offline sync verification on the new UI, and visual checks across desktop
+  widths.
 
 ## Where We Were (2026-05-10)
 
@@ -307,7 +308,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Pro upgrade entry surface — 구독 섹션 / 업그레이드 모달 (실결제 연동 전).
 - [x] 색상/타이포 토큰은 그대로 재사용 (도메인 토큰은 공유).
 - [x] Edit Task modal 태그 수정 / 삭제 지원 보강.
-- [ ] Category reorder 지원 복원.
+- [x] Category reorder 지원 복원 — Settings 카테고리 관리에서 위/아래 이동.
 - [x] Habit edit 지원 보강 — Settings 습관 관리에서 제목 / 이모지 / 반복 /
   요일 / 알림 수정.
 - [ ] Pro checkout API / webhook / `user_subscriptions` 갱신 구현.

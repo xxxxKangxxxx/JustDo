@@ -171,7 +171,9 @@ cdd5b1f docs(ios): start phase 6 planning
     desktop detail modal and persist through `updateTask`.
   - Desktop Habit edit is implemented from Settings → 습관 관리: title, emoji,
     daily/weekly recurrence, weekday picker, and reminder time.
-  - 다음은 category reorder, manual offline sync verification, 해상도별 시각 검증.
+  - Category reorder is restored in Settings → 카테고리 관리 with up/down
+    controls backed by `position` swaps.
+  - 다음은 manual offline sync verification, 해상도별 시각 검증.
   - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
@@ -491,9 +493,9 @@ Cloud manual checks already performed by the user/Codex:
 
 1. **Phase 7 Web Desktop Redesign** ← v1 출시 차단 항목, 현재 진행 중
    - First pass is implemented in `apps/web/src/features/just-do/app-shell.tsx`.
-   - 남은 핵심: category reorder, Pro checkout backend, offline sync manual
-     verification, 1024/1280/1440/1920 시각 검증, real iOS download link /
-     App Store auto-redirect, Android waitlist wiring.
+   - 남은 핵심: Pro checkout backend, offline sync manual verification,
+     1024/1280/1440/1920 시각 검증, real iOS download link / App Store
+     auto-redirect, Android waitlist wiring.
    - 자세한 punch list: `next_steps.md` Phase 7.
 
 2. **iOS 잔여 작업** (Phase 7과 독립, 병렬 가능)
@@ -523,7 +525,13 @@ Cloud manual checks already performed by the user/Codex:
 - 가장 먼저: `docs/just_do_prd.md` §1.5 와 `next_steps.md` Phase 7 읽기.
 - Web 작업은 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`을
   desktop reference로 삼고, iOS `reference/proto/`와 분리해서 진행.
-- `apps/web/src/features/just-do/app-shell.tsx`에 Phase 7 첫 구현 패스가 들어가
-  있으므로 여기서 이어서 mobile 안내 페이지, desktop interaction tests,
-  category reorder, habit edit, task edit tag editing, Pro checkout backend를 진행.
+- `apps/web/src/features/just-do/app-shell.tsx`에 Phase 7 desktop shell과 후속
+  편집/관리 흐름이 들어가 있음. 완료된 항목: mobile 안내 페이지, desktop
+  interaction tests, Task tag edit, Habit edit, Category reorder.
+- 다음 우선순위는 Pro checkout backend, offline sync manual verification,
+  1024/1280/1440/1920 visual checks, App Store auto-redirect / Android waitlist
+  wiring.
 - 도메인/sync 레이어 (persistence, supabase-mapping, store)는 기존 구현을 유지.
+- 태그 입력은 `#운동` → `운동`으로 정규화하고, Korean IME composition 중 Enter
+  커밋을 막도록 보정됨. Supabase `task_tags` join write는 `upsert` 대신 신규 row
+  `insert`를 사용해 RLS update-policy 의존을 피함.
