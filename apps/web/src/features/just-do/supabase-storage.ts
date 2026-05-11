@@ -84,7 +84,7 @@ export const createSupabaseStorage = (
     if (newTagIds.length > 0) {
       const { error } = await client
         .from("task_tags")
-        .upsert(newTagIds.map((tagId) => ({ task_id: taskId, tag_id: tagId })));
+        .insert(newTagIds.map((tagId) => ({ task_id: taskId, tag_id: tagId })));
       if (error) throw error;
     }
   };

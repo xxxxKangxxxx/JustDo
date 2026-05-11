@@ -14,6 +14,16 @@ describe("parseTagInput", () => {
   it("preserves a single non-comma string", () => {
     expect(parseTagInput("work")).toEqual(["work"]);
   });
+
+  it("normalizes leading hash markers", () => {
+    expect(parseTagInput("#운동")).toEqual(["운동"]);
+    expect(parseTagInput("#운동, #식단")).toEqual(["운동", "식단"]);
+    expect(parseTagInput("#운동, #동")).toEqual(["운동", "동"]);
+  });
+
+  it("drops accidental suffix fragments from Korean IME commits", () => {
+    expect(parseTagInput("#운동,동")).toEqual(["운동"]);
+  });
 });
 
 describe("mergeTags", () => {

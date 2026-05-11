@@ -86,9 +86,10 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
   };
 
   const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingInputEvent(event)) return;
     if (event.key === "Enter" || event.key === ",") {
       event.preventDefault();
-      commitTagDraft(tagDraft);
+      commitTagDraft(event.currentTarget.value || tagDraft);
       return;
     }
     if (event.key === "Backspace" && tagDraft.length === 0 && tags.length > 0) {
@@ -232,7 +233,7 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
                   value={tagDraft}
                   onChange={(event) => setTagDraft(event.target.value)}
                   onKeyDown={onTagKeyDown}
-                  onBlur={() => commitTagDraft(tagDraft)}
+                  onBlur={(event) => commitTagDraft(event.currentTarget.value || tagDraft)}
                   placeholder={tags.length ? "" : "태그 추가"}
                   className="min-w-[80px] flex-1 bg-transparent py-1 text-[13px] font-medium outline-none"
                   style={{ color: t.text }}
@@ -299,6 +300,11 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
       </div>
     </>
   );
+}
+
+function isComposingInputEvent(event: React.KeyboardEvent<HTMLInputElement>) {
+  const native = event.nativeEvent as KeyboardEvent;
+  return event.nativeEvent.isComposing || event.key === "Process" || native.keyCode === 229;
 }
 
 function Field({

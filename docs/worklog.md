@@ -1763,3 +1763,141 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Implement real Pro checkout backend and webhook-driven subscription update.
 - Run manual offline sync verification on the new web UI.
 - Perform visual checks at 1024 / 1280 / 1440 / 1920 widths.
+
+## 2026-05-11 Phase 7: Mobile Web 안내 Page
+
+### Codex
+
+- Rechecked the current repo state before starting: working tree was clean and
+  Phase 7 next steps still listed mobile web 안내 as the first follow-up.
+- Added a viewport-based mobile web fallback in
+  `apps/web/src/features/just-do/app-shell.tsx`.
+  - `< lg` screens show a dedicated Just Do Web 안내 page.
+  - `lg` and wider screens keep the existing desktop shell / auth screen.
+  - The same mobile fallback applies before sign-in and after sign-in, so
+    OAuth callback redirects back to `/` and still land on the mobile guide
+    when the viewport is narrow.
+- The guide explicitly reflects the platform split: web is a desktop
+  productivity hub, while mobile verification continues through the iOS app
+  track.
+- Updated `docs/next_steps.md` to mark the viewport fallback as done and leave
+  actual iOS download link / Android waitlist wiring as future work.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 76 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; the
+  sandbox still blocks Turbopack helper port binding.
+- Local dev server responded with HTTP 200 at `http://127.0.0.1:3000`.
+
+### Remaining Follow-up
+
+- Add desktop UI interaction tests.
+- Add the real iOS App Store / TestFlight link when available.
+- Once the public App Store URL is available, consider auto-redirecting iOS
+  mobile browser visits to that URL, with the current 안내 page kept as the
+  fallback for missing URL, unsupported devices, or redirect failure.
+- Add Android launch notification signup once the product path is defined.
+- Continue Phase 7 edit-flow work: Task edit, Habit edit, category reorder,
+  and Pro checkout integration.
+
+## 2026-05-11 Phase 7: Desktop UI Interaction Tests
+
+### Codex
+
+- Added `apps/web/src/features/just-do/app-shell.test.tsx` to cover the new
+  desktop shell's user-facing flows with a real React render and in-memory
+  Just Do storage.
+- Added a test storage seam to `JustDoApp` so component tests can inject
+  `createMemoryStorage(...)` without touching Supabase, IndexedDB, or browser
+  auth.
+- Mocked auth at the test boundary and kept the production app path unchanged.
+- Added accessibility state to Today panel completion buttons:
+  `aria-label` / `aria-pressed` for Task and Habit toggles.
+- Covered:
+  - Task creation through the desktop add modal, including tag chip commit.
+  - Habit creation through the same modal's Habit tab.
+  - Calendar date click selecting only, while the small date `+` opens add.
+  - Today panel Task/Habit completion toggles without a separate completed
+    section.
+  - Settings split layout rendering only the selected section content.
+- Updated Vitest resolution so React component tests use the app's React /
+  ReactDOM versions instead of the workspace root fallback.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 81 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; the
+  sandbox still blocks Turbopack helper port binding.
+
+### Remaining Follow-up
+
+- Add edit-flow coverage after Task edit / Habit edit / category reorder are
+  implemented.
+- Run manual offline sync verification on the new desktop UI.
+- Perform visual checks at 1024 / 1280 / 1440 / 1920 widths.
+
+## 2026-05-11 Phase 7: Task Detail Tag Editing
+
+### Codex
+
+- Upgraded the desktop Task detail modal's tag row from read-only chips to the
+  same editable chip-input pattern used by the add modal.
+- Existing tags can now be removed directly from the detail modal.
+- New tags can be added with Enter, comma, or blur commit; Backspace on an
+  empty input removes the last tag.
+- Tag edits persist immediately through `s.updateTask(task.id, { tags })`.
+- Extended the desktop app shell interaction test to cover adding tags and
+  deleting an existing tag from the Task detail modal.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 82 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; the
+  sandbox still blocks Turbopack helper port binding.
+
+## 2026-05-11 Phase 7: Habit Edit Support
+
+### Codex
+
+- Added desktop Habit editing from Settings → 습관 관리.
+- Each Habit row now has a `수정` action in addition to delete.
+- Added `HabitEditModal` for title, emoji, recurrence type, weekly day picker,
+  and reminder time.
+- Saved edits through the existing `s.updateHabit(...)` domain/store path.
+- Extended app-shell interaction tests to cover editing a habit from desktop
+  settings and verifying the updated row summary.
+- While checking the live dev server, found that task tag writes could hit
+  `task_tags` RLS on Supabase because the client used `upsert` for join rows
+  even though no update policy exists or is needed. Changed that path to
+  insert only newly computed join rows.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 83 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; the
+  sandbox still blocks Turbopack helper port binding.
+
+## 2026-05-11 Tag Input Hash / IME Fix
+
+### Codex
+
+- Fixed tag parsing so a leading `#` is treated as input syntax, not stored as
+  part of the tag. Example: `#운동` now stores `운동`.
+- Added parser coverage for multiple hash tags such as `#운동, #식단`.
+- Guarded tag input key handling during Korean IME composition so Enter used
+  to complete composition does not prematurely commit a partial tag.
+- Added a defensive parser case for the observed duplicate suffix form
+  `#운동,동`, which now stores only `운동` unless the second tag also has an
+  explicit `#`.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 85 tests pass.
+- `npm --prefix apps/web run build` — pass when run outside the sandbox; the
+  sandbox still blocks Turbopack helper port binding.

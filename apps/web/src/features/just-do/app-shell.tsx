@@ -18,6 +18,7 @@ import { habitActiveOn, habitStreak, tasksOnDate } from "./selectors";
 import { JustDoProvider, useJustDo } from "./store";
 import { mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
+import type { JustDoStorage } from "./persistence";
 
 type Page = "calendar" | "stats" | "settings" | "search";
 type CalendarView = "month" | "week" | "list";
@@ -52,19 +53,19 @@ const categoryPalette = [
   "#6D7694",
 ];
 
-export function JustDoApp() {
+export function JustDoApp({ storage }: { storage?: JustDoStorage } = {}) {
   return (
     <AuthProvider>
-      <JustDoAppWithAuth />
+      <JustDoAppWithAuth storage={storage} />
     </AuthProvider>
   );
 }
 
-function JustDoAppWithAuth() {
+function JustDoAppWithAuth({ storage }: { storage?: JustDoStorage }) {
   const { status, user } = useAuth();
   if (status === "loading") return <LoadingViewport mode="light" />;
   return (
-    <JustDoProvider userId={user?.id ?? null}>
+    <JustDoProvider userId={user?.id ?? null} storage={storage}>
       <JustDoViewport />
     </JustDoProvider>
   );
@@ -159,100 +160,114 @@ function JustDoViewport() {
   if (!s.isHydrated) return <LoadingViewport mode={mode} />;
 
   if (!auth.user) {
-    return <AuthScreen mode={mode} />;
+    return (
+      <>
+        <div className="lg:hidden">
+          <MobileWebGuide mode={mode} />
+        </div>
+        <div className="hidden lg:block">
+          <AuthScreen mode={mode} />
+        </div>
+      </>
+    );
   }
 
   return (
-    <div
-      className="flex h-screen overflow-hidden"
-      style={{ background: t.bg, color: t.text, fontFamily: fontStack }}
-    >
-      <Sidebar
-        mode={mode}
-        page={visiblePage}
-        collapsed={collapsed}
-        categoryFilter={categoryFilter}
-        priorityFilter={priorityFilter}
-        onPage={setPage}
-        onToggle={() => setCollapsed((value) => !value)}
-        onCategory={setCategoryFilter}
-        onPriority={setPriorityFilter}
-        onSearchTag={(tag) => {
-          setSearch(tag);
-          setPage("search");
-        }}
-        onPalette={() => setPaletteOpen(true)}
-      />
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Header
+    <>
+      <div className="lg:hidden">
+        <MobileWebGuide mode={mode} />
+      </div>
+      <div
+        className="hidden h-screen overflow-hidden lg:flex"
+        style={{ background: t.bg, color: t.text, fontFamily: fontStack }}
+      >
+        <Sidebar
           mode={mode}
           page={visiblePage}
-          calendarView={calendarView}
-          search={search}
-          searchRef={searchRef}
-          showToday={showToday}
-          onSearch={(value) => {
-            setSearch(value);
-            if (value.trim()) setPage("search");
-            else if (page === "search") setPage("calendar");
-          }}
-          onView={setCalendarView}
-          onPrev={() => moveCalendar(s, calendarView, -1)}
-          onNext={() => moveCalendar(s, calendarView, 1)}
-          onToday={() => {
-            const parsed = parseISO(today);
-            s.setMonth(parsed.year, parsed.month);
-            s.selectDate(today);
+          collapsed={collapsed}
+          categoryFilter={categoryFilter}
+          priorityFilter={priorityFilter}
+          onPage={setPage}
+          onToggle={() => setCollapsed((value) => !value)}
+          onCategory={setCategoryFilter}
+          onPriority={setPriorityFilter}
+          onSearchTag={(tag) => {
+            setSearch(tag);
+            setPage("search");
           }}
           onPalette={() => setPaletteOpen(true)}
-          onToggleToday={() => setShowToday((value) => !value)}
-          onNew={() => setNewTask({ date: s.state.view.selectedDate })}
         />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            {visiblePage === "calendar" && calendarView === "month" ? (
-              <MonthGrid
-                mode={mode}
-                tasks={filteredTasks}
-                onOpenTask={setTaskModalId}
-                onNewTask={setNewTask}
-              />
-            ) : null}
-            {visiblePage === "calendar" && calendarView === "week" ? (
-              <WeekView mode={mode} tasks={filteredTasks} onOpenTask={setTaskModalId} onNewTask={setNewTask} />
-            ) : null}
-            {visiblePage === "calendar" && calendarView === "list" ? (
-              <ListView
-                mode={mode}
-                tasks={filteredTasks}
-                selectedIds={selectedIds}
-                onSelect={setSelectedIds}
-                onOpenTask={setTaskModalId}
-              />
-            ) : null}
-            {visiblePage === "search" ? <SearchPage mode={mode} tasks={filteredTasks} query={search} onOpenTask={setTaskModalId} /> : null}
-            {visiblePage === "stats" ? <StatsDashboard mode={mode} /> : null}
-            {visiblePage === "settings" ? <SettingsPage mode={mode} /> : null}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Header
+            mode={mode}
+            page={visiblePage}
+            calendarView={calendarView}
+            search={search}
+            searchRef={searchRef}
+            showToday={showToday}
+            onSearch={(value) => {
+              setSearch(value);
+              if (value.trim()) setPage("search");
+              else if (page === "search") setPage("calendar");
+            }}
+            onView={setCalendarView}
+            onPrev={() => moveCalendar(s, calendarView, -1)}
+            onNext={() => moveCalendar(s, calendarView, 1)}
+            onToday={() => {
+              const parsed = parseISO(today);
+              s.setMonth(parsed.year, parsed.month);
+              s.selectDate(today);
+            }}
+            onPalette={() => setPaletteOpen(true)}
+            onToggleToday={() => setShowToday((value) => !value)}
+            onNew={() => setNewTask({ date: s.state.view.selectedDate })}
+          />
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              {visiblePage === "calendar" && calendarView === "month" ? (
+                <MonthGrid
+                  mode={mode}
+                  tasks={filteredTasks}
+                  onOpenTask={setTaskModalId}
+                  onNewTask={setNewTask}
+                />
+              ) : null}
+              {visiblePage === "calendar" && calendarView === "week" ? (
+                <WeekView mode={mode} tasks={filteredTasks} onOpenTask={setTaskModalId} onNewTask={setNewTask} />
+              ) : null}
+              {visiblePage === "calendar" && calendarView === "list" ? (
+                <ListView
+                  mode={mode}
+                  tasks={filteredTasks}
+                  selectedIds={selectedIds}
+                  onSelect={setSelectedIds}
+                  onOpenTask={setTaskModalId}
+                />
+              ) : null}
+              {visiblePage === "search" ? <SearchPage mode={mode} tasks={filteredTasks} query={search} onOpenTask={setTaskModalId} /> : null}
+              {visiblePage === "stats" ? <StatsDashboard mode={mode} /> : null}
+              {visiblePage === "settings" ? <SettingsPage mode={mode} /> : null}
+            </div>
+            {visiblePage === "calendar" && showToday ? <TodayPanel mode={mode} onOpenTask={setTaskModalId} /> : null}
           </div>
-          {visiblePage === "calendar" && showToday ? <TodayPanel mode={mode} onOpenTask={setTaskModalId} /> : null}
-        </div>
-      </main>
-      <TaskModal mode={mode} taskId={taskModalId} onClose={() => setTaskModalId(null)} onToast={flash} />
-      <NewTaskInline mode={mode} draft={newTask} onClose={() => setNewTask(null)} onToast={flash} />
-      <CommandPalette
-        key={paletteOpen ? "palette-open" : "palette-closed"}
-        mode={mode}
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        tasks={s.state.tasks}
-        onOpenTask={setTaskModalId}
-        onNew={() => setNewTask({ date: s.state.view.selectedDate })}
-        onPage={setPage}
-        onView={setCalendarView}
-      />
-      <BulkActionBar mode={mode} selectedIds={selectedIds} onClear={() => setSelectedIds([])} onToast={flash} />
-      {toast ? <Toast mode={mode}>{toast}</Toast> : null}
-    </div>
+        </main>
+        <TaskModal mode={mode} taskId={taskModalId} onClose={() => setTaskModalId(null)} onToast={flash} />
+        <NewTaskInline mode={mode} draft={newTask} onClose={() => setNewTask(null)} onToast={flash} />
+        <CommandPalette
+          key={paletteOpen ? "palette-open" : "palette-closed"}
+          mode={mode}
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          tasks={s.state.tasks}
+          onOpenTask={setTaskModalId}
+          onNew={() => setNewTask({ date: s.state.view.selectedDate })}
+          onPage={setPage}
+          onView={setCalendarView}
+        />
+        <BulkActionBar mode={mode} selectedIds={selectedIds} onClear={() => setSelectedIds([])} onToast={flash} />
+        {toast ? <Toast mode={mode}>{toast}</Toast> : null}
+      </div>
+    </>
   );
 }
 
@@ -305,6 +320,110 @@ function AuthScreen({ mode }: { mode: ThemeMode }) {
           ))}
         </div>
         {auth.error ? <p className="mt-4 text-xs" style={{ color: t.danger }}>{auth.error}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function MobileWebGuide({ mode }: { mode: ThemeMode }) {
+  const t = webTokens(mode);
+  return (
+    <div
+      className="min-h-dvh overflow-hidden px-5 py-6"
+      style={{ background: t.bg, color: t.text, fontFamily: fontStack }}
+    >
+      <div className="mx-auto flex min-h-[calc(100dvh-48px)] max-w-[430px] flex-col justify-between">
+        <div>
+          <div className="mb-7 flex items-center justify-between">
+            <div className="flex items-baseline gap-1 text-[25px] font-extrabold tracking-[-0.7px]">
+              Just Do
+              <span className="h-[6px] w-[6px] rounded-full" style={{ background: t.accent }} />
+            </div>
+            <span
+              className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={{ background: t.selected, color: t.textSecondary }}
+            >
+              Web
+            </span>
+          </div>
+
+          <div className="relative mb-8 h-[295px]">
+            <div
+              className="absolute left-1/2 top-2 h-[245px] w-[325px] max-w-[86vw] -translate-x-1/2 rounded-[18px] border p-3 shadow-2xl"
+              style={{ background: t.surface, borderColor: t.divider }}
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.danger }} />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.ext.solid }} />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.habit.solid }} />
+                <span className="ml-auto h-2 w-16 rounded-full" style={{ background: t.divider }} />
+              </div>
+              <div className="grid h-[194px] grid-cols-[64px_1fr] gap-2">
+                <div className="rounded-[10px] p-2" style={{ background: t.bg2 }}>
+                  <div className="mb-2 h-2.5 w-9 rounded-full" style={{ background: t.accent }} />
+                  <div className="mb-1.5 h-2 w-11 rounded-full" style={{ background: t.dividerStrong }} />
+                  <div className="mb-1.5 h-2 w-8 rounded-full" style={{ background: t.divider }} />
+                  <div className="h-2 w-10 rounded-full" style={{ background: t.divider }} />
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <div
+                      key={index}
+                      className="rounded-[7px] border p-1.5"
+                      style={{ borderColor: t.divider, background: index === 4 ? t.me.softer : t.bg2 }}
+                    >
+                      <div className="mb-2 h-1.5 w-3 rounded-full" style={{ background: index === 4 ? t.me.solid : t.divider }} />
+                      {index === 4 || index === 8 ? (
+                        <div className="h-3 rounded-[4px]" style={{ background: index === 4 ? t.me.solid : t.ext.solid }} />
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div
+              className="absolute bottom-0 right-2 h-[150px] w-[84px] rounded-[22px] border-[5px] shadow-xl"
+              style={{ background: t.surface, borderColor: mode === "dark" ? "#0D0C0A" : "#1F1B16" }}
+            >
+              <div className="mx-auto mt-2 h-1 w-7 rounded-full" style={{ background: t.dividerStrong }} />
+              <div className="px-2 pt-4">
+                <div className="mb-2 h-2 w-9 rounded-full" style={{ background: t.text }} />
+                <div className="mb-1.5 h-8 rounded-lg" style={{ background: t.me.softer }} />
+                <div className="mb-1.5 h-8 rounded-lg" style={{ background: t.habit.softer }} />
+                <div className="h-8 rounded-lg" style={{ background: t.bg2 }} />
+              </div>
+            </div>
+          </div>
+
+          <h1 className="text-[30px] font-extrabold leading-[1.08] tracking-[-0.9px]">
+            Web은 데스크톱 화면에 맞춰 준비 중입니다.
+          </h1>
+          <p className="mt-3 text-[14px] leading-6" style={{ color: t.textSecondary }}>
+            모바일에서는 iOS 앱을 기준으로 확인하고, web은 캘린더와 사이드 패널을 넓은 화면에서 쓰는 별도 경험으로 구현합니다.
+          </p>
+        </div>
+
+        <div className="mt-8 rounded-[14px] border p-4" style={{ background: t.surface, borderColor: t.divider }}>
+          <div className="mb-3 text-[12px] font-bold uppercase tracking-[0.35px]" style={{ color: t.textTertiary }}>
+            권장 환경
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-[10px] p-3" style={{ background: t.bg2 }}>
+              <div className="mb-2 h-7 w-7 rounded-lg" style={{ background: t.me.softer, color: t.me.ink }}>
+                <IconDesktop />
+              </div>
+              <div className="text-[13px] font-bold">데스크톱 Web</div>
+              <div className="mt-1 text-[11px] leading-4" style={{ color: t.textTertiary }}>1024px 이상</div>
+            </div>
+            <div className="rounded-[10px] p-3" style={{ background: t.bg2 }}>
+              <div className="mb-2 h-7 w-7 rounded-lg" style={{ background: t.habit.softer, color: t.habit.ink }}>
+                <IconPhone />
+              </div>
+              <div className="text-[13px] font-bold">모바일 App</div>
+              <div className="mt-1 text-[11px] leading-4" style={{ color: t.textTertiary }}>iOS 앱 기준</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -867,6 +986,8 @@ function TaskModalBody({
   const [scheduledTime, setScheduledTime] = useState(task.scheduledTime ?? "");
   const [categoryId, setCategoryId] = useState<string | null>(task.categoryId);
   const [priority, setPriority] = useState<Priority>(task.priority ?? "medium");
+  const [tags, setTags] = useState<string[]>(task.tags);
+  const [tagDraft, setTagDraft] = useState("");
   const category = categories.find((item) => item.id === categoryId) ?? categories[0] ?? null;
   const c = categoryStyle(category, mode);
   const save = () => {
@@ -878,8 +999,31 @@ function TaskModalBody({
       scheduledTime: scheduledTime || null,
       categoryId: category?.id ?? null,
       priority,
+      tags,
     });
     onToast("저장됨");
+  };
+  const updateTags = (nextTags: string[]) => {
+    setTags(nextTags);
+    s.updateTask(task.id, { tags: nextTags });
+  };
+  const commitTagDraft = (raw: string) => {
+    const parsed = parseTagInput(raw);
+    setTagDraft("");
+    if (!parsed.length) return;
+    updateTags(mergeTags(tags, parsed));
+  };
+  const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingInputEvent(event)) return;
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      commitTagDraft(event.currentTarget.value || tagDraft);
+      return;
+    }
+    if (event.key === "Backspace" && !tagDraft && tags.length) {
+      event.preventDefault();
+      updateTags(tags.slice(0, -1));
+    }
   };
   return (
     <>
@@ -918,8 +1062,30 @@ function TaskModalBody({
             </div>
           </ModalRow>
           <ModalRow label="태그" mode={mode}>
-            <div className="flex flex-wrap gap-1.5">
-              {task.tags.length ? task.tags.map((tag) => <span key={tag} className="rounded px-2 py-1 text-[11px] font-medium" style={{ background: c.soft, color: c.ink }}>{tag}</span>) : <span className="text-[12px]" style={{ color: t.textTertiary }}>태그 없음</span>}
+            <div className="flex flex-1 flex-wrap items-center gap-1.5">
+              {tags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => updateTags(tags.filter((item) => item !== tag))}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium"
+                  style={{ background: c.soft, color: c.ink }}
+                  aria-label={`태그 ${tag} 삭제`}
+                >
+                  <span>{tag}</span>
+                  <span aria-hidden style={{ opacity: 0.7 }}>×</span>
+                </button>
+              ))}
+              <input
+                value={tagDraft}
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={onTagKeyDown}
+                onBlur={(event) => commitTagDraft(event.currentTarget.value || tagDraft)}
+                placeholder={tags.length ? "" : "태그 추가"}
+                className="min-w-[100px] flex-1 bg-transparent py-1 text-[13px] font-medium outline-none"
+                style={{ color: t.text }}
+                aria-label="Task 태그 추가"
+              />
             </div>
           </ModalRow>
         </div>
@@ -970,6 +1136,7 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
     setTagDraft("");
   };
   const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingInputEvent(event)) return;
     if (event.key === "Enter" || event.key === ",") {
       event.preventDefault();
       commitTagDraft(tagDraft);
@@ -1271,6 +1438,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
   const t = webTokens(mode);
   const [section, setSection] = useState<SettingsSection>("account");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [editHabitId, setEditHabitId] = useState<string | null>(null);
   const syncDetail = s.syncError ? "확인 필요" : !s.syncStatus.isOnline ? "오프라인" : s.syncStatus.isSyncing ? "동기화 중" : s.syncStatus.pendingCount > 0 ? "대기 중" : "정상";
   const sections: Array<[SettingsSection, string]> = [
     ["account", "계정"],
@@ -1323,7 +1491,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
           ) : null}
           {section === "categories" ? <CategoryManagementPanel mode={mode} /> : null}
           {section === "habits" ? (
-          <Panel mode={mode} title="습관 관리" subtitle="web에서도 habit을 확인하고 삭제할 수 있습니다. 새 habit은 상단 새 Task 버튼에서 Habit 탭으로 추가합니다.">
+          <Panel mode={mode} title="습관 관리" subtitle="web에서도 habit을 확인하고 수정/삭제할 수 있습니다. 새 habit은 상단 새 Task 버튼에서 Habit 탭으로 추가합니다.">
             <div className="flex flex-col gap-2">
               {s.state.habits.length ? s.state.habits.map((habit) => (
                 <div key={habit.id} className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: t.divider, background: t.bg2 }}>
@@ -1335,6 +1503,9 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
                       {habit.reminderTime ? ` · ${formatTime(habit.reminderTime)}` : ""}
                     </div>
                   </div>
+                  <button type="button" onClick={() => setEditHabitId(habit.id)} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.text }}>
+                    수정
+                  </button>
                   <button type="button" onClick={() => s.deleteHabit(habit.id)} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.danger }}>
                     삭제
                   </button>
@@ -1361,6 +1532,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
         </div>
       </div>
       {upgradeOpen ? <UpgradeModal mode={mode} onClose={() => setUpgradeOpen(false)} /> : null}
+      <HabitEditModal mode={mode} habitId={editHabitId} onClose={() => setEditHabitId(null)} />
     </div>
   );
 }
@@ -1374,6 +1546,117 @@ function SearchPage({ mode, tasks, query, onOpenTask }: { mode: ThemeMode; tasks
         <div className="overflow-hidden rounded-[10px] border" style={{ background: t.surface, borderColor: t.divider }}>
           {tasks.length ? tasks.map((task, index) => <TaskRow key={task.id} mode={mode} task={task} selected={false} last={index === tasks.length - 1} onOpen={onOpenTask} onToggleSelect={() => undefined} />) : <div className="px-4 py-10 text-center text-[13px]" style={{ color: t.textTertiary }}>일치하는 task가 없어요</div>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function HabitEditModal({ mode, habitId, onClose }: { mode: ThemeMode; habitId: string | null; onClose: () => void }) {
+  const s = useJustDo();
+  const habit = habitId ? s.state.habits.find((item) => item.id === habitId) : null;
+  if (!habit) return null;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
+      <HabitEditModalBody key={habit.id} mode={mode} habit={habit} onClose={onClose} />
+    </div>
+  );
+}
+
+function HabitEditModalBody({ mode, habit, onClose }: { mode: ThemeMode; habit: Habit; onClose: () => void }) {
+  const s = useJustDo();
+  const t = webTokens(mode);
+  const [title, setTitle] = useState(habit.title);
+  const [emoji, setEmoji] = useState(habit.emoji);
+  const [recurType, setRecurType] = useState<HabitRecurType>(habit.recurType);
+  const [recurDays, setRecurDays] = useState<number[]>(habit.recurDays?.length ? habit.recurDays : [weekdayOfISO(todayISO())]);
+  const [reminderTime, setReminderTime] = useState(habit.reminderTime ?? "");
+
+  const save = () => {
+    const nextTitle = title.trim() || habit.title;
+    const nextRecurDays = recurType === "weekly" ? (recurDays.length ? [...recurDays].sort((a, b) => a - b) : [weekdayOfISO(todayISO())]) : undefined;
+    s.updateHabit(habit.id, {
+      title: nextTitle,
+      emoji,
+      recurType,
+      recurDays: nextRecurDays,
+      reminderTime: reminderTime || null,
+    });
+    onClose();
+  };
+
+  return (
+    <div
+      className="flex max-h-[88vh] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border shadow-2xl"
+      style={{ background: t.surface, borderColor: t.divider }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="border-b px-5 py-4" style={{ borderColor: t.divider }}>
+        <div className="mb-1 flex items-center justify-between">
+          <div className="text-[18px] font-bold tracking-[-0.4px]">Habit 수정</div>
+          <IconShellButton mode={mode} title="닫기" onClick={onClose}><IconClose /></IconShellButton>
+        </div>
+        <div className="text-[12px]" style={{ color: t.textTertiary }}>반복 주기와 알림 시간을 조정합니다.</div>
+      </div>
+      <div className="flex flex-col gap-3 overflow-auto px-5 py-4">
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onClose();
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) save();
+          }}
+          className="w-full border-b bg-transparent pb-3 text-[19px] font-semibold tracking-[-0.3px] outline-none"
+          style={{ borderColor: t.divider, color: t.text }}
+          aria-label="Habit 제목"
+        />
+        <ModalRow label="이모지" mode={mode}>
+          <div className="flex flex-wrap gap-1.5">
+            {habitEmojis.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setEmoji(item)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-lg"
+                style={{ background: emoji === item ? t.habit.soft : "transparent", border: emoji === item ? "none" : `0.5px solid ${t.divider}` }}
+                aria-label={`이모지 ${item}`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </ModalRow>
+        <ModalRow label="반복" mode={mode}>
+          <SegmentedButtons
+            mode={mode}
+            color={t.habit}
+            options={[["daily", "매일"], ["weekly", "요일"]]}
+            value={recurType}
+            onChange={(value) => setRecurType(value as HabitRecurType)}
+          />
+        </ModalRow>
+        {recurType === "weekly" ? (
+          <ModalRow label="요일" mode={mode}>
+            <WeekdayPicker mode={mode} value={recurDays} onChange={setRecurDays} />
+          </ModalRow>
+        ) : null}
+        <ModalRow label="알림" mode={mode}>
+          <input
+            type="time"
+            value={reminderTime}
+            onChange={(event) => setReminderTime(event.target.value)}
+            style={dateInputStyle(t)}
+            aria-label="Habit 알림 시간"
+          />
+          {reminderTime ? <button type="button" onClick={() => setReminderTime("")} className="text-[11px]" style={{ color: t.textTertiary }}>지우기</button> : null}
+        </ModalRow>
+      </div>
+      <div className="flex items-center gap-2 border-t px-5 py-3" style={{ borderColor: t.divider }}>
+        <span className="text-[11px]" style={{ color: t.textTertiary }}><Kbd mode={mode}>⌘↵</Kbd> 저장</span>
+        <div className="flex-1" />
+        <button type="button" onClick={onClose} className="px-3.5 py-2 text-[13px] font-medium" style={{ color: t.textSecondary }}>취소</button>
+        <button type="button" onClick={save} className="rounded-lg px-5 py-2 text-[13px] font-semibold text-white" style={{ background: t.habit.solid }}>
+          저장
+        </button>
       </div>
     </div>
   );
@@ -1695,9 +1978,10 @@ function TodayCard({ mode, task, onOpen }: { mode: ThemeMode; task: Task; onOpen
       <button
         type="button"
         onClick={() => s.toggleTask(task.id)}
+        aria-label={`${task.title} 완료 토글`}
+        aria-pressed={task.isCompleted}
         className="mr-1.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border"
         style={{ background: task.isCompleted ? c.solid : "transparent", borderColor: task.isCompleted ? c.solid : c.ink }}
-        aria-label={`${task.title} 완료 토글`}
       >
         {task.isCompleted ? <IconCheck /> : null}
       </button>
@@ -1713,7 +1997,16 @@ function HabitMiniRow({ mode, habit, iso }: { mode: ThemeMode; habit: Habit; iso
     <div className="flex items-center gap-2">
       <div className="flex h-[22px] w-[22px] items-center justify-center rounded-md text-[13px]" style={{ background: t.habit.softer }}>{habit.emoji}</div>
       <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{habit.title}</div>
-      <button type="button" onClick={() => s.toggleHabit(habit.id, iso)} className="mr-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-md border" style={{ background: checked ? t.habit.solid : "transparent", borderColor: checked ? t.habit.solid : t.habit.ink }}>{checked ? <IconCheck /> : null}</button>
+      <button
+        type="button"
+        onClick={() => s.toggleHabit(habit.id, iso)}
+        aria-label={`${habit.title} 완료 토글`}
+        aria-pressed={checked}
+        className="mr-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-md border"
+        style={{ background: checked ? t.habit.solid : "transparent", borderColor: checked ? t.habit.solid : t.habit.ink }}
+      >
+        {checked ? <IconCheck /> : null}
+      </button>
     </div>
   );
 }
@@ -2035,6 +2328,11 @@ function dateInputStyle(t: ReturnType<typeof webTokens>) {
   } as const;
 }
 
+function isComposingInputEvent(event: React.KeyboardEvent<HTMLInputElement>) {
+  const native = event.nativeEvent as KeyboardEvent;
+  return event.nativeEvent.isComposing || event.key === "Process" || native.keyCode === 229;
+}
+
 function webTokens(mode: ThemeMode) {
   const base = tokens[mode];
   return {
@@ -2064,3 +2362,5 @@ function IconLogout() { return <svg width="13" height="13" viewBox="0 0 13 13" f
 function IconCheck() { return <svg width="11" height="11" viewBox="0 0 9 9"><path d="M1 4.5 3.5 7 8 1.5" stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function IconTrash() { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 4h7M5 4V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M4 4l.5 7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1L9 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function IconClose() { return <svg width="13" height="13" viewBox="0 0 13 13"><path d="M3 3l7 7M10 3l-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
+function IconDesktop() { return <svg className="h-full w-full p-1.5" viewBox="0 0 18 18" fill="none"><rect x="2.5" y="3" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" /><path d="M7 15h4M9 12v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
+function IconPhone() { return <svg className="h-full w-full p-1.5" viewBox="0 0 18 18" fill="none"><rect x="5" y="2.5" width="8" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" /><path d="M8 13.5h2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }

@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-10
+Date: 2026-05-11
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -159,8 +159,19 @@ cdd5b1f docs(ios): start phase 6 planning
     Task/Habit add modal, Task detail modal, command palette, bulk actions,
     Stats dashboard, Settings split layout, category/habit management, task tag
     input, and Pro upgrade entry surface.
-  - 다음은 모바일 web 안내 페이지, 데스크탑 UI interaction 테스트, manual offline
-    sync verification, 해상도별 시각 검증.
+  - Mobile web 안내 page is implemented as a viewport-based fallback for
+    `< lg` screens, before and after sign-in. Real iOS download link and
+    Android waitlist wiring remain future work. Once the public App Store URL
+    exists, iOS mobile browser visits should auto-redirect there, with the
+    안내 page retained as fallback.
+  - Desktop UI interaction tests now cover Task/Habit add modal, calendar date
+    selection vs `+` add, Today Task/Habit check toggles, and Settings selected
+    section rendering.
+  - Task detail modal tag editing is implemented: add/delete tags from the
+    desktop detail modal and persist through `updateTask`.
+  - Desktop Habit edit is implemented from Settings → 습관 관리: title, emoji,
+    daily/weekly recurrence, weekday picker, and reminder time.
+  - 다음은 category reorder, manual offline sync verification, 해상도별 시각 검증.
   - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
@@ -480,9 +491,9 @@ Cloud manual checks already performed by the user/Codex:
 
 1. **Phase 7 Web Desktop Redesign** ← v1 출시 차단 항목, 현재 진행 중
    - First pass is implemented in `apps/web/src/features/just-do/app-shell.tsx`.
-   - 남은 핵심: mobile web 안내 페이지, desktop UI interaction tests, category reorder,
-     habit edit, task edit modal tag editing, Pro checkout backend, offline sync manual
-     verification, 1024/1280/1440/1920 시각 검증.
+   - 남은 핵심: category reorder, Pro checkout backend, offline sync manual
+     verification, 1024/1280/1440/1920 시각 검증, real iOS download link /
+     App Store auto-redirect, Android waitlist wiring.
    - 자세한 punch list: `next_steps.md` Phase 7.
 
 2. **iOS 잔여 작업** (Phase 7과 독립, 병렬 가능)

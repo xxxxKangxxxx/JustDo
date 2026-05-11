@@ -12,7 +12,19 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Where We Are (2026-05-10)
+## Where We Are (2026-05-11)
+
+- Phase 7 desktop web shell first pass is implemented.
+- Mobile web now has a viewport-based 안내 page for narrow screens. The
+  desktop web app remains the primary web experience, and the mobile/iOS app
+  remains a separate implementation track.
+- Desktop UI interaction tests now cover the Phase 7 shell's key add/check/date
+  selection/settings flows. Task detail modal tag editing and desktop Habit
+  editing are implemented. Next Phase 7 work should focus on category reorder,
+  Pro checkout backend design/implementation, offline sync verification on the
+  new UI, and visual checks across desktop widths.
+
+## Where We Were (2026-05-10)
 
 - **Platform Strategy 결정** (`just_do_prd.md` §1.5): Web=데스크탑 productivity hub, iOS=모바일 네이티브, Android=v3. Web과 iOS는 도메인/스키마만 공유하고 UI/UX는 분기.
 - 그 결과 **Phase 7: Web Desktop Redesign**이 v1 출시 차단 항목으로 추가됨.
@@ -275,7 +287,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Stats 위치: 별도 dashboard page.
 - [x] 데스크탑 핵심 가치 우선순위: 큰 calendar workspace, command palette /
   keyboard shortcut, drag 이동, multi-select bulk action.
-- [ ] 좁은 윈도우 (< 1024px) 폴백 정책 — 안내 페이지로 redirect 또는 단순 축소.
+- [x] 좁은 윈도우 (< 1024px) 폴백 정책 — viewport 기반 안내 페이지 표시.
 
 ### 7-3. 구현
 - [x] `apps/web/src/features/just-do/` entry shell 재작성 (모바일 `PhoneFrame` /
@@ -294,19 +306,26 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Task tag chip input — Enter/comma/blur commit, Backspace 삭제.
 - [x] Pro upgrade entry surface — 구독 섹션 / 업그레이드 모달 (실결제 연동 전).
 - [x] 색상/타이포 토큰은 그대로 재사용 (도메인 토큰은 공유).
-- [ ] Edit Task modal 태그 수정 / 삭제 지원 보강.
+- [x] Edit Task modal 태그 수정 / 삭제 지원 보강.
 - [ ] Category reorder 지원 복원.
-- [ ] Habit edit 지원 보강 (현재 추가/삭제 중심).
+- [x] Habit edit 지원 보강 — Settings 습관 관리에서 제목 / 이모지 / 반복 /
+  요일 / 알림 수정.
 - [ ] Pro checkout API / webhook / `user_subscriptions` 갱신 구현.
 
 ### 7-4. 모바일 진입 페이지
-- [ ] User-Agent 또는 viewport 기반 모바일 진입 감지.
-- [ ] 안내 페이지: "데스크탑 권장 + iOS 앱 다운로드 링크 + Android 앱 출시 알림 대기 가입".
-- [ ] OAuth 콜백 등 *진입 후 화면*에서도 모바일이면 안내 페이지로 폴백.
+- [x] User-Agent 또는 viewport 기반 모바일 진입 감지 — CSS viewport (`lg`
+  breakpoint) 기반.
+- [x] 로그인 전/후 화면 모두 모바일이면 안내 페이지로 폴백.
+- [ ] 안내 페이지에 실제 iOS 앱 다운로드 링크 연결.
+- [ ] iOS 모바일 브라우저 진입 시 실제 앱스토어 주소로 자동 이동
+  (`NEXT_PUBLIC_IOS_APP_STORE_URL` 등 환경변수 기반, URL 확정 후 구현).
+- [ ] 안내 페이지에 Android 앱 출시 알림 대기 가입 연결.
 
 ### 7-5. 회귀 / 검증
-- [x] 기존 76개 web 테스트 중 도메인/sync 테스트 유지 확인.
-- [ ] 새 데스크탑 UI interaction 테스트 추가.
+- [x] 기존 web 도메인/sync 테스트 유지 확인.
+- [x] 새 데스크탑 UI interaction 테스트 추가 — Task/Habit add modal,
+  calendar date click vs hover `+`, Today Task/Habit check toggle, Settings
+  selected-section rendering.
 - [ ] Manual offline sync verification (`docs/local_dev.md`)을 새 UI로 다시 통과.
 - [ ] 데스크탑/노트북 해상도 (1024 / 1280 / 1440 / 1920)에서 시각 검증.
 
