@@ -327,6 +327,17 @@ function AuthScreen({ mode }: { mode: ThemeMode }) {
 
 function MobileWebGuide({ mode }: { mode: ThemeMode }) {
   const t = webTokens(mode);
+  const iosUrl = process.env.NEXT_PUBLIC_IOS_APP_STORE_URL;
+
+  useEffect(() => {
+    if (!iosUrl) return;
+    if (typeof window === "undefined" || typeof navigator === "undefined") return;
+    if (!/iPhone|iPad|iPod/.test(navigator.userAgent)) return;
+    if (window.sessionStorage.getItem("justdo:ios-redirect") === "1") return;
+    window.sessionStorage.setItem("justdo:ios-redirect", "1");
+    window.location.replace(iosUrl);
+  }, [iosUrl]);
+
   return (
     <div
       className="min-h-dvh overflow-hidden px-5 py-6"
@@ -403,7 +414,12 @@ function MobileWebGuide({ mode }: { mode: ThemeMode }) {
           </p>
         </div>
 
-        <div className="mt-8 rounded-[14px] border p-4" style={{ background: t.surface, borderColor: t.divider }}>
+        <div className="mt-8 flex flex-col gap-3">
+          <MobileGuideIosCta mode={mode} iosUrl={iosUrl} />
+          <MobileGuideAndroidCta mode={mode} />
+        </div>
+
+        <div className="mt-6 rounded-[14px] border p-4" style={{ background: t.surface, borderColor: t.divider }}>
           <div className="mb-3 text-[12px] font-bold uppercase tracking-[0.35px]" style={{ color: t.textTertiary }}>
             권장 환경
           </div>
@@ -426,6 +442,124 @@ function MobileWebGuide({ mode }: { mode: ThemeMode }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function MobileGuideIosCta({ mode, iosUrl }: { mode: ThemeMode; iosUrl: string | undefined }) {
+  const t = webTokens(mode);
+  const enabled = Boolean(iosUrl);
+  return (
+    <div className="rounded-[14px] border p-4" style={{ background: t.surface, borderColor: t.divider }}>
+      <div className="mb-1 text-[13px] font-bold">iOS 앱</div>
+      <div className="mb-3 text-[12px] leading-5" style={{ color: t.textSecondary }}>
+        {enabled
+          ? "App Store에서 Just Do를 받아 모바일에서 바로 사용하세요."
+          : "iOS 앱은 곧 App Store에 출시됩니다. 출시되면 이 화면에서 바로 이동할 수 있어요."}
+      </div>
+      <a
+        href={enabled ? iosUrl : undefined}
+        aria-disabled={!enabled}
+        onClick={(event) => {
+          if (!enabled) event.preventDefault();
+        }}
+        className="flex h-11 items-center justify-center rounded-[10px] text-[14px] font-semibold transition-opacity"
+        style={{
+          background: t.text,
+          color: t.bg,
+          opacity: enabled ? 1 : 0.4,
+          pointerEvents: enabled ? "auto" : "none",
+        }}
+      >
+        {enabled ? "App Store에서 받기" : "App Store 출시 예정"}
+      </a>
+    </div>
+  );
+}
+
+function MobileGuideAndroidCta({ mode }: { mode: ThemeMode }) {
+  const t = webTokens(mode);
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (status === "submitting") return;
+    const trimmed = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setStatus("error");
+      setMessage("이메일 형식을 확인해 주세요.");
+      return;
+    }
+    setStatus("submitting");
+    setMessage(null);
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed, platform: "android", source: "mobile_web_guide" }),
+      });
+      if (!res.ok) {
+        throw new Error(`status ${res.status}`);
+      }
+      setStatus("success");
+      setMessage("출시 알림 신청이 완료됐어요.");
+      setEmail("");
+    } catch {
+      setStatus("error");
+      setMessage("일시적인 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
+    }
+  };
+
+  const hint =
+    status === "success"
+      ? message
+      : status === "error"
+        ? message
+        : "Android 앱은 v3에 출시 예정입니다. 출시되면 알려드릴게요.";
+
+  const hintColor = status === "success" ? t.habit.ink : status === "error" ? t.danger : t.textSecondary;
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="rounded-[14px] border p-4"
+      style={{ background: t.surface, borderColor: t.divider }}
+    >
+      <div className="mb-1 text-[13px] font-bold">Android 출시 알림</div>
+      <div className="mb-3 text-[12px] leading-5" style={{ color: hintColor }}>
+        {hint}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          required
+          aria-label="이메일"
+          placeholder="you@example.com"
+          value={email}
+          disabled={status === "submitting"}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (status !== "idle") {
+              setStatus("idle");
+              setMessage(null);
+            }
+          }}
+          className="h-11 min-w-0 flex-1 rounded-[10px] border px-3 text-[14px] outline-none"
+          style={{ background: t.bg2, borderColor: t.divider, color: t.text }}
+        />
+        <button
+          type="submit"
+          disabled={status === "submitting" || status === "success"}
+          className="h-11 shrink-0 rounded-[10px] px-3 text-[13px] font-semibold disabled:opacity-50"
+          style={{ background: t.accent, color: "#fff" }}
+        >
+          {status === "submitting" ? "등록 중…" : status === "success" ? "완료" : "알림 받기"}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -597,24 +731,24 @@ function Header({
   const t = webTokens(mode);
   const title = page === "calendar" ? `${s.state.view.year}년 ${s.state.view.month}월` : page === "stats" ? "통계" : page === "settings" ? "설정" : "검색";
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-4 border-b px-[22px] py-2.5 backdrop-blur-xl" style={{ background: t.glass, borderColor: t.glassBorder }}>
+    <header className="sticky top-0 z-10 flex items-center gap-3 border-b px-[22px] py-2.5 backdrop-blur-xl xl:gap-4" style={{ background: t.glass, borderColor: t.glassBorder }}>
       {page === "calendar" ? (
         <>
-          <div className="flex items-center gap-2.5">
+          <div className="flex shrink-0 items-center gap-2.5">
             <IconShellButton mode={mode} title="이전" onClick={onPrev}><IconChevronLeft /></IconShellButton>
-            <button type="button" onClick={onToday} className="rounded-md border px-2.5 py-[5px] text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.textSecondary }}>
+            <button type="button" onClick={onToday} className="whitespace-nowrap rounded-md border px-2.5 py-[5px] text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.textSecondary }}>
               오늘
             </button>
             <IconShellButton mode={mode} title="다음" onClick={onNext}><IconChevronRight /></IconShellButton>
           </div>
-          <div className="text-[19px] font-bold tracking-[-0.6px]">{title}</div>
-          <div className="flex gap-px rounded-lg p-0.5" style={{ background: t.surfaceAlt }}>
+          <div className="shrink-0 whitespace-nowrap text-[19px] font-bold tracking-[-0.6px]">{title}</div>
+          <div className="flex shrink-0 gap-px rounded-lg p-0.5" style={{ background: t.surfaceAlt }}>
             {(["month", "week", "list"] as const).map((view) => (
               <button
                 key={view}
                 type="button"
                 onClick={() => onView(view)}
-                className="rounded-md px-3 py-[5px] text-[12px] font-semibold"
+                className="whitespace-nowrap rounded-md px-3 py-[5px] text-[12px] font-semibold"
                 style={{
                   background: calendarView === view ? t.surface : "transparent",
                   color: calendarView === view ? t.text : t.textSecondary,
@@ -627,10 +761,10 @@ function Header({
           </div>
         </>
       ) : (
-        <div className="text-[19px] font-bold tracking-[-0.6px]">{title}</div>
+        <div className="shrink-0 whitespace-nowrap text-[19px] font-bold tracking-[-0.6px]">{title}</div>
       )}
-      <div className="flex-1" />
-      <div className="relative w-[280px]">
+      <div className="min-w-0 flex-1" />
+      <div className="relative hidden w-[180px] shrink-0 xl:block xl:w-[280px]">
         <span className="absolute left-[11px] top-1/2 -translate-y-1/2" style={{ color: t.textTertiary }}><IconSearch /></span>
         <input
           ref={searchRef}
@@ -646,7 +780,7 @@ function Header({
       <button
         type="button"
         onClick={onNew}
-        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold text-white"
+        className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold text-white"
         style={{ background: t.accent }}
       >
         <IconPlus /> 새 Task <span className="rounded bg-white/20 px-1 text-[10px]">N</span>
