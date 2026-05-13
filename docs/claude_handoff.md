@@ -491,47 +491,62 @@ Cloud manual checks already performed by the user/Codex:
 > 진행 가능. Manual offline sync verification 은 Phase 7 완료 후 새 web UI 위에서
 > 회귀 검증으로 흡수됨 (`next_steps.md` Phase 7-5).
 
-1. **Phase 7 Web Desktop Redesign** ← v1 출시 차단 항목, 현재 진행 중
-   - First pass is implemented in `apps/web/src/features/just-do/app-shell.tsx`.
-   - 남은 핵심: Pro checkout backend, offline sync manual verification,
-     1024/1280/1440/1920 시각 검증, real iOS download link / App Store
-     auto-redirect, Android waitlist wiring.
-   - 자세한 punch list: `next_steps.md` Phase 7.
+1. **Phase 7 Web Desktop Redesign** ← v1 출시 차단 항목, **결제 외 모두 완료
+   (2026-05-13)**.
+   - 진행 상태: shell / 모달 / 단축키 / 드래그 / Today / Settings / 카테고리·
+     습관 관리 / 태그 편집 / 모바일 안내 페이지 / 1024–1920 시각 검증 /
+     manual offline sync 재검증 모두 통과.
+   - 남은 단일 항목: **Pro checkout backend** (Toss Payments 빌링).
+   - **Pro checkout 결정 (2026-05-11)**: provider = Toss Payments 빌링,
+     Trial = 가입 즉시 빌링 정보 요구 + 30일 후 자동 결제.
+     사업자등록 / 가맹점 심사 등 외부 선결 조건은 사용자 트랙 (Track A).
+     코드 트랙 (Track B: schema → webhook/issue-key → UI → cron) 은 Toss
+     테스트 키로 진행. iOS 결제는 별도 트랙(Apple IAP, Phase 6 v1 ship 후).
+     세부 단계: `next_steps.md` Phase 7-3 Pro checkout.
 
 2. **iOS 잔여 작업** (Phase 7과 독립, 병렬 가능)
    - Native detail editing (edit/delete from pushed task/habit detail screens).
    - Sync status UI (Settings 또는 root status surface 에 큐 flush 에러 노출).
    - 나머지: `ios_phase6_status.md` "Next Work" 참고.
 
-3. **Manual Offline Sync Verification** (지금이 아닌 Phase 7 완료 후)
-   - 절차 자체는 `docs/local_dev.md` → "Manual Offline Sync Verification".
-   - 데이터 레이어와 UI 레이어가 독립이라 *지금 통과해도 의미가 있지만*, web UI가
-     Phase 7에서 재작성될 예정이라 그 전 검증은 회귀 가치가 낮음. Phase 7 끝난
-     뒤 새 UI 위에서 한 번에 통과시키는 게 효율적.
-
-4. **배포 트랙** (Phase 7 후속)
+3. **배포 트랙** (Phase 7 후속)
    - Gabia 도메인, Route 53, Amplify Hosting, Supabase production callback URL
      등록, smoke test. 절차: `docs/deployment_domain_aws_plan.md`.
 
-5. **Xcode polish (defer until needed)**
+4. **Xcode polish (defer until needed)**
    - Trim `JustDoApp` Supported Destinations to iPhone-only for v1.
    - Decide whether to consolidate `JustDoApp.swift` placeholder file
      with `JustDoAppApp.swift` entry point.
    - Configure real iPhone for device testing (resolves the Personal
      Team provisioning warnings).
 
-### Codex 세션을 재개하는 경우
+### Codex 세션을 재개하는 경우 (2026-05-13 갱신)
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5 와 `next_steps.md` Phase 7 읽기.
 - Web 작업은 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`을
   desktop reference로 삼고, iOS `reference/proto/`와 분리해서 진행.
 - `apps/web/src/features/just-do/app-shell.tsx`에 Phase 7 desktop shell과 후속
-  편집/관리 흐름이 들어가 있음. 완료된 항목: mobile 안내 페이지, desktop
-  interaction tests, Task tag edit, Habit edit, Category reorder.
-- 다음 우선순위는 Pro checkout backend, offline sync manual verification,
-  1024/1280/1440/1920 visual checks, App Store auto-redirect / Android waitlist
-  wiring.
+  편집/관리 흐름이 들어가 있음. **완료된 항목 (2026-05-13 기준)**:
+  desktop shell, mobile 안내 페이지(iOS App Store CTA + Android waitlist 폼),
+  desktop interaction tests, Task tag edit, Habit edit, Category reorder,
+  1024–1920 시각 검증, manual offline sync 5-stage 검증.
+- **남은 v1 ship 차단 항목은 Pro checkout backend 단 하나** (Toss Payments
+  빌링). 자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
+- iOS 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7 과 독립
+  트랙. `ios_phase6_status.md` "Next Work" 참고.
 - 도메인/sync 레이어 (persistence, supabase-mapping, store)는 기존 구현을 유지.
 - 태그 입력은 `#운동` → `운동`으로 정규화하고, Korean IME composition 중 Enter
   커밋을 막도록 보정됨. Supabase `task_tags` join write는 `upsert` 대신 신규 row
   `insert`를 사용해 RLS update-policy 의존을 피함.
+- **Sync UX 가드 (2026-05-13)**: realtime CHANNEL_ERROR (`supabase-storage.ts`
+  `onChannelStatus`) 와 `reportSyncError` (`store.tsx`) 둘 다 오프라인일 때는
+  syncError emit/표시를 silent. 큐는 source of truth, reconnect 시 자동 flush.
+  새 mutation handler 추가 시 같은 가드 패턴 유지 권장.
+- **Mobile guide CTA (2026-05-13)**: 환경변수
+  `NEXT_PUBLIC_IOS_APP_STORE_URL` 채우면 안내 페이지 iOS 버튼 활성 + iOS UA
+  자동 리다이렉트 (sessionStorage 1회 가드). Android waitlist 는
+  `public.waitlist` (마이그레이션 `20260511064305_waitlist.sql`) +
+  `POST /api/waitlist` (service-role, `onConflict: email,platform`).
+- **1024 헤더 squeeze fix (2026-05-13)**: Header 의 텍스트 노드들에
+  `whitespace-nowrap`, 검색 input 은 `xl` (1280+) 에서만 노출. 좁은 폭에서는
+  `IconCommand` (Cmd+K) 와 사이드바 "빠른 검색" 으로 검색 진입.

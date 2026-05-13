@@ -1922,3 +1922,161 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `npm --prefix apps/web test` — 7 files / 86 tests pass.
 - `npm --prefix apps/web run build` — pass when run outside the sandbox; the
   sandbox still blocks Turbopack helper port binding.
+
+## 2026-05-11 Pro Checkout — Provider / Trial 정책 결정
+
+### Claude Code
+
+- 사용자가 "Codex로 작업했던 내용 모두 확인하고 작업해야할 내용 파악해서 정리"
+  를 요청. Phase 7 desktop shell까지의 Codex 작업 상태와 Phase 7 잔여 punch list,
+  iOS Phase 6 잔여 작업, deployment 트랙을 정리해서 보고.
+- 다음 우선 트랙으로 사용자가 **Pro checkout backend** 선택.
+- 결제 provider 옵션 (Toss / Stripe / Lemon Squeezy / 보류) 비교 후 사용자가
+  **Toss Payments 빌링** 선택. 사유: 한국 사용자 대상 productivity 앱, ₩1,900
+  소액 정기결제에 카카오페이/네이버페이/계좌/카드까지 커버, 수수료 ~3%.
+- Toss 가맹점 상태: **사업자등록 미완료** → 외부 선결 조건이 길어 코드와
+  외부 작업을 두 트랙으로 분리하기로 결정.
+  - Track A (사용자 외부): 사업자등록 → Toss 가입 → 가맹점 심사 → 운영 키.
+  - Track B (코드, Toss 테스트 키 기준): schema → webhook/issue-key → UI →
+    cron 순서.
+- Trial 정책: **회원가입 즉시 빌링 정보 요구 → 30일 Trial 후 자동 결제**.
+  사유: 전환율 우선. 게스트 모드는 그대로 유지하고 로그인 진입 시 빌링 등록
+  step을 강제하는 형태.
+- iOS 결제는 Apple IAP 별도 트랙(Phase 6 v1 ship 후)으로 분리.
+- 사용자가 "다음 세션으로 미루고 일단 계획만 docs에 고정" 선택. 코드 변경
+  없음. 본 세션 결과물은 `docs/next_steps.md` Phase 7-3 Pro checkout 세분화,
+  `docs/claude_handoff.md` Recommended Next Work 결제 결정 추가, 본 worklog
+  엔트리, auto-memory `payment_provider.md`.
+
+### Notes
+
+- Track B는 사업자등록 없이도 Toss 테스트 키만으로 schema/webhook/UI/cron
+  단위 테스트와 E2E까지 가능. 운영 키 교체 시점에 환경 변수만 swap.
+- 운영 도메인은 Webhook URL 등록을 위해 deployment 트랙(Gabia/Route 53/Amplify)
+  과 동시에 결정해야 함. 현재 deployment 트랙도 미시작 상태.
+- 회원가입 즉시 빌링 요구 정책은 강한 결정이라, 가입 conversion 추적이 중요해
+  지면 `onboarding/billing` step을 옵션화(skip 허용)할 수 있도록 UI 설계는
+  step 단위로 분리 권장.
+
+## 2026-05-11 Phase 7-4: Mobile Guide Wiring (iOS link / Android waitlist)
+
+### Claude Code
+
+- Phase 7 잔여 항목 중 결제 backend는 다음 세션으로 미루고 mobile 안내 페이지
+  wiring 부터 진행 (사용자 선택).
+- iOS App Store 진입:
+  - `apps/web/.env.local.example` 에 `NEXT_PUBLIC_IOS_APP_STORE_URL` 추가.
+  - `MobileWebGuide` 에 iOS UA 자동 리다이렉트 useEffect 추가. URL 비어 있을
+    땐 no-op. sessionStorage 가드로 같은 세션에서 한 번만 시도.
+  - 안내 페이지에 "App Store에서 받기" CTA 추가. URL 없으면 "App Store 출시
+    예정" 비활성 라벨로 표시.
+- Android 출시 알림 가입:
+  - 신규 Supabase 마이그레이션 `20260511064305_waitlist.sql` — `public.waitlist`
+    (id uuid pk, email, platform check('android'/'ios'/'web'), source, created_at)
+    + `unique(email, platform)` + 인덱스. RLS enable, 정책 0개 → service-role
+    경유만 접근 가능.
+  - `apps/web/src/app/api/waitlist/route.ts` 추가. `POST { email, platform,
+    source? }` → 이메일/플랫폼 화이트리스트 검증 후 `service-role` upsert
+    (`onConflict: 'email,platform', ignoreDuplicates: true`).
+  - `MobileGuideAndroidCta` 폼 추가. submitting/success/error 상태와 안내
+    문구. 성공 시 입력 비우고 disabled.
+- iOS 결제 별도 트랙 결정과는 충돌 없음 — 본 작업은 결제 미포함.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 86 tests pass.
+- `npm --prefix apps/web run build` — pass (TypeScript 통과 포함).
+
+### Follow-up
+
+- 사용자가 마이그레이션 적용 필요:
+  - 호스티드: `supabase db push` 또는 dashboard SQL editor.
+  - 로컬: `supabase migration up` (또는 `supabase db reset` — 데이터 삭제됨).
+- 이후 `supabase gen types typescript --local` 재생성하면
+  `apps/web/src/lib/supabase/database.types.ts` 에 `waitlist` 타입이 추가되어
+  route.ts 의 좁은 캐스트를 제거할 수 있음.
+- 실제 iOS App Store URL 확정 시 `.env.local` 과 운영 환경(Amplify 등)의
+  `NEXT_PUBLIC_IOS_APP_STORE_URL` 만 채우면 자동 활성화.
+- 안내 페이지 form 회귀 테스트는 추후 dev server 위 manual smoke로 충분.
+  자동 테스트가 필요하면 `app-shell.test.tsx` 에 viewport mock 추가 + fetch
+  mock 으로 보강.
+
+## 2026-05-13 Phase 7-5: Desktop Visual Verification + Header Fix
+
+### Claude Code
+
+- A1 시각 검증을 1024 / 1280 / 1440 / 1920 widths 에서 진행 (Chrome DevTools
+  device toolbar, DPR 1.0).
+- **1024px 헤더 squeeze 발견.** 사이드바(240) + Today panel 가용 폭이 헤더에
+  남는 폭을 줄여 "2026년 5월" / "리스트" / "새 Task" 같은 헤더 텍스트가
+  글자 단위로 줄바꿈됨.
+- Fix (`apps/web/src/features/just-do/app-shell.tsx` Header):
+  - 헤더 텍스트 노드들에 `whitespace-nowrap`.
+  - 좌측 nav 묶음 / 타이틀 / 뷰 스위처 / 새 Task 버튼에 `shrink-0`.
+  - 검색 input wrapper 를 `hidden xl:block w-[180px] xl:w-[280px]` 로 변경 →
+    1024 ≤ width < 1280 구간에서는 검색 input 미노출. 검색 진입점은
+    사이드바 "빠른 검색" 박스와 헤더의 `IconCommand` (Cmd+K) 가 다중 보장.
+  - 헤더 gap 을 `gap-3 xl:gap-4` 로.
+- 1280 / 1440 / 1920 모두 캘린더 / 사이드바 / Today panel / 모달 / Stats /
+  Settings 시나리오 통과.
+- 모바일 안내 페이지(`< lg`): 자동 fallback 동작, iOS CTA 비활성 라벨, Android
+  폼 invalid email 에러 메시지 모두 정상 동작.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+
+### Follow-up
+
+- A2 manual offline sync verification (`docs/local_dev.md`) 진행.
+- 검색 input 미노출 구간(1024 ≤ width < 1280) UX 가 자연스럽지 않다는
+  사용자 피드백이 나오면, breakpoint 조정 또는 IconShellButton 형 검색 진입점
+  추가 검토.
+
+## 2026-05-13 Phase 7-5: Manual Offline Sync Verification + Sync UX Fix
+
+### Claude Code
+
+- `docs/local_dev.md` 절차를 새 desktop UI 진입점에 맞춰 5 stage 로 재구성하고
+  hosted Supabase 위에서 통과시킴.
+  - Stage 1 baseline → 2 온라인 smoke → 3 오프라인 mutation 적재 →
+    4 online 복귀 자동 flush → 5 시크릿창 cross-device mirror.
+- 검증 중 오프라인 UX 버그 두 건 발견 → fix:
+  - **(1) Realtime CHANNEL_ERROR 가 syncError 로 잡힘.** DevTools 를 Offline
+    으로 전환 시 Supabase realtime WebSocket 연결이 끊기고 6개 채널의
+    `subscribe(status => ...)` 콜백이 `CHANNEL_ERROR` 를 emit. 이 emit 이
+    `emitError` 를 통해 syncError 로 표시되어, 동기화 패널이 "확인 필요" +
+    "habit logs realtime subscription failed" 같은 메시지를 노출.
+    Fix: `apps/web/src/features/just-do/supabase-storage.ts` 에
+    `onChannelStatus(label)` helper 추가. `navigator.onLine === false` 면
+    emit 무시. 6개 채널 (`tasks`, `categories`, `tags`, `task_tags`, `habits`,
+    `habit_logs`) 의 inline subscribe 콜백을 helper 호출로 단일화.
+  - **(2) Offline fetch 실패가 syncError 로 잡힘.** mutation handler 들이
+    큐 적재와 함께 시도하는 첫 원격 쓰기가 오프라인에서 `Failed to fetch`
+    로 실패 → `reportSyncError` 가 "저장 중 문제가 발생했습니다." 표시.
+    Fix: `apps/web/src/features/just-do/store.tsx` 의 `reportSyncError` 가
+    `navigator.onLine === false` 면 silent (dev console.debug 만). 큐는
+    그대로 남고 `setOnline` listener 가 reconnect 시 flush.
+- Stage 3 에서 5 mutation 시도 시 큐가 4개로 끝나는 dedupe 동작 확인됨
+  (예: 같은 task 의 두 번 upsert 가 합쳐짐). 기능적으로 정상 — Stage 4 에서
+  남은 행 모두 정확히 flush.
+- Stage 4 의 IndexedDB 화면이 "Data may be stale" 캐싱으로 비워지지 않은
+  것처럼 보였으나, 화면 ↻ 새로고침 후 0 row 확인 — DevTools view 한정
+  artifact, 실제 큐 메커니즘 정상.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 86 tests pass (두 fix 후 모두 유지).
+- Manual hosted Supabase 5 stage 검증 통과.
+
+### Follow-up
+
+- Phase 7 결제 제외 잔여 작업은 모두 완료. v1 desktop UI 는 ship 가능 상태
+  (Pro checkout backend 만 결제 트랙으로 분리되어 있음).
+- 두 syncError 가드는 `navigator.onLine` 만 신뢰. 일부 환경에서 navigator 가
+  online 으로 보고하지만 실 네트워크가 끊긴 경우는 여전히 syncError 로
+  잡힘 — 이건 진짜 오류 신호로 간주가 적절. 별도 fix 불필요.
+- 회귀 자동화가 필요하면 `app-shell.test.tsx` 에 navigator.onLine mock + fake
+  realtime channel 로 가드 동작 시나리오 추가.

@@ -312,23 +312,75 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Habit edit 지원 보강 — Settings 습관 관리에서 제목 / 이모지 / 반복 /
   요일 / 알림 수정.
 - [ ] Pro checkout API / webhook / `user_subscriptions` 갱신 구현.
+  - 2026-05-11 결정: 결제 provider = **Toss Payments 빌링** (월 ₩1,900 / 연 ₩9,900).
+    Trial 정책 = 회원가입 즉시 빌링 정보 요구 → 30일 Trial 후 자동 결제.
+    iOS 결제는 별도 트랙(Apple IAP, Phase 6 v1 ship 후).
+  - Track A — 사용자 외부 작업 (선결 조건):
+    - [ ] 사업자등록 (개인사업자 + 통신판매업 신고).
+    - [ ] Toss Payments 가입 + 가맹점 심사 (~2–3주).
+    - [ ] 운영 API 키 / Webhook secret 발급.
+    - [ ] 운영 도메인 결정 (Webhook URL 등록용, deployment 트랙과 동시).
+  - Track B — 코드 작업 (Toss 테스트 키로 동작):
+    - [ ] B1 Schema 마이그레이션 — `user_subscriptions` 보강
+      (`toss_billing_key`, `toss_customer_key`, `next_billing_at`, `cancel_at`,
+      `last_payment_at`, `payment_failures`) + 신규 `payment_events` 테이블
+      (webhook 멱등 처리).
+    - [ ] B2 서버 엔드포인트 — `POST /api/billing/issue-key`,
+      `POST /api/billing/charge`, `POST /api/webhook/toss` (signature 검증 +
+      멱등), `POST /api/billing/cancel`. 모두 `service-role` client 사용.
+    - [ ] B3 정기결제 cron — `next_billing_at <= now AND status='active'` 행에
+      `requestBillingPayment` 호출. 실패 3회 누적 시 `status='paused'`. v1은
+      Vercel Cron 또는 Supabase Cron 중 선택.
+    - [ ] B4 UI 연동 — `apps/web/src/features/just-do/app-shell.tsx`의
+      `UpgradeModal` placeholder를 `@tosspayments/payment-sdk` 호출로 교체.
+      `SubscriptionPanel`에 다음 결제일/카드 일부/취소 버튼 노출.
+      회원가입 직후 `onboarding/billing` step 추가.
+    - [ ] B5 게스트 모드 정책 — 비로그인 = localStorage 유지, 로그인 진입 시
+      빌링 등록 step 강제. 게스트 → 로그인 전이 데이터 보존은 기존
+      `mergePersisted` 그대로.
+    - [ ] B6 회귀 테스트 — Toss SDK mock + webhook fixture 단위 테스트, E2E는
+      Toss 테스트 키.
+  - 진행 순서: B1 → B2 → B4 → B3. Track A 완료 후 운영 키만 교체.
 
 ### 7-4. 모바일 진입 페이지
 - [x] User-Agent 또는 viewport 기반 모바일 진입 감지 — CSS viewport (`lg`
   breakpoint) 기반.
 - [x] 로그인 전/후 화면 모두 모바일이면 안내 페이지로 폴백.
-- [ ] 안내 페이지에 실제 iOS 앱 다운로드 링크 연결.
-- [ ] iOS 모바일 브라우저 진입 시 실제 앱스토어 주소로 자동 이동
-  (`NEXT_PUBLIC_IOS_APP_STORE_URL` 등 환경변수 기반, URL 확정 후 구현).
-- [ ] 안내 페이지에 Android 앱 출시 알림 대기 가입 연결.
+- [x] 안내 페이지에 실제 iOS 앱 다운로드 링크 연결 — 환경변수
+  `NEXT_PUBLIC_IOS_APP_STORE_URL` wiring 완료. 값이 설정되면 "App Store에서
+  받기" 버튼이 활성화되고 link로 동작. 값 비어 있으면 "App Store 출시 예정"
+  비활성 상태로 표시. URL 확정 시 환경변수만 채우면 됨.
+- [x] iOS 모바일 브라우저 진입 시 실제 앱스토어 주소로 자동 이동 — 같은
+  환경변수 기반. iOS UA 감지 시 `window.location.replace`. 세션당 1회만
+  시도하도록 sessionStorage 가드.
+- [x] 안내 페이지에 Android 앱 출시 알림 대기 가입 연결 — 신규 Supabase
+  `public.waitlist` 테이블(2026-05-11 마이그레이션) + `POST /api/waitlist`
+  service-role 엔드포인트 + 안내 페이지 폼. 멱등 처리(`unique(email, platform)`,
+  `ignoreDuplicates`).
 
 ### 7-5. 회귀 / 검증
 - [x] 기존 web 도메인/sync 테스트 유지 확인.
 - [x] 새 데스크탑 UI interaction 테스트 추가 — Task/Habit add modal,
   calendar date click vs hover `+`, Today Task/Habit check toggle, Settings
   selected-section rendering.
-- [ ] Manual offline sync verification (`docs/local_dev.md`)을 새 UI로 다시 통과.
-- [ ] 데스크탑/노트북 해상도 (1024 / 1280 / 1440 / 1920)에서 시각 검증.
+- [x] Manual offline sync verification (`docs/local_dev.md`)을 새 UI로 다시 통과.
+  - 검증 중 오프라인 transition 의 realtime CHANNEL_ERROR 와 fetch 실패가
+    `syncError` 로 잡혀 "확인 필요" / "저장 중 문제 발생" 가 노출되던 UX 버그
+    두 건 발견 → fix:
+    `apps/web/src/features/just-do/supabase-storage.ts` 에 `onChannelStatus`
+    helper 추가 (navigator.onLine === false 면 emit 무시),
+    `apps/web/src/features/just-do/store.tsx` 의 `reportSyncError` 도 동일
+    가드. 오프라인은 큐가 source of truth이고 reconnect 시 자동 flush 되므로
+    silent.
+  - 5 stage 모두 통과: baseline → 온라인 smoke → 오프라인 mutation 적재 →
+    online 복귀 자동 flush → 시크릿 창 cross-device mirror.
+- [x] 데스크탑/노트북 해상도 (1024 / 1280 / 1440 / 1920)에서 시각 검증.
+  - 1024px 헤더 squeeze 발견 → fix: 헤더 텍스트 `whitespace-nowrap` + 좌우
+    묶음 `shrink-0` + 검색 input 을 `xl` (1280+) 에서만 노출 +
+    `gap-3 xl:gap-4`. 검색 진입점은 사이드바 "빠른 검색" / `IconCommand`
+    (Cmd+K) 로 다중 보장.
+  - 1280 / 1440 / 1920 통과. 모바일 안내 페이지(`< lg`) iOS 비활성 라벨 +
+    Android 폼 에러 메시지 동작 확인.
 
 ## UX / UI Backlog
 
