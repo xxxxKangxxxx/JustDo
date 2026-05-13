@@ -133,6 +133,16 @@ export function JustDoProvider({
   const hydratedRef = useRef(false);
 
   const reportSyncError = useCallback((err: unknown) => {
+    // Suppress while offline — queued mutations stay in IndexedDB and the
+    // online listener flushes them on reconnect. Surfacing offline fetch
+    // failures as syncError makes the settings panel claim "확인 필요" while
+    // the connection row already says "오프라인".
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("JustDo storage error suppressed (offline):", err);
+      }
+      return;
+    }
     const message = err instanceof Error && err.message
       ? err.message
       : "저장 중 문제가 발생했습니다.";

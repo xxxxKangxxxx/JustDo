@@ -342,6 +342,19 @@ export const createSupabaseStorage = (
     subscribe(callback) {
       const channels: RealtimeChannel[] = [];
 
+      // CHANNEL_ERROR fires whenever the realtime websocket cannot be reached,
+      // which includes the expected offline transition (DevTools throttle to
+      // Offline, network drop, etc). Surfacing those as syncError makes the
+      // settings sync panel claim "확인 필요" while the offline queue is still
+      // healthy. Treat CHANNEL_ERROR as a real error only when the browser
+      // currently believes it is online — otherwise the queue is the source of
+      // truth and will reconcile on reconnect.
+      const onChannelStatus = (label: string) => (status: string) => {
+        if (status !== "CHANNEL_ERROR") return;
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+        emitError(callback, new Error(`${label} realtime subscription failed`));
+      };
+
       const tasksChannel = client
         .channel(`just-do:${userId}:tasks`)
         .on(
@@ -365,11 +378,7 @@ export const createSupabaseStorage = (
             })().catch((error: unknown) => emitError(callback, error));
           },
         )
-        .subscribe((status) => {
-          if (status === "CHANNEL_ERROR") {
-            emitError(callback, new Error("tasks realtime subscription failed"));
-          }
-        });
+        .subscribe(onChannelStatus("tasks"));
       channels.push(tasksChannel);
 
       const categoriesChannel = client
@@ -395,11 +404,7 @@ export const createSupabaseStorage = (
             });
           },
         )
-        .subscribe((status) => {
-          if (status === "CHANNEL_ERROR") {
-            emitError(callback, new Error("categories realtime subscription failed"));
-          }
-        });
+        .subscribe(onChannelStatus("categories"));
       channels.push(categoriesChannel);
 
       const tagsChannel = client
@@ -423,11 +428,7 @@ export const createSupabaseStorage = (
             })().catch((error: unknown) => emitError(callback, error));
           },
         )
-        .subscribe((status) => {
-          if (status === "CHANNEL_ERROR") {
-            emitError(callback, new Error("tags realtime subscription failed"));
-          }
-        });
+        .subscribe(onChannelStatus("tags"));
       channels.push(tagsChannel);
 
       const taskTagsChannel = client
@@ -449,11 +450,7 @@ export const createSupabaseStorage = (
             })().catch((error: unknown) => emitError(callback, error));
           },
         )
-        .subscribe((status) => {
-          if (status === "CHANNEL_ERROR") {
-            emitError(callback, new Error("task tags realtime subscription failed"));
-          }
-        });
+        .subscribe(onChannelStatus("task tags"));
       channels.push(taskTagsChannel);
 
       const habitsChannel = client
@@ -479,11 +476,7 @@ export const createSupabaseStorage = (
             });
           },
         )
-        .subscribe((status) => {
-          if (status === "CHANNEL_ERROR") {
-            emitError(callback, new Error("habits realtime subscription failed"));
-          }
-        });
+        .subscribe(onChannelStatus("habits"));
       channels.push(habitsChannel);
 
       const logsChannel = client
@@ -510,11 +503,7 @@ export const createSupabaseStorage = (
             });
           },
         )
-        .subscribe((status) => {
-          if (status === "CHANNEL_ERROR") {
-            emitError(callback, new Error("habit logs realtime subscription failed"));
-          }
-        });
+        .subscribe(onChannelStatus("habit logs"));
       channels.push(logsChannel);
 
       return () => {
