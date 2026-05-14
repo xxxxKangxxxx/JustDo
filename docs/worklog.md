@@ -2245,3 +2245,78 @@ This document records coordination notes for work done with Codex and Claude Cod
   - `docs/just_do_db_schema.md`
   - `docs/next_steps.md`
   - `docs/worklog.md`
+
+## 2026-05-14 Deployment 트랙 — AWS 셋업 + 코드 사전 정비
+
+### Claude Code
+
+- AWS 계정 셋업 완료 (사용자 콘솔 진행, Claude 가이드):
+  - 루트 MFA: 이미 활성화되어 있음 (패스키/보안 키, 2025-03-31 등록).
+  - IAM admin 사용자 `justdo-admin` 생성 + `AdministratorAccess` 정책 + MFA 할당.
+  - 결제수단: 기존 등록.
+  - Budget 알림 `justdo-monthly` 생성:
+    - 월별 비용 예산 $20 USD (모든 AWS 서비스 / 일반 요금).
+    - 알림 4단계: 50% 실제 ($10), 80% 실제 ($16), 100% 실제 ($20),
+      100% **예측** ($20). 모두 `kang071911@gmail.com` 으로.
+  - 기본 리전 `ap-northeast-2` (서울) 로 전환.
+- DNS 관리 모드 = **Route 53 위임** 결정.
+  - Why: Amplify 자동 records, AWS 단일 콘솔. hosted zone $0.50/월은 예산 무시 가능.
+- 코드 측 사전 정비:
+  - `amplify.yml` 추가 (repo root). monorepo `appRoot: apps/web` + workspace install
+    (`cd ../../ && npm ci --include=dev && cd apps/web && npm run build`).
+    artifacts `.next`, cache는 root `node_modules` + `.next/cache`.
+  - Secret leak grep 통과:
+    - `lib/supabase/service-role.ts`, `lib/supabase/server.ts`, `lib/billing/toss.ts`
+      모두 `import "server-only"` 마크.
+    - 셋 다 `app/api/*/route.ts` 또는 `app/(auth)/callback/route.ts` 에서만 import.
+    - `lib/billing/toss-client.ts` 는 clientKey만 받고 server secret 없음.
+  - `app/(auth)/callback/route.ts` 는 `url.origin` 기반 redirect → 운영 도메인에
+    자연스럽게 적응, env 의존 없음. (사이드 노트: `?next=` 파라미터 origin 검증
+    없어 open redirect 가능. 보안 리뷰 트랙으로 이월.)
+  - `apps/web/.env.local.example` 상단에 Amplify 등록 변수 분류 가이드 추가
+    (public NEXT_PUBLIC_* vs server-only vs CLI/dashboard 전용).
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 86 tests pass.
+- `npm --prefix apps/web run build` — pass (12 routes: 정적 2 + 동적 10).
+
+### Follow-up
+
+- Route 53 hosted zone 생성 (`justdo.co.kr`) → 4개 NS records 가비아 네임서버
+  교체 → propagation 대기.
+- AWS Amplify Hosting GitHub repo 연결 → `main` branch → root `amplify.yml`
+  자동 감지.
+- Amplify 환경변수 등록: `apps/web/.env.local.example` 의 Amplify 등록 섹션
+  목록 참고.
+- Supabase Auth Settings → Site URL 운영 도메인으로 변경, Redirect URLs에
+  `https://www.justdo.co.kr/callback` 추가.
+- Google OAuth Console → Authorized redirect URIs에 동일 URL 추가.
+- TLS 인증서 발급 확인 후 production smoke test.
+
+## 2026-05-14 Deployment 트랙 시작 — 운영 도메인 확정
+
+### Claude Code
+
+- 운영 도메인을 **`justdo.co.kr`** 으로 확정 (가비아 구매 완료).
+- 결정 근거:
+  - 한국 사용자 타깃과 정렬.
+  - `.co.kr` 은 사업자등록 + 통신판매업 신고와 자연스럽게 묶이며,
+    Toss Payments 가맹점 심사 트랙과 동일한 사업자 정보 사용.
+  - `justdo.com` 은 이스라엘 PM 툴이 선점 → 한국 .co.kr 사용으로 충돌 회피.
+- `docs/deployment_domain_aws_plan.md` "Gabia Domain Purchase" 섹션에
+  도메인 확정 박음.
+- `docs/next_steps.md` Deployment Backlog 갱신:
+  - Purchase production domain → 완료 체크 + `justdo.co.kr` 명시.
+  - AWS 계정 셋업 (MFA / IAM / Budget) 항목 추가.
+  - Toss webhook URL 등록 항목 추가 (`https://www.justdo.co.kr/api/webhook/toss`).
+
+### Follow-up
+
+- DNS 모드 결정 (Route 53 위임 vs 가비아 DNS) — AWS 셋업 후.
+- AWS 계정 셋업 — 사용자 진행.
+- 코드 측 사전 정비 — amplify.yml, secret leak grep, callback route 검증.
+- Supabase / Google OAuth 운영 callback URL 추가:
+  - `https://www.justdo.co.kr/callback`
+  - `https://justdo.co.kr/callback` (apex 직접 서빙 시).

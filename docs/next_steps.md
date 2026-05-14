@@ -430,14 +430,16 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Deployment Backlog
 
-- [ ] Purchase production domain in Gabia.
-- [ ] Decide DNS mode: delegate to Route 53 or manage records in Gabia DNS.
-- [ ] Create Route 53 hosted zone if using AWS DNS hosting.
+- [x] Purchase production domain in Gabia — `justdo.co.kr` (2026-05-14).
+- [x] Decide DNS mode — **Route 53 위임** (2026-05-14).
+- [x] AWS 계정 셋업 — root MFA, IAM admin user (`justdo-admin`), 결제수단, Budget 알림 (`justdo-monthly` $20, 50/80/100% 실제 + 100% 예측), 리전 `ap-northeast-2` (2026-05-14).
+- [ ] Create Route 53 hosted zone for `justdo.co.kr` + 가비아 네임서버 교체.
 - [ ] Connect `apps/web` to AWS Amplify Hosting.
 - [ ] Add production Supabase env vars in Amplify.
 - [ ] Connect custom domain and verify AWS-managed TLS certificate.
 - [ ] Add production OAuth callback URLs in Supabase and Google OAuth settings.
 - [ ] Run production smoke test after deployment.
+- [ ] Toss webhook URL 등록 (`https://www.justdo.co.kr/api/webhook/toss`) — Toss 운영 심사 후.
 
 ## Open Decisions
 

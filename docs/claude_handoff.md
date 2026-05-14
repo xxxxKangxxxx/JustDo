@@ -14,6 +14,13 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 자세한 내용: `just_do_prd.md` §1.5 / `next_steps.md` Phase 7 / 본 문서
 > "App Shape Now" 섹션 / `worklog.md` 2026-05-10 엔트리.
 
+> **2026-05-14 Deployment 트랙 시작** — 운영 도메인 `justdo.co.kr` (가비아 구매 완료),
+> DNS = Route 53 위임, AWS 계정 셋업 완료 (IAM admin `justdo-admin`, Budget
+> `justdo-monthly` $20, 리전 `ap-northeast-2`). 코드 측 사전 정비 완료:
+> 루트 `amplify.yml` 추가, secret leak grep 통과, callback route origin-agnostic
+> 확인, `.env.local.example` Amplify 등록 가이드 보강, lint/test 86개/build 통과.
+> 다음: Route 53 hosted zone 생성 → 가비아 네임서버 교체 → Amplify GitHub 연결.
+
 ## Resume Work — cold-start checklist
 
 The current local Supabase stack and web dev server may already be running

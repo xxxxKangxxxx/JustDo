@@ -33,15 +33,17 @@ xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -de
 
 ## Gabia Domain Purchase
 
-- Choose and purchase the production domain in Gabia.
-- Record:
-  - root domain, for example `example.com`
-  - intended web host, for example `www.example.com`
-  - registrar account owner
-  - renewal date and auto-renew status
-- Decide DNS management mode:
-  - Preferred: keep Gabia as registrar, delegate DNS to Route 53.
-  - Alternative: keep DNS records in Gabia DNS management.
+- 2026-05-14 결정: 운영 도메인 = **`justdo.co.kr`** (가비아 구매 완료).
+  - root domain: `justdo.co.kr`
+  - intended web host: `www.justdo.co.kr`
+  - 사업자등록/통신판매업 신고와 함께 `.co.kr` 사용 (Toss 가맹점 트랙과 정렬).
+- 2026-05-14 결정: DNS 관리 모드 = **Route 53 위임**.
+  - Why: Amplify가 도메인 인증서 records를 자동 생성/갱신, AWS 단일 콘솔 관리,
+    가비아 → Route 53 네임서버 1회 교체로 미래 DNS 작업 통합.
+  - Cost: hosted zone $0.50/월 + 쿼리당 $0.40/M (예산 $20의 2.5%로 무시 가능).
+- 다음 작업:
+  - 가비아 계정에서 갱신일 / auto-renew 상태 기록.
+  - Route 53 hosted zone 생성 후 4개 NS records 가비아에 등록.
 
 ## Route 53 DNS Option
 
