@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   daysInMonth,
@@ -13,6 +13,11 @@ import {
 } from "@/lib/date";
 import { authProviders } from "@/lib/auth/providers";
 import { AuthProvider, useAuth } from "@/lib/auth/useAuth";
+import {
+  createTossPayment,
+  tossBillingPlans,
+  type TossBillingPlanInterval,
+} from "@/lib/billing/toss-client";
 import type { Habit, HabitRecurType, Priority, Task } from "@/types/domain";
 import { habitActiveOn, habitStreak, tasksOnDate } from "./selectors";
 import { JustDoProvider, useJustDo } from "./store";
@@ -32,6 +37,65 @@ type SettingsSection =
   | "sync"
   | "data";
 type NewTaskDraft = { date: string; range?: [string, string]; time?: string } | null;
+type UpgradePlan = TossBillingPlanInterval;
+type PaymentMethodKey = "toss" | "card" | "bank" | "naverpay" | "kakaopay" | "other";
+type BillingSubscription = {
+  id: string;
+  plan_name: string;
+  status: string;
+  trial_start_at: string | null;
+  trial_end_at: string | null;
+  subscribed_at: string | null;
+  expires_at: string | null;
+  billing_provider: string | null;
+  plan_interval: string;
+  amount_krw: number;
+  currency: string;
+  next_billing_at: string | null;
+  cancel_at: string | null;
+  cancelled_at: string | null;
+  last_payment_at: string | null;
+  payment_failures: number;
+  payment_method_label: string | null;
+  payment_method_last4: string | null;
+};
+type BillingSubscriptionResponse = {
+  subscription: BillingSubscription | null;
+};
+
+const paymentMethods: Array<{
+  key: PaymentMethodKey;
+  label: string;
+  enabled: boolean;
+  accent: string;
+  soft: string;
+}> = [
+  { key: "toss", label: "토스", enabled: true, accent: "#0064FF", soft: "#EAF2FF" },
+  { key: "card", label: "신용카드", enabled: false, accent: "#4F6FD8", soft: "#EEF2FF" },
+  { key: "bank", label: "계좌이체", enabled: false, accent: "#2F9B72", soft: "#EAF8F2" },
+  { key: "naverpay", label: "네이버페이", enabled: false, accent: "#03C75A", soft: "#E7FBEF" },
+  { key: "kakaopay", label: "카카오페이", enabled: false, accent: "#FEE500", soft: "#FFF9C7" },
+  { key: "other", label: "기타결제수단", enabled: false, accent: "#6D7694", soft: "#F1F3F7" },
+];
+const subscriptionStatusLabels: Record<string, string> = {
+  trial: "Trial",
+  active: "활성",
+  past_due: "결제 확인 필요",
+  paused: "일시중지",
+  expired: "만료",
+  cancelled: "해지됨",
+};
+
+const formatDateLabel = (value: string | null | undefined) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+};
 
 const fontStack =
   '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "SF Pro Display", Pretendard, "Noto Sans KR", system-ui, sans-serif';
@@ -1571,7 +1635,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
   const auth = useAuth();
   const t = webTokens(mode);
   const [section, setSection] = useState<SettingsSection>("account");
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
   const [editHabitId, setEditHabitId] = useState<string | null>(null);
   const syncDetail = s.syncError ? "확인 필요" : !s.syncStatus.isOnline ? "오프라인" : s.syncStatus.isSyncing ? "동기화 중" : s.syncStatus.pendingCount > 0 ? "대기 중" : "정상";
   const sections: Array<[SettingsSection, string]> = [
@@ -1648,7 +1712,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
             </div>
           </Panel>
           ) : null}
-          {section === "subscription" ? <SubscriptionPanel mode={mode} onUpgrade={() => setUpgradeOpen(true)} /> : null}
+          {section === "subscription" ? <SubscriptionPanel mode={mode} onUpgrade={setUpgradePlan} /> : null}
           {section === "sync" ? (
           <Panel mode={mode} title="동기화">
             <SettingRow mode={mode} label="연결 상태" value={s.syncStatus.isOnline ? "온라인" : "오프라인"} />
@@ -1665,7 +1729,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
           ) : null}
         </div>
       </div>
-      {upgradeOpen ? <UpgradeModal mode={mode} onClose={() => setUpgradeOpen(false)} /> : null}
+      {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
       <HabitEditModal mode={mode} habitId={editHabitId} onClose={() => setEditHabitId(null)} />
     </div>
   );
@@ -1796,24 +1860,113 @@ function HabitEditModalBody({ mode, habit, onClose }: { mode: ThemeMode; habit: 
   );
 }
 
-function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: () => void }) {
-  const s = useJustDo();
+function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (plan: UpgradePlan) => void }) {
+  const auth = useAuth();
   const t = webTokens(mode);
-  const isPro = s.state.settings.plan === "pro";
+  const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const isPro = Boolean(
+    subscription &&
+      subscription.plan_name === "pro" &&
+      !["cancelled", "expired"].includes(subscription.status),
+  );
+  const statusLabel = subscription
+    ? subscriptionStatusLabels[subscription.status] ?? subscription.status
+    : auth.user
+      ? "Free"
+      : "게스트";
+  const billingAmount = subscription
+    ? `₩${subscription.amount_krw.toLocaleString("ko-KR")} / ${subscription.plan_interval === "yearly" ? "년" : "월"}`
+    : null;
+  const paymentMethod = subscription?.payment_method_last4
+    ? `${subscription.payment_method_label ?? "Toss"} •••• ${subscription.payment_method_last4}`
+    : subscription?.billing_provider === "toss_payments"
+      ? "Toss Payments"
+      : "등록 전";
+
+  const refresh = useCallback(() => {
+    if (!auth.user) {
+      setSubscription(null);
+      setError(null);
+      return;
+    }
+    setLoading(true);
+    fetch("/api/billing/subscription")
+      .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as
+          | BillingSubscriptionResponse
+          | { error?: string };
+        if (!response.ok) {
+          throw new Error("error" in body && body.error ? body.error : "subscription_fetch_failed");
+        }
+        setSubscription((body as BillingSubscriptionResponse).subscription);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "subscription_fetch_failed"))
+      .finally(() => setLoading(false));
+  }, [auth.user]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(refresh, 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  const cancelSubscription = () => {
+    if (!subscription || cancelling) return;
+    setCancelling(true);
+    fetch("/api/billing/cancel", { method: "POST" })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(body.error ?? "subscription_cancel_failed");
+        }
+        refresh();
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "subscription_cancel_failed"))
+      .finally(() => setCancelling(false));
+  };
+
   return (
     <Panel mode={mode} title="구독" subtitle="Pro 플랜 상태와 업그레이드 진입점입니다.">
       <div className="mb-3 rounded-lg border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>현재 플랜</div>
-        <div className="flex items-center gap-3">
+        <div className="mb-3 flex items-center gap-3">
           <div className="text-[26px] font-bold tracking-[-0.6px]">{isPro ? "Pro" : "Free"}</div>
           <span className="rounded-md px-2 py-1 text-[11px] font-semibold" style={{ background: isPro ? t.habit.softer : t.surfaceAlt, color: isPro ? t.habit.ink : t.textSecondary }}>
-            {isPro ? "활성" : "기본"}
+            {loading ? "확인 중" : statusLabel}
           </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[12px]">
+          <SettingRow mode={mode} label="결제 주기" value={billingAmount ?? "-"} />
+          <SettingRow mode={mode} label="다음 결제일" value={formatDateLabel(subscription?.next_billing_at)} />
+          <SettingRow mode={mode} label="결제수단" value={paymentMethod} />
+          <SettingRow mode={mode} label="Trial 종료" value={formatDateLabel(subscription?.trial_end_at)} />
+        </div>
+        {error ? <div className="mt-3 text-[12px]" style={{ color: t.danger }}>{error}</div> : null}
+        <div className="mt-3 flex gap-2">
+          {auth.user ? (
+            <button type="button" onClick={refresh} className="rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.textSecondary }}>
+              새로고침
+            </button>
+          ) : null}
+          {subscription?.billing_provider === "toss_payments" && !["cancelled", "expired"].includes(subscription.status) ? (
+            <button
+              type="button"
+              onClick={cancelSubscription}
+              disabled={cancelling}
+              className="rounded-md border px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+              style={{ borderColor: t.divider, color: t.danger }}
+            >
+              {cancelling ? "해지 중" : "구독 해지"}
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <PlanCard mode={mode} title="월간 Pro" price="₩1,900 / 월" onUpgrade={onUpgrade} disabled={isPro} />
-        <PlanCard mode={mode} title="연간 Pro" price="₩9,900 / 년" badge="추천" onUpgrade={onUpgrade} disabled={isPro} />
+        <PlanCard mode={mode} plan="monthly" title="월간 Pro" price="₩1,900 / 월" onUpgrade={onUpgrade} disabled={isPro} />
+        <PlanCard mode={mode} plan="yearly" title="연간 Pro" price="₩9,900 / 년" badge="추천" onUpgrade={onUpgrade} disabled={isPro} />
       </div>
     </Panel>
   );
@@ -1821,6 +1974,7 @@ function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: ()
 
 function PlanCard({
   mode,
+  plan,
   title,
   price,
   badge,
@@ -1828,11 +1982,12 @@ function PlanCard({
   onUpgrade,
 }: {
   mode: ThemeMode;
+  plan: UpgradePlan;
   title: string;
   price: string;
   badge?: string;
   disabled: boolean;
-  onUpgrade: () => void;
+  onUpgrade: (plan: UpgradePlan) => void;
 }) {
   const t = webTokens(mode);
   return (
@@ -1845,7 +2000,7 @@ function PlanCard({
       <button
         type="button"
         disabled={disabled}
-        onClick={onUpgrade}
+        onClick={() => onUpgrade(plan)}
         className="w-full rounded-lg px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-45"
         style={{ background: disabled ? t.dividerStrong : t.accent }}
       >
@@ -1855,8 +2010,46 @@ function PlanCard({
   );
 }
 
-function UpgradeModal({ mode, onClose }: { mode: ThemeMode; onClose: () => void }) {
+function UpgradeModal({ mode, plan, onClose }: { mode: ThemeMode; plan: UpgradePlan; onClose: () => void }) {
+  const auth = useAuth();
   const t = webTokens(mode);
+  const selected = tossBillingPlans[plan];
+  const clientKey = process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY;
+  const [method, setMethod] = useState<PaymentMethodKey>("toss");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canStart = Boolean(auth.user && clientKey && method === "toss");
+
+  const startBillingAuth = async () => {
+    if (!canStart) return;
+    const tossClientKey = clientKey;
+    if (!auth.user || !tossClientKey) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const origin = window.location.origin;
+      const successUrl = new URL("/billing/success", origin);
+      successUrl.searchParams.set("planInterval", plan);
+      const failUrl = new URL("/billing/fail", origin);
+      failUrl.searchParams.set("planInterval", plan);
+      const payment = await createTossPayment({
+        clientKey: tossClientKey,
+        customerKey: auth.user.id,
+      });
+      await payment.requestBillingAuth({
+        method: "CARD",
+        successUrl: successUrl.toString(),
+        failUrl: failUrl.toString(),
+        customerName: auth.user.displayName ?? undefined,
+        customerEmail: auth.user.email ?? undefined,
+        windowTarget: "iframe",
+      });
+    } catch (err) {
+      setBusy(false);
+      setError(err instanceof Error ? err.message : "결제창을 열지 못했습니다.");
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
       <div
@@ -1869,16 +2062,57 @@ function UpgradeModal({ mode, onClose }: { mode: ThemeMode; onClose: () => void 
           <IconShellButton mode={mode} title="닫기" onClick={onClose}><IconClose /></IconShellButton>
         </div>
         <p className="mb-4 text-[13px] leading-5" style={{ color: t.textSecondary }}>
-          결제 checkout API가 연결되면 이 화면에서 결제 페이지로 이동합니다. 현재는 결제 연동 전이라 실제 Pro 권한을 부여하지 않습니다.
+          Toss 결제로 30일 Trial을 시작합니다. Trial 종료 후 선택한 주기로 자동 결제가 진행됩니다.
         </p>
-        <div className="rounded-lg border p-3 text-[12px] leading-5" style={{ borderColor: t.divider, background: t.bg2, color: t.textSecondary }}>
-          다음 구현 대상: 결제 provider 선택, checkout session API, 결제 완료 webhook, `user_subscriptions` 갱신.
+        <div className="mb-3 rounded-lg border p-3" style={{ borderColor: t.divider, background: t.bg2 }}>
+          <div className="mb-1 text-[12px] font-semibold" style={{ color: t.textSecondary }}>{selected.label}</div>
+          <div className="text-[24px] font-bold tracking-[-0.4px]">{selected.price}</div>
+          <div className="mt-1 text-[11px]" style={{ color: t.textTertiary }}>오늘 결제 없음 · 30일 후 첫 결제</div>
         </div>
-        <div className="mt-4 flex justify-end">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white" style={{ background: t.accent }}>
-            확인
-          </button>
+        <div className="mb-3">
+          <div className="mb-2 text-[12px] font-bold" style={{ color: t.text }}>결제수단</div>
+          <div className="grid grid-cols-3 gap-2">
+            {paymentMethods.map((item) => {
+              const selectedMethod = method === item.key;
+              const ink = item.key === "kakaopay" ? "#191600" : item.accent;
+              const isToss = item.key === "toss";
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  disabled={!item.enabled || (isToss && busy)}
+                  onClick={() => {
+                    setMethod(item.key);
+                    if (isToss) void startBillingAuth();
+                  }}
+                  className="relative min-h-[58px] rounded-lg border px-2 text-[13px] font-bold transition disabled:cursor-not-allowed disabled:opacity-45"
+                  style={{
+                    borderColor: selectedMethod ? item.accent : t.dividerStrong,
+                    background: selectedMethod ? item.soft : t.surface,
+                    color: selectedMethod ? ink : t.textSecondary,
+                    boxShadow: selectedMethod ? `0 0 0 1px ${item.accent} inset` : "none",
+                  }}
+                >
+                  {item.key === "kakaopay" ? (
+                    <span
+                      className="absolute -right-1 -top-2 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold text-white"
+                      style={{ background: "#EF3340" }}
+                    >
+                      예정
+                    </span>
+                  ) : null}
+                  {isToss && busy ? "Toss 연결 중" : item.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 text-[11px]" style={{ color: t.textTertiary }}>
+            현재는 Toss 자동결제만 사용할 수 있습니다. 네이버페이와 카카오페이는 추후 추가됩니다.
+          </div>
         </div>
+        {!auth.user ? <div className="rounded-lg border p-3 text-[12px]" style={{ borderColor: t.divider, color: t.danger }}>Pro 업그레이드는 로그인 후 사용할 수 있습니다.</div> : null}
+        {auth.user && !clientKey ? <div className="rounded-lg border p-3 text-[12px]" style={{ borderColor: t.divider, color: t.danger }}>Toss Payments client key가 설정되지 않았습니다.</div> : null}
+        {error ? <div className="rounded-lg border p-3 text-[12px]" style={{ borderColor: t.divider, color: t.danger }}>{error}</div> : null}
       </div>
     </div>
   );

@@ -315,26 +315,49 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - 2026-05-11 결정: 결제 provider = **Toss Payments 빌링** (월 ₩1,900 / 연 ₩9,900).
     Trial 정책 = 회원가입 즉시 빌링 정보 요구 → 30일 Trial 후 자동 결제.
     iOS 결제는 별도 트랙(Apple IAP, Phase 6 v1 ship 후).
+  - 2026-05-14 UX/확장 결정:
+    - v1은 Toss Payments 빌링을 유지한다.
+    - 사용자-facing CTA는 내부 billing-key 발급 구조를 직접 드러내지 않고
+      "Toss로 결제하기" / "Toss 결제" 흐름으로 표현한다.
+    - 결제 모달에는 결제수단 버튼 UI를 미리 배치하되, v1에서는 Toss만
+      활성화한다. 네이버페이/카카오페이/카드/계좌 등은 브랜드 색을 반영한
+      disabled 예정 상태로 노출한다. 별도 하단 결제 CTA 없이 활성 결제수단
+      버튼 클릭이 바로 해당 provider 결제창을 여는 구조로 둔다.
+    - 네이버페이 자동결제, 카카오페이 자동결제, PortOne 경유 다중 PG는
+      v1 이후 결제수단 확장 트랙으로 추가 검토한다.
+    - 추후 확장 시 현재 Toss 전용 컬럼을 provider-agnostic subscription /
+      payment method 모델로 점진 전환한다.
   - Track A — 사용자 외부 작업 (선결 조건):
     - [ ] 사업자등록 (개인사업자 + 통신판매업 신고).
     - [ ] Toss Payments 가입 + 가맹점 심사 (~2–3주).
     - [ ] 운영 API 키 / Webhook secret 발급.
     - [ ] 운영 도메인 결정 (Webhook URL 등록용, deployment 트랙과 동시).
   - Track B — 코드 작업 (Toss 테스트 키로 동작):
-    - [ ] B1 Schema 마이그레이션 — `user_subscriptions` 보강
+    - [x] B1 Schema 마이그레이션 — `user_subscriptions` 보강
       (`toss_billing_key`, `toss_customer_key`, `next_billing_at`, `cancel_at`,
       `last_payment_at`, `payment_failures`) + 신규 `payment_events` 테이블
       (webhook 멱등 처리).
-    - [ ] B2 서버 엔드포인트 — `POST /api/billing/issue-key`,
+    - [x] B2 서버 엔드포인트 — `POST /api/billing/issue-key`,
       `POST /api/billing/charge`, `POST /api/webhook/toss` (signature 검증 +
       멱등), `POST /api/billing/cancel`. 모두 `service-role` client 사용.
+      2026-05-14 현재 테스트 키 기준 REST 래퍼와 endpoint 골격 구현 완료.
+      Toss webhook signature 방식은 운영 심사/대시보드 설정 단계에서 공식
+      secret/헤더 스펙 확인 후 보강 필요.
     - [ ] B3 정기결제 cron — `next_billing_at <= now AND status='active'` 행에
       `requestBillingPayment` 호출. 실패 3회 누적 시 `status='paused'`. v1은
       Vercel Cron 또는 Supabase Cron 중 선택.
-    - [ ] B4 UI 연동 — `apps/web/src/features/just-do/app-shell.tsx`의
-      `UpgradeModal` placeholder를 `@tosspayments/payment-sdk` 호출로 교체.
-      `SubscriptionPanel`에 다음 결제일/카드 일부/취소 버튼 노출.
-      회원가입 직후 `onboarding/billing` step 추가.
+    - [x] B4-a UI 연동 — `apps/web/src/features/just-do/app-shell.tsx`의
+      `UpgradeModal` placeholder를 Toss JS SDK 호출로 교체.
+      2026-05-14 현재 `https://js.tosspayments.com/v2/standard` 기반
+      `requestBillingAuth()` UI와 `/billing/success` billing key 발급 완료
+      페이지 구현. 결제수단 버튼 UI는 Toss만 활성화하고, 네이버페이 /
+      카카오페이 / 카드 / 계좌 등은 disabled 예정 상태로 노출.
+    - [x] B4-b SubscriptionPanel 상태 표시 — 서버 `user_subscriptions` 조회,
+      다음 결제일 / 결제수단 일부 / 취소 버튼 노출.
+      2026-05-14 `/api/billing/subscription` 추가. Settings → 구독 패널에서
+      status / 다음 결제일 / 결제수단 / Trial 종료일을 읽고, Toss 구독 해지
+      버튼은 `/api/billing/cancel`로 연결.
+    - [ ] B4-c 회원가입 직후 `onboarding/billing` step 추가.
     - [ ] B5 게스트 모드 정책 — 비로그인 = localStorage 유지, 로그인 진입 시
       빌링 등록 step 강제. 게스트 → 로그인 전이 데이터 보존은 기존
       `mergePersisted` 그대로.

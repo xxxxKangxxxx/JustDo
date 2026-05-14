@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -177,6 +197,66 @@ export type Database = {
           },
           {
             foreignKeyName: "habits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          order_id: string | null
+          payload: Json
+          payment_key: string | null
+          processed_at: string | null
+          processing_error: string | null
+          provider: string
+          provider_event_id: string | null
+          subscription_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          order_id?: string | null
+          payload?: Json
+          payment_key?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          provider: string
+          provider_event_id?: string | null
+          subscription_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          order_id?: string | null
+          payload?: Json
+          payment_key?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          provider?: string
+          provider_event_id?: string | null
+          subscription_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -418,39 +498,81 @@ export type Database = {
       }
       user_subscriptions: {
         Row: {
+          amount_krw: number
+          billing_provider: string | null
+          cancel_at: string | null
+          cancelled_at: string | null
           created_at: string
+          currency: string
           expires_at: string | null
           id: string
+          last_payment_at: string | null
+          next_billing_at: string | null
+          payment_failures: number
+          payment_method_label: string | null
+          payment_method_last4: string | null
+          plan_interval: string
           plan_name: string
           reminded_7d: boolean
           status: string
           subscribed_at: string | null
+          toss_billing_key: string | null
+          toss_customer_key: string | null
+          toss_last_payment_key: string | null
           trial_end_at: string
           trial_start_at: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          amount_krw?: number
+          billing_provider?: string | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          currency?: string
           expires_at?: string | null
           id?: string
+          last_payment_at?: string | null
+          next_billing_at?: string | null
+          payment_failures?: number
+          payment_method_label?: string | null
+          payment_method_last4?: string | null
+          plan_interval?: string
           plan_name?: string
           reminded_7d?: boolean
           status?: string
           subscribed_at?: string | null
+          toss_billing_key?: string | null
+          toss_customer_key?: string | null
+          toss_last_payment_key?: string | null
           trial_end_at?: string
           trial_start_at?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          amount_krw?: number
+          billing_provider?: string | null
+          cancel_at?: string | null
+          cancelled_at?: string | null
           created_at?: string
+          currency?: string
           expires_at?: string | null
           id?: string
+          last_payment_at?: string | null
+          next_billing_at?: string | null
+          payment_failures?: number
+          payment_method_label?: string | null
+          payment_method_last4?: string | null
+          plan_interval?: string
           plan_name?: string
           reminded_7d?: boolean
           status?: string
           subscribed_at?: string | null
+          toss_billing_key?: string | null
+          toss_customer_key?: string | null
+          toss_last_payment_key?: string | null
           trial_end_at?: string
           trial_start_at?: string
           updated_at?: string
@@ -654,6 +776,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

@@ -7,14 +7,17 @@ Supabase workspace, and the native iOS implementation track.
 
 - **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일
   네이티브, Android=v3. 자세한 내용: `docs/just_do_prd.md` §1.5.
-- **Phase 7 Web Desktop Redesign** is the v1 출시 차단 항목. 데스크탑
-  reference는 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`.
-  첫 구현 패스가 `apps/web/`에 반영됨. 자세한 punch list:
-  `docs/next_steps.md` Phase 7.
+- **Phase 7 Web Desktop Redesign** is complete except the Pro checkout track.
+  데스크탑 reference는 `reference/web_proto/`와
+  `reference/Just Do - Web Prototype.html`. 현재 Pro checkout은 Toss
+  Payments 빌링 기준으로 schema/API/UI wiring까지 진행됐고, cron /
+  subscription 상태 표시 / onboarding / webhook signature 보강이 남아 있음.
+  자세한 punch list: `docs/next_steps.md` Phase 7.
 - iOS Phase 6 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7과
   독립적으로 병렬 진행.
-- 현재 `apps/web/` 은 데스크탑 productivity hub shell로 재작성 중이며,
-  도메인/sync 레이어는 기존 구현을 유지함.
+- 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
+  기존 구현을 유지함. 결제 모달은 v1에서 Toss만 활성화하고 네이버페이 /
+  카카오페이 / PortOne 경유 다중 PG는 추후 확장 트랙으로 남겨둠.
 - Product and handoff documents live in `docs/`.
 - Original UI references remain in `reference/`.
 

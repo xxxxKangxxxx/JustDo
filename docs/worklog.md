@@ -2080,3 +2080,168 @@ This document records coordination notes for work done with Codex and Claude Cod
   잡힘 — 이건 진짜 오류 신호로 간주가 적절. 별도 fix 불필요.
 - 회귀 자동화가 필요하면 `app-shell.test.tsx` 에 navigator.onLine mock + fake
   realtime channel 로 가드 동작 시나리오 추가.
+
+## 2026-05-14 Phase 7 Pro Checkout Backend Start
+
+### Codex
+
+- 결제 provider 재검토:
+  - Toss Payments 직접 연동은 테스트 키 기준으로 사업자등록/운영 심사 전에도
+    backend 골격과 sandbox 호출 검증을 진행 가능.
+  - 운영 자동결제는 Toss 계약/심사 및 자동결제 MID 발급 후 라이브 키로 전환 필요.
+  - Kakao Pay / Naver Pay 직접 연동은 추후 추가 트랙으로 미루고, v1은 Toss
+    Payments 직접 연동 유지.
+- B1 schema 구현:
+  - `20260514061000_toss_billing.sql` 추가.
+  - `user_subscriptions` 에 Toss billing/customer/payment 상태 컬럼 추가.
+  - `payment_events` 테이블 추가로 webhook/API 결과 저장 및 provider event
+    idempotency 기반 마련.
+  - `handle_new_auth_user()` 의 구독 생성 로직을 현재 스키마 컬럼
+    (`plan_name`, `trial_start_at`, `trial_end_at`) 기준으로 재정의.
+- B2 server endpoint 골격 구현:
+  - `POST /api/billing/issue-key`
+  - `POST /api/billing/charge`
+  - `POST /api/billing/cancel`
+  - `POST /api/webhook/toss`
+  - Toss REST wrapper 추가: billing key 발급, billing charge, billing key 삭제.
+- `.env.local.example` 에 Toss/client/server/cron env 추가.
+- Supabase local migration 적용 후 `database.types.ts` 재생성.
+
+### Verification
+
+- `supabase migration up` — local DB 적용 완료.
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 86 tests pass.
+- `npm --prefix apps/web run build` — pass.
+
+### Follow-up
+
+- B4 UI 연동: Toss SDK `requestBillingAuth` 호출, `authKey/customerKey` 를
+  `/api/billing/issue-key` 로 전달.
+- B3 cron 선택: Vercel Cron 또는 Supabase Cron 중 하나로
+  `/api/billing/charge` 호출. `BILLING_CRON_SECRET` 필수.
+- Toss webhook signature/secret 검증은 운영 대시보드에서 실제 webhook secret
+  및 header 스펙 확인 후 `/api/webhook/toss` 에 보강.
+
+## 2026-05-14 Phase 7 Pro Checkout UI Wiring
+
+### Codex
+
+- SubscriptionPanel의 월간/연간 Pro 카드가 선택 plan을 UpgradeModal로 전달하도록
+  변경.
+- Toss JS SDK v2 loader 추가 (`https://js.tosspayments.com/v2/standard`).
+- UpgradeModal에서 로그인 사용자와 `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`가
+  준비되면 `payment.requestBillingAuth()` 호출:
+  - method: `CARD`
+  - successUrl: `/billing/success?planInterval=monthly|yearly`
+  - failUrl: `/billing/fail?planInterval=monthly|yearly`
+  - customerKey: Supabase user id
+- `/billing/success` 추가:
+  - Toss redirect query의 `authKey`, `customerKey`, `planInterval`을 받아
+    `/api/billing/issue-key`로 전달.
+  - 성공 시 30일 Trial 시작 안내.
+- `/billing/fail` 추가:
+  - Toss redirect error code/message 표시.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 86 tests pass.
+- `npm --prefix apps/web run build` — pass.
+
+### Follow-up
+
+- 사용자가 Toss 개발자센터에서 테스트용 API 개별 연동 키를 발급해
+  `apps/web/.env.local`에 `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`,
+  `TOSS_PAYMENTS_SECRET_KEY`를 채워야 실제 카드 등록창과 billing key 발급
+  smoke test 가능.
+- env 변경 후 web dev server 재시작 필요.
+- SubscriptionPanel이 DB의 `user_subscriptions` 상태를 직접 읽어 다음 결제일,
+  등록 카드 일부, 취소 버튼을 표시하도록 보강.
+- 회원가입 직후 billing 등록 step 강제는 별도 onboarding UI로 분리.
+
+## 2026-05-14 Payment UX / Future Providers
+
+### Codex
+
+- 사용자가 Toss 자동결제 화면이 "카드 등록하기"로 보이는 점을 지적.
+- 기술 구조는 Toss Payments billing key 발급을 유지하되, 사용자-facing 문구는
+  일반 결제 UI에 가깝게 변경:
+  - UpgradeModal CTA: "카드 등록하기" → "Toss로 결제하기"
+  - 진행 상태: "결제창 여는 중" → "Toss 연결 중"
+  - success/fail 페이지의 "카드 등록" 표현 → "Toss 결제" 표현
+- 결제 모달에 결제수단 버튼 UI 추가:
+  - Toss만 enabled.
+  - 신용카드 / 계좌이체 / 네이버페이 / 카카오페이 / 기타결제수단은 브랜드
+    색을 반영하되 disabled 예정 상태.
+- 하단 "취소" / "Toss로 결제하기" CTA를 제거하고 결제수단 버튼 자체가 액션이
+  되도록 변경. 현재는 Toss 버튼 클릭 시 바로 Toss billing auth 창을 연다.
+- v1 결제 provider는 Toss Payments 빌링 유지.
+- 네이버페이 자동결제, 카카오페이 자동결제, PortOne 경유 다중 PG는 추후
+  결제수단 확장 트랙으로 문서화. 확장 시 provider-agnostic subscription /
+  payment method 모델로 점진 전환 필요.
+
+## 2026-05-14 Phase 7 Pro Checkout Subscription Status
+
+### Codex
+
+- `GET /api/billing/subscription` 추가:
+  - 로그인 사용자를 Supabase server client로 확인.
+  - service-role client로 `user_subscriptions` 현재 row 조회.
+  - plan/status/trial/subscribed/next billing/payment method fields 반환.
+- Settings → 구독 패널이 원격 subscription 상태를 읽도록 연결:
+  - status badge: Trial / 활성 / 결제 확인 필요 / 일시중지 / 만료 / 해지됨.
+  - 결제 주기, 다음 결제일, 결제수단, Trial 종료일 표시.
+  - 새로고침 버튼 추가.
+  - Toss 구독이 활성 상태면 `POST /api/billing/cancel`로 구독 해지 버튼 표시.
+- 기존 local settings `plan` 대신 서버 subscription row를 구독 상태 source of
+  truth로 사용.
+
+### Verification
+
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web test` — 7 files / 86 tests pass.
+- `npm --prefix apps/web run build` — pass.
+
+### Follow-up
+
+- 실제 Toss billing auth smoke 후 success page → subscription panel refresh
+  시 값이 기대대로 표시되는지 수동 확인.
+- 회원가입 직후 billing 등록 step 강제(B4-c)와 cron(B3)은 계속 잔여.
+- 사용자가 hosted Supabase에 `supabase db push` 실행. 이후
+  `/api/billing/subscription` 이 hosted DB에서 200 응답으로 확인됨.
+
+## 2026-05-14 Claude Handoff Prep
+
+### Codex
+
+- Claude 전환을 위해 `docs/claude_handoff.md`를 최신화:
+  - 날짜를 2026-05-14로 갱신.
+  - 현재 worktree에 남아 있는 Pro checkout 변경 파일 목록을 명시.
+  - 최신 verification expectation 갱신: web tests 86개, iOS Swift tests 30개.
+  - Phase 7 web shape를 desktop shell + Pro checkout wiring 기준으로 갱신.
+  - Hosted Supabase applied migrations에 waitlist / toss billing 추가.
+  - Pro checkout 상세 섹션 추가:
+    schema, Toss server/client wrappers, billing API routes, success/fail pages,
+    subscription panel behavior, known limitations, immediate next steps.
+- `README.md`, `next_steps.md`, `just_do_db_schema.md`, `worklog.md`는 이미
+  Toss billing / future providers / hosted migration 상태를 반영.
+
+### Current Uncommitted Scope
+
+- Web payment code:
+  - `apps/web/src/lib/billing/`
+  - `apps/web/src/app/api/billing/`
+  - `apps/web/src/app/api/webhook/toss/`
+  - `apps/web/src/app/billing/`
+  - `apps/web/src/features/just-do/app-shell.tsx`
+- DB/types:
+  - `supabase/migrations/20260514061000_toss_billing.sql`
+  - `apps/web/src/lib/supabase/database.types.ts`
+- Docs/env template:
+  - `apps/web/.env.local.example`
+  - `README.md`
+  - `docs/claude_handoff.md`
+  - `docs/just_do_db_schema.md`
+  - `docs/next_steps.md`
+  - `docs/worklog.md`

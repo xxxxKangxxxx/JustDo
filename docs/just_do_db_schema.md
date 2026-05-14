@@ -308,7 +308,7 @@ CREATE TABLE public.user_subscriptions (
   user_id         UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   plan_name       TEXT NOT NULL DEFAULT 'free',  -- 'free', 'pro'
   status          TEXT NOT NULL DEFAULT 'trial'
-                  CHECK (status IN ('trial', 'active', 'expired', 'cancelled')),
+                  CHECK (status IN ('trial', 'active', 'past_due', 'paused', 'expired', 'cancelled')),
 
   -- Trial 기간
   trial_start_at  TIMESTAMPTZ DEFAULT NOW(),
@@ -321,10 +321,46 @@ CREATE TABLE public.user_subscriptions (
   -- 알림 발송 여부
   reminded_7d     BOOLEAN DEFAULT FALSE,  -- 만료 7일 전 알림 발송 여부
 
+  -- Toss Payments 자동결제
+  billing_provider TEXT CHECK (billing_provider IS NULL OR billing_provider IN ('toss_payments')),
+  toss_billing_key TEXT,
+  toss_customer_key TEXT,
+  toss_last_payment_key TEXT,
+  plan_interval TEXT NOT NULL DEFAULT 'monthly' CHECK (plan_interval IN ('monthly', 'yearly')),
+  amount_krw INTEGER NOT NULL DEFAULT 1900 CHECK (amount_krw > 0),
+  currency TEXT NOT NULL DEFAULT 'KRW' CHECK (currency = 'KRW'),
+  next_billing_at TIMESTAMPTZ,
+  cancel_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  last_payment_at TIMESTAMPTZ,
+  payment_failures INTEGER NOT NULL DEFAULT 0 CHECK (payment_failures >= 0),
+  payment_method_label TEXT,
+  payment_method_last4 TEXT,
+
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW(),
 
   UNIQUE (user_id)
+);
+```
+
+### payment_events
+> 결제 provider webhook/API 결과 저장 및 멱등 처리
+
+```sql
+CREATE TABLE public.payment_events (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider          TEXT NOT NULL CHECK (provider IN ('toss_payments')),
+  provider_event_id TEXT,
+  event_type        TEXT NOT NULL,
+  payment_key       TEXT,
+  order_id          TEXT,
+  subscription_id   UUID REFERENCES public.user_subscriptions(id) ON DELETE SET NULL,
+  user_id           UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  payload           JSONB NOT NULL DEFAULT '{}'::jsonb,
+  processed_at      TIMESTAMPTZ,
+  processing_error  TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 

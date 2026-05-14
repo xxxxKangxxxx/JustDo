@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-11
+Date: 2026-05-14
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -43,6 +43,10 @@ cp apps/web/.env.local.example apps/web/.env.local
 # then edit:
 # - NEXT_PUBLIC_SUPABASE_URL
 # - NEXT_PUBLIC_SUPABASE_ANON_KEY
+# - SUPABASE_SERVICE_ROLE_KEY
+# - NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY
+# - TOSS_PAYMENTS_SECRET_KEY
+# - BILLING_CRON_SECRET
 ```
 
 For hosted (cloud) Supabase the values come from
@@ -82,7 +86,7 @@ callback is `http://127.0.0.1:3000/callback`.
 
 ```bash
 npm --prefix apps/web run lint     # expect: pass
-npm --prefix apps/web test         # expect: 76 tests pass
+npm --prefix apps/web test         # expect: 86 tests pass
 npm --prefix apps/web run build    # expect: pass
 git diff --check                   # expect: clean
 ```
@@ -91,7 +95,7 @@ For iOS shared-code verification:
 
 ```bash
 cd apps/ios
-swift test                         # expect: 15 tests pass
+swift test                         # expect: 30 tests pass
 ```
 
 If any step fails, stop and investigate before starting new work. The latest
@@ -120,9 +124,28 @@ they belong to other projects on this machine.
 
 ## Working Tree State
 
-At handoff, the intent is to leave `main` clean and pushed. If `git status -sb`
-shows local changes, they should be reviewed against the latest worklog entry
-before continuing.
+At this handoff, Codex intentionally leaves local changes in the worktree for
+Claude to review/continue. They are not yet committed in this workspace. If
+`git status -sb` shows the files below, they are expected Pro checkout work:
+
+```text
+README.md
+apps/web/.env.local.example
+apps/web/src/app/api/billing/
+apps/web/src/app/api/webhook/
+apps/web/src/app/billing/
+apps/web/src/features/just-do/app-shell.tsx
+apps/web/src/lib/billing/
+apps/web/src/lib/supabase/database.types.ts
+docs/claude_handoff.md
+docs/just_do_db_schema.md
+docs/next_steps.md
+docs/worklog.md
+supabase/migrations/20260514061000_toss_billing.sql
+```
+
+Do not discard these changes. They include the Toss Payments schema/API/UI
+track and documentation updates.
 
 Latest pushed commits in this session (Claude Code, 2026-04-30):
 
@@ -151,7 +174,7 @@ cdd5b1f docs(ios): start phase 6 planning
 - Phase 5.6 User Preferences Sync — done.
 - Phase 5.7 Habit Recurrence (daily + weekly) — done for new habit creation,
   storage/sync, selectors, Habit screen, Stats screen, and Habit detail/edit.
-- **Phase 7 Web Desktop Redesign — in progress (v1 출시 차단 항목, 2026-05-10 신설)**.
+- **Phase 7 Web Desktop Redesign — 결제 외 완료; Pro checkout 잔여 진행 중**.
   - 사용자가 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`에
     데스크탑 web prototype을 제공함.
   - First implementation pass shipped in `apps/web/src/features/just-do/app-shell.tsx`:
@@ -160,10 +183,9 @@ cdd5b1f docs(ios): start phase 6 planning
     Stats dashboard, Settings split layout, category/habit management, task tag
     input, and Pro upgrade entry surface.
   - Mobile web 안내 page is implemented as a viewport-based fallback for
-    `< lg` screens, before and after sign-in. Real iOS download link and
-    Android waitlist wiring remain future work. Once the public App Store URL
-    exists, iOS mobile browser visits should auto-redirect there, with the
-    안내 page retained as fallback.
+    `< lg` screens, before and after sign-in. iOS App Store URL is wired by
+    `NEXT_PUBLIC_IOS_APP_STORE_URL`; Android waitlist is wired through
+    `public.waitlist` + `POST /api/waitlist`.
   - Desktop UI interaction tests now cover Task/Habit add modal, calendar date
     selection vs `+` add, Today Task/Habit check toggles, and Settings selected
     section rendering.
@@ -173,7 +195,27 @@ cdd5b1f docs(ios): start phase 6 planning
     daily/weekly recurrence, weekday picker, and reminder time.
   - Category reorder is restored in Settings → 카테고리 관리 with up/down
     controls backed by `position` swaps.
-  - 다음은 manual offline sync verification, 해상도별 시각 검증.
+  - Manual offline sync verification and 1024 / 1280 / 1440 / 1920 visual
+    verification passed on 2026-05-13.
+  - Pro checkout track is the remaining v1 blocker:
+    - B1 schema migration done: `20260514061000_toss_billing.sql`.
+    - B2 API route skeleton done:
+      `POST /api/billing/issue-key`, `POST /api/billing/charge`,
+      `POST /api/billing/cancel`, `POST /api/webhook/toss`,
+      `GET /api/billing/subscription`.
+    - B4-a UI wiring done: Toss JS SDK v2 `requestBillingAuth()` from
+      Settings -> 구독 -> Pro plan -> Toss payment method button.
+    - B4-b subscription panel status/cancel done: reads
+      `user_subscriptions`, shows status / next billing / payment method /
+      trial end, and calls `/api/billing/cancel`.
+    - Hosted Supabase migration was pushed by the user on 2026-05-14.
+      `/api/billing/subscription` returned 200 afterward. Before the push it
+      failed because hosted `user_subscriptions.billing_provider` did not exist.
+    - Remaining: B3 cron, B4-c onboarding billing step, B6 tests, Toss webhook
+      signature verification once official dashboard secret/header details are
+      available.
+    - v1 keeps Toss Payments billing. Naver Pay recurring, Kakao Pay recurring,
+      and PortOne multi-PG are documented as future payment-method expansion.
   - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
@@ -250,10 +292,10 @@ cdd5b1f docs(ios): start phase 6 planning
 - Add 플로우는 partial-height bottom sheet.
 - Auth 랜딩은 Apple/Google/Kakao/Email 4 버튼 + "Just Do" 워드마크 (`reference/proto/auth.jsx`, `auth-button.jsx`).
 
-### App Shape — Web (Phase 7 desktop shell, first pass)
+### App Shape — Web (Phase 7 desktop shell + Pro checkout wiring)
 
 > 현재 web은 `reference/web_proto/`와 `Just Do - Web Prototype.html`의 desktop
-> reference를 기준으로 재작성 중. iOS `reference/proto/`와 UI/UX는 의도적으로 분기.
+> reference를 기준으로 재작성됨. iOS `reference/proto/`와 UI/UX는 의도적으로 분기.
 
 - Left sidebar: Calendar / Stats / Settings, filters, priority filter, tags, quick search.
 - Header: date navigation, view switcher (month/week/list), search, command palette, Today panel toggle, `새 Task` entry.
@@ -261,9 +303,18 @@ cdd5b1f docs(ios): start phase 6 planning
 - Today panel: selected-date Task list and active Habit list; Task/Habit check toggles live on the right side. Task completion stays in the same list with checkbox/strikethrough, not a separate completed section.
 - Add modal: Task/Habit tabs. Task supports title, date range, time, category, priority, tag chips. Habit supports title, emoji, daily/weekly recurrence, weekday picker, reminder time.
 - Settings: left settings menu with one selected section rendered at a time. Sections include account, notifications, display, categories, habits, subscription, sync, and data.
-- Category management: add, rename, color edit, delete. Reorder still needs follow-up.
-- Habit management: add from global add modal, delete from Settings. Edit still needs follow-up.
-- Subscription: Pro upgrade entry surface exists, but real checkout/webhook is not implemented yet.
+- Category management: add, rename, color edit, delete, up/down reorder.
+- Habit management: add from global add modal; edit/delete from Settings.
+- Subscription:
+  - Plan cards for monthly (`₩1,900 / 월`) and yearly (`₩9,900 / 년`).
+  - Upgrade modal has payment-method buttons. Toss is enabled and opens Toss
+    billing auth; card/bank/Naver Pay/Kakao Pay/other are disabled future
+    surfaces with provider colors.
+  - `/billing/success` receives Toss `authKey/customerKey/planInterval` and
+    calls `/api/billing/issue-key`.
+  - `/billing/fail` displays Toss error code/message.
+  - Subscription panel reads server state through `/api/billing/subscription`
+    and can call `/api/billing/cancel`.
 
 > Data layer remains the same: custom categories, task tags, habit recurrence,
 > IndexedDB local-first queue, Supabase sync/realtime, and auth still use the
@@ -285,6 +336,8 @@ Applied migrations:
 - `20260429052000_enable_realtime.sql`
 - `20260430090000_category_management.sql`
 - `20260430103000_user_preferences.sql`
+- `20260511064305_waitlist.sql`
+- `20260514061000_toss_billing.sql`
 
 Realtime publication includes:
 
@@ -304,6 +357,21 @@ https://cohkxnwsbhrsfmsjqdpa.supabase.co/auth/v1/callback
 
 `apps/web/.env.local` is gitignored and currently expected to point to the
 cloud project for browser testing. Do not print or commit real key values.
+
+Current expected hosted env keys for Pro checkout testing:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY
+TOSS_PAYMENTS_SECRET_KEY
+BILLING_CRON_SECRET
+```
+
+The Toss keys are test API individual integration keys from Toss Payments
+Developer Center. The payment widget keys are not used for this billing flow.
+`BILLING_CRON_SECRET` is internal and is not issued by Toss.
 
 ## Important Storage Architecture
 
@@ -400,6 +468,17 @@ apps/web/src/features/just-do/tags.ts
 apps/web/src/features/just-do/tags.test.ts
 apps/web/src/features/just-do/persistence.test.ts
 
+apps/web/src/lib/billing/toss.ts
+apps/web/src/lib/billing/toss-client.ts
+apps/web/src/app/api/billing/issue-key/route.ts
+apps/web/src/app/api/billing/charge/route.ts
+apps/web/src/app/api/billing/cancel/route.ts
+apps/web/src/app/api/billing/subscription/route.ts
+apps/web/src/app/api/webhook/toss/route.ts
+apps/web/src/app/billing/success/page.tsx
+apps/web/src/app/billing/success/BillingSuccessClient.tsx
+apps/web/src/app/billing/fail/page.tsx
+
 apps/ios/Package.swift
 apps/ios/JustDoShared/Domain/JustDoModels.swift
 apps/ios/JustDoShared/Sync/MutationQueueSchema.swift
@@ -424,6 +503,8 @@ supabase/migrations/20260429021447_add_habit_emoji.sql
 supabase/migrations/20260429052000_enable_realtime.sql
 supabase/migrations/20260430090000_category_management.sql
 supabase/migrations/20260430103000_user_preferences.sql
+supabase/migrations/20260511064305_waitlist.sql
+supabase/migrations/20260514061000_toss_billing.sql
 supabase/scripts/reset_local_app_data.sql
 ```
 
@@ -433,7 +514,7 @@ Latest web checks:
 
 ```bash
 npm --prefix apps/web run lint     # pass
-npm --prefix apps/web test         # 76 tests pass
+npm --prefix apps/web test         # 86 tests pass
 npm --prefix apps/web run build    # pass
 git diff --check                   # pass
 ```
@@ -442,7 +523,7 @@ Latest iOS shared-code checks:
 
 ```bash
 cd apps/ios
-swift test                         # 15 tests pass
+swift test                         # 30 tests pass
 ```
 
 Cloud manual checks already performed by the user/Codex:
@@ -452,6 +533,81 @@ Cloud manual checks already performed by the user/Codex:
 - Task completion persisted.
 - Habit check persisted to `habit_logs`.
 - Realtime-oriented flows were manually checked before Phase 5 work.
+- Phase 7 desktop visual verification passed at 1024 / 1280 / 1440 / 1920.
+- Phase 7 manual hosted offline sync verification passed.
+- User pushed hosted Supabase billing migration on 2026-05-14; after that,
+  `/api/billing/subscription` returned 200 from the running dev server.
+
+## Pro Checkout Details For Claude
+
+Provider decision:
+
+- v1 uses Toss Payments billing / automatic payment.
+- UX should avoid saying "card registration" in the app. The user-facing flow
+  says "Toss 결제" and the active payment method button itself opens the Toss
+  flow.
+- Naver Pay recurring, Kakao Pay recurring, and PortOne multi-PG are planned
+  future expansion tracks. Do not start those unless explicitly asked.
+
+Implemented files:
+
+- `supabase/migrations/20260514061000_toss_billing.sql`
+  - Adds billing columns to `public.user_subscriptions`.
+  - Adds `public.payment_events`.
+  - Rewrites `handle_new_auth_user()` to create a 30-day Pro trial row using
+    the current column names (`plan_name`, `trial_start_at`, `trial_end_at`).
+- `apps/web/src/lib/billing/toss.ts`
+  - Server-only Toss REST wrapper:
+    `issueTossBillingKey`, `chargeTossBillingKey`, `deleteTossBillingKey`.
+- `apps/web/src/lib/billing/toss-client.ts`
+  - Client Toss SDK v2 loader for `https://js.tosspayments.com/v2/standard`.
+- `apps/web/src/app/api/billing/issue-key/route.ts`
+  - Authenticated route. Takes Toss `authKey/customerKey/planInterval`, issues
+    billing key, upserts `user_subscriptions`.
+- `apps/web/src/app/api/billing/charge/route.ts`
+  - Cron-protected route. Requires `Authorization: Bearer $BILLING_CRON_SECRET`.
+  - Charges due subscriptions and updates payment failure counters.
+- `apps/web/src/app/api/billing/cancel/route.ts`
+  - Authenticated route. Deletes Toss billing key if present and marks
+    subscription cancelled.
+- `apps/web/src/app/api/billing/subscription/route.ts`
+  - Authenticated route. Reads current subscription state for Settings -> 구독.
+  - Includes a legacy fallback for environments where the billing migration is
+    not yet applied; hosted has now been migrated, but keep the fallback.
+- `apps/web/src/app/api/webhook/toss/route.ts`
+  - Skeleton webhook receiver. Stores events with idempotency via
+    `payment_events`. Signature verification is still TODO.
+- `apps/web/src/app/billing/success/*`
+  - Handles Toss success redirect and calls `/api/billing/issue-key`.
+- `apps/web/src/app/billing/fail/page.tsx`
+  - Displays Toss fail code/message.
+- `apps/web/src/features/just-do/app-shell.tsx`
+  - SubscriptionPanel now reads `/api/billing/subscription`.
+  - UpgradeModal now shows payment-method buttons; Toss button opens billing
+    auth; other buttons are disabled future surfaces.
+
+Important current limitations:
+
+- B3 cron is not configured. `/api/billing/charge` exists but nothing calls it.
+- B4-c onboarding billing step is not implemented. Users can still log in and
+  use the app without forced billing setup.
+- Toss webhook signature verification is not implemented. Add it after
+  confirming the official dashboard secret/header behavior for this account.
+- There are no Toss-specific automated tests yet. B6 remains open.
+- `SubscriptionPanel` does not auto-refresh after `/billing/success` redirect
+  unless the user returns/reloads or clicks refresh; this is acceptable for now
+  but can be improved.
+
+Recommended immediate next steps:
+
+1. Run a manual Toss test flow from `http://localhost:3000`:
+   Settings -> 구독 -> Pro plan -> Toss button -> Toss auth -> `/billing/success`.
+2. Confirm `user_subscriptions` row has `billing_provider='toss_payments'`,
+   `toss_billing_key`, `toss_customer_key`, `next_billing_at`, and payment
+   method metadata.
+3. Confirm Settings -> 구독 shows Trial/next billing/payment method after refresh.
+4. Then choose between B3 cron and B4-c onboarding. B3 is backend-critical;
+   B4-c is product-policy critical.
 
 ## Known Notes / Risks
 
@@ -496,13 +652,16 @@ Cloud manual checks already performed by the user/Codex:
    - 진행 상태: shell / 모달 / 단축키 / 드래그 / Today / Settings / 카테고리·
      습관 관리 / 태그 편집 / 모바일 안내 페이지 / 1024–1920 시각 검증 /
      manual offline sync 재검증 모두 통과.
-   - 남은 단일 항목: **Pro checkout backend** (Toss Payments 빌링).
-   - **Pro checkout 결정 (2026-05-11)**: provider = Toss Payments 빌링,
-     Trial = 가입 즉시 빌링 정보 요구 + 30일 후 자동 결제.
-     사업자등록 / 가맹점 심사 등 외부 선결 조건은 사용자 트랙 (Track A).
-     코드 트랙 (Track B: schema → webhook/issue-key → UI → cron) 은 Toss
-     테스트 키로 진행. iOS 결제는 별도 트랙(Apple IAP, Phase 6 v1 ship 후).
-     세부 단계: `next_steps.md` Phase 7-3 Pro checkout.
+   - 남은 단일 항목: **Pro checkout** (Toss Payments 빌링).
+   - **Pro checkout 결정 (2026-05-11, 2026-05-14 갱신)**:
+     provider = Toss Payments 빌링, Trial = 가입 즉시 결제수단 연결 + 30일 후
+     자동 결제. 사업자등록 / 가맹점 심사 등 외부 선결 조건은 사용자 트랙
+     (Track A). 코드 트랙은 Toss 테스트 키로 진행 가능.
+     2026-05-14 현재 B1 schema, B2 server endpoint 골격, B4-a Toss billing
+     UI wiring, B4-b subscription 상태 표시/취소 버튼은 구현됨. 남은 코드
+     항목은 B3 cron, B4-c onboarding billing step, B6 회귀 테스트.
+     네이버페이 자동결제 / 카카오페이 자동결제 / PortOne 경유 다중 PG는
+     v1 이후 결제수단 확장 트랙으로 문서화됨.
 
 2. **iOS 잔여 작업** (Phase 7과 독립, 병렬 가능)
    - Native detail editing (edit/delete from pushed task/habit detail screens).
@@ -520,7 +679,7 @@ Cloud manual checks already performed by the user/Codex:
    - Configure real iPhone for device testing (resolves the Personal
      Team provisioning warnings).
 
-### Codex 세션을 재개하는 경우 (2026-05-13 갱신)
+### Codex 세션을 재개하는 경우 (2026-05-14 갱신)
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5 와 `next_steps.md` Phase 7 읽기.
 - Web 작업은 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`을
@@ -530,8 +689,12 @@ Cloud manual checks already performed by the user/Codex:
   desktop shell, mobile 안내 페이지(iOS App Store CTA + Android waitlist 폼),
   desktop interaction tests, Task tag edit, Habit edit, Category reorder,
   1024–1920 시각 검증, manual offline sync 5-stage 검증.
-- **남은 v1 ship 차단 항목은 Pro checkout backend 단 하나** (Toss Payments
-  빌링). 자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
+- **남은 v1 ship 차단 항목은 Pro checkout 잔여 작업**. Toss Payments 빌링
+  기준으로 DB migration, API route 골격, Toss JS SDK UI wiring,
+  SubscriptionPanel의 `user_subscriptions` 상태 조회/취소 버튼은 들어가 있음.
+  다음 우선순위는 `/api/billing/charge` cron 선택/설정, onboarding billing
+  step, Toss webhook signature 보강. 자세한 단계 / Track A·B 분리는
+  `next_steps.md` Phase 7-3.
 - iOS 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7 과 독립
   트랙. `ios_phase6_status.md` "Next Work" 참고.
 - 도메인/sync 레이어 (persistence, supabase-mapping, store)는 기존 구현을 유지.
