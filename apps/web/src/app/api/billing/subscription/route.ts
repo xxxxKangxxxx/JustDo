@@ -54,40 +54,65 @@ const withBillingDefaults = (row: BaseSubscription) => ({
 });
 
 export async function GET() {
-  const authClient = await createSupabaseServerClient();
-  const { data, error: userError } = await authClient.auth.getUser();
-  if (userError || !data.user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const supabase = getSupabaseServiceRoleClient();
-  const { data: subscription, error } = await supabase
-    .from("user_subscriptions")
-    .select(billingSubscriptionSelect)
-    .eq("user_id", data.user.id)
-    .maybeSingle();
-
-  if (error) {
-    if (error.message.includes("does not exist")) {
-      const { data: legacySubscription, error: legacyError } = await supabase
-        .from("user_subscriptions")
-        .select(baseSubscriptionSelect)
-        .eq("user_id", data.user.id)
-        .maybeSingle();
-
-      if (!legacyError) {
-        return NextResponse.json({
-          subscription: legacySubscription
-            ? withBillingDefaults(legacySubscription as unknown as BaseSubscription)
-            : null,
-          schema: "legacy",
-        });
-      }
+  try {
+    const authClient = await createSupabaseServerClient();
+    const { data, error: userError } = await authClient.auth.getUser();
+    if (userError || !data.user) {
+      return NextResponse.json(
+        { error: "unauthorized", debug: { stage: "auth", message: userError?.message } },
+        { status: 401 },
+      );
     }
 
-    console.error("[billing.subscription] query failed", error.message);
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
-  }
+    const supabase = getSupabaseServiceRoleClient();
+    const { data: subscription, error } = await supabase
+      .from("user_subscriptions")
+      .select(billingSubscriptionSelect)
+      .eq("user_id", data.user.id)
+      .maybeSingle();
 
-  return NextResponse.json({ subscription, schema: "billing" });
+    if (error) {
+      if (error.message.includes("does not exist")) {
+        const { data: legacySubscription, error: legacyError } = await supabase
+          .from("user_subscriptions")
+          .select(baseSubscriptionSelect)
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+
+        if (!legacyError) {
+          return NextResponse.json({
+            subscription: legacySubscription
+              ? withBillingDefaults(legacySubscription as unknown as BaseSubscription)
+              : null,
+            schema: "legacy",
+          });
+        }
+      }
+
+      console.error("[billing.subscription] query failed", error.message);
+      return NextResponse.json(
+        {
+          error: "server_error",
+          debug: {
+            stage: "query",
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+          },
+        },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ subscription, schema: "billing" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack?.split("\n").slice(0, 5).join("\n") : undefined;
+    console.error("[billing.subscription] uncaught", message);
+    return NextResponse.json(
+      { error: "server_error", debug: { stage: "uncaught", message, stack } },
+      { status: 500 },
+    );
+  }
 }

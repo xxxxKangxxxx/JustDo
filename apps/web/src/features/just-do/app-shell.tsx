@@ -226,10 +226,10 @@ function JustDoViewport() {
   if (!auth.user) {
     return (
       <>
-        <div className="lg:hidden">
+        <div className="md:hidden">
           <MobileWebGuide mode={mode} />
         </div>
-        <div className="hidden lg:block">
+        <div className="hidden md:block">
           <AuthScreen mode={mode} />
         </div>
       </>
@@ -238,11 +238,11 @@ function JustDoViewport() {
 
   return (
     <>
-      <div className="lg:hidden">
+      <div className="md:hidden">
         <MobileWebGuide mode={mode} />
       </div>
       <div
-        className="hidden h-screen overflow-hidden lg:flex"
+        className="hidden h-screen overflow-hidden md:flex"
         style={{ background: t.bg, color: t.text, fontFamily: fontStack }}
       >
         <Sidebar
