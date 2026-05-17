@@ -14,12 +14,14 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 자세한 내용: `just_do_prd.md` §1.5 / `next_steps.md` Phase 7 / 본 문서
 > "App Shape Now" 섹션 / `worklog.md` 2026-05-10 엔트리.
 
-> **2026-05-14 Deployment 트랙 시작** — 운영 도메인 `justdo.co.kr` (가비아 구매 완료),
-> DNS = Route 53 위임, AWS 계정 셋업 완료 (IAM admin `justdo-admin`, Budget
-> `justdo-monthly` $20, 리전 `ap-northeast-2`). 코드 측 사전 정비 완료:
-> 루트 `amplify.yml` 추가, secret leak grep 통과, callback route origin-agnostic
-> 확인, `.env.local.example` Amplify 등록 가이드 보강, lint/test 86개/build 통과.
-> 다음: Route 53 hosted zone 생성 → 가비아 네임서버 교체 → Amplify GitHub 연결.
+> **2026-05-17 운영 도메인 LIVE** — `https://www.justdo.co.kr` (apex →
+> www redirect). Amplify Hosting Compute (`dcsdzu0ew3l2m`, 리전
+> `ap-northeast-2`), Route 53 위임, ACM TLS, Next.js SSR (`Next.js - SSR`
+> framework + `WEB_COMPUTE` platform + `AMPLIFY_MONOREPO_APP_ROOT=apps/web`).
+> Production smoke test 통과 — Google 로그인 / Task·Habit 생성·persist /
+> Settings 구독 패널 Trial 상태 노출 / 모바일 안내 페이지 (768px 기준).
+> 남은 Deployment 항목: Toss webhook URL 등록(가맹점 심사 후), Supabase
+> Redirect URLs에서 amplifyapp.com 백업 항목 제거.
 
 ## Resume Work — cold-start checklist
 

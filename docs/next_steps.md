@@ -433,13 +433,21 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Purchase production domain in Gabia — `justdo.co.kr` (2026-05-14).
 - [x] Decide DNS mode — **Route 53 위임** (2026-05-14).
 - [x] AWS 계정 셋업 — root MFA, IAM admin user (`justdo-admin`), 결제수단, Budget 알림 (`justdo-monthly` $20, 50/80/100% 실제 + 100% 예측), 리전 `ap-northeast-2` (2026-05-14).
-- [ ] Create Route 53 hosted zone for `justdo.co.kr` + 가비아 네임서버 교체.
-- [ ] Connect `apps/web` to AWS Amplify Hosting.
-- [ ] Add production Supabase env vars in Amplify.
-- [ ] Connect custom domain and verify AWS-managed TLS certificate.
-- [ ] Add production OAuth callback URLs in Supabase and Google OAuth settings.
-- [ ] Run production smoke test after deployment.
+- [x] Create Route 53 hosted zone for `justdo.co.kr` + 가비아 네임서버 교체 (2026-05-14).
+- [x] Connect `apps/web` to AWS Amplify Hosting (app id `dcsdzu0ew3l2m`, 2026-05-16).
+- [x] Add production Supabase env vars in Amplify (2026-05-16).
+- [x] Connect custom domain and verify AWS-managed TLS certificate — `www.justdo.co.kr` canonical, apex redirect (2026-05-17).
+- [x] Add production OAuth callback URLs in Supabase — Site URL `https://www.justdo.co.kr`, Redirect URLs allowlist 6개 (2026-05-16).
+- [x] Run production smoke test after deployment — 운영 도메인 LIVE, Google 로그인 / Task / Habit / Settings 구독 패널 정상 동작 (2026-05-17).
 - [ ] Toss webhook URL 등록 (`https://www.justdo.co.kr/api/webhook/toss`) — Toss 운영 심사 후.
+- [ ] Supabase Redirect URLs에서 `https://main.dcsdzu0ew3l2m.amplifyapp.com/callback` 제거 (smoke test용, 더 이상 불필요).
+
+### Deployment 트랙에서 발견한 SSR 함정 (참고)
+
+1. Amplify Hosting의 자동 framework detection이 monorepo + appRoot 조합에서 실패 → CLI로
+   `aws amplify update-app --platform WEB_COMPUTE` + `aws amplify update-branch --framework "Next.js - SSR"` 명시 + `AMPLIFY_MONOREPO_APP_ROOT=apps/web` 환경변수 등록 필요.
+2. SSR Lambda의 `request.url` 호스트가 `localhost`로 들어옴 → `x-forwarded-host`/`x-forwarded-proto` 헤더 우선 사용 (`app/(auth)/callback/route.ts`).
+3. Amplify Hosting Compute가 환경변수를 빌드 shell에는 노출하지만 SSR Lambda runtime에는 자동 전달 안 함 → `amplify.yml`의 build 단계에서 `.env.production` 생성으로 Next.js가 server bundle에 inline.
 
 ## Open Decisions
 

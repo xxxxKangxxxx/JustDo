@@ -2320,3 +2320,72 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Supabase / Google OAuth 운영 callback URL 추가:
   - `https://www.justdo.co.kr/callback`
   - `https://justdo.co.kr/callback` (apex 직접 서빙 시).
+
+## 2026-05-16 Deployment 트랙 — Route 53 + Amplify 연결 + SSR 함정
+
+### Claude Code
+
+- Route 53 hosted zone (`justdo.co.kr`) 생성 → 4개 NS records를 가비아 네임서버에
+  교체 (사용자 콘솔). propagation 1시간 내 반영 확인.
+- AWS Amplify Hosting 앱 (`dcsdzu0ew3l2m`, 리전 ap-northeast-2) 생성, GitHub
+  `xxxxKangxxxx/JustDo` `main` 브랜치 연결.
+- 8개 환경 변수 등록 (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  `NEXT_PUBLIC_AUTH_GOOGLE_ENABLED`, `NEXT_PUBLIC_AUTH_APPLE_ENABLED`,
+  `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `TOSS_PAYMENTS_SECRET_KEY`, `BILLING_CRON_SECRET`).
+
+### 발견한 함정 3개
+
+1. **monorepo + Next.js SSR auto-detect 실패**:
+   - 첫 빌드: platform이 `WEB`(정적)으로 잡혀 `.next` 폴더가 정적 파일처럼 노출되며
+     모든 경로가 404.
+   - CLI `aws amplify update-app --platform WEB_COMPUTE`로 platform 변경 → 두 번째
+     빌드는 `Failed to find the deploy-manifest.json file` 에러.
+   - CLI `aws amplify update-branch --framework "Next.js - SSR"` 추가 → 세 번째
+     빌드는 `Cannot read 'next' version in package.json. ... AMPLIFY_MONOREPO_APP_ROOT`.
+   - Amplify 환경 변수에 `AMPLIFY_MONOREPO_APP_ROOT=apps/web` 추가 → 빌드 성공.
+2. **SSR Lambda의 `request.url` 호스트가 `localhost`**:
+   - Google OAuth flow 끝나면 `https://localhost:3000/`로 redirect 시도되어
+     `ERR_CONNECTION_REFUSED`.
+   - Supabase Site URL / Redirect URLs는 모두 정상, 우리 `callback/route.ts`가
+     `url.origin`을 그대로 써서 발생.
+   - `x-forwarded-host` / `x-forwarded-proto` 헤더 우선 사용으로 수정
+     (commit `b414595`).
+3. **server-only 환경변수가 SSR Lambda runtime에 inject 안 됨**:
+   - `/api/billing/subscription`이 500 반환. 임시 debug payload 추가해 캡처한
+     메시지: `Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY`.
+   - 원인: Amplify Hosting Compute가 환경 변수를 빌드 shell에는 노출하지만 SSR
+     Lambda runtime에는 자동 전달하지 않음. `NEXT_PUBLIC_*`은 Next.js가 server
+     bundle에도 inline해서 영향 없지만 server-only secret은 undefined.
+   - `amplify.yml`의 build 단계에서 `printenv | grep ... > .env.production`로
+     server-only 값을 Next.js가 server bundle에 inline하게 만드는 패턴 적용
+     (commit `300b86b`). `.gitignore`에도 `.env.production` 추가.
+
+### Verification
+
+- Production smoke test 통과 (2026-05-17): `https://www.justdo.co.kr` 접속,
+  apex `https://justdo.co.kr` → www 자동 redirect, Google 로그인, Task / Habit
+  생성·persist, Settings 구독 패널 Trial 상태 (Trial 종료일 2026-05-29) 노출.
+- TLS 인증서 ACM 발급 정상.
+
+## 2026-05-17 운영 도메인 LIVE + 태블릿 viewport 정책 + Deployment 마무리
+
+### Claude Code
+
+- 운영 smoke test 중 발견한 이슈 fix:
+  - **태블릿 viewport 정책**: 모바일 안내 vs 데스크탑 shell 분기 breakpoint를
+    Tailwind `lg`(1024px) → `md`(768px)로 낮춤. iPad Pro / Air portrait도 데스크탑
+    shell. iPad mini와 phone만 모바일 안내 (commit `da678df`).
+  - **subscription 500 디버그**: 임시 try/catch + debug payload 추가로 원인 파악
+    후 디버그 페이로드 제거, try/catch는 유지 (commit `300b86b`).
+- 운영 도메인 LIVE 사실을 next_steps Deployment Backlog에 박음. 남은 항목:
+  - Toss webhook URL 등록 — Toss 가맹점 심사 후.
+  - Supabase Redirect URLs에서 amplifyapp.com 항목 제거 (smoke test 완료).
+- offline→online sync UI 표시 일관성 이슈는 사용자가 "이번엔 괜찮다" 응답해
+  후속 모니터링으로 미룸 (큐 flush 자체는 정상).
+
+### Follow-up
+
+- Pro Checkout 잔여 (B3 cron, B4-c onboarding, B5 게스트 정책, B6 회귀 테스트).
+- Toss 가맹점 심사 — 사업자등록 → 통신판매업 신고 → Toss 신청 (사용자 트랙).
+- iOS Phase 6 잔여 (offline sync 검증 / detail edit·delete / sync error UI).
