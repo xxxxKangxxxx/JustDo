@@ -2389,3 +2389,41 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Pro Checkout 잔여 (B3 cron, B4-c onboarding, B5 게스트 정책, B6 회귀 테스트).
 - Toss 가맹점 심사 — 사업자등록 → 통신판매업 신고 → Toss 신청 (사용자 트랙).
 - iOS Phase 6 잔여 (offline sync 검증 / detail edit·delete / sync error UI).
+
+## 2026-05-18 Deployment 트랙 마무리 + 세션 종료
+
+### Claude Code
+
+- Supabase Redirect URLs에서 `https://main.dcsdzu0ew3l2m.amplifyapp.com/callback`
+  백업 항목 제거 (사용자 콘솔). 운영 5개 + 로컬 3개 = 5개 URL만 남김.
+- Deployment 트랙 완전 종료. 남은 외부 의존은 Toss 가맹점 심사 → webhook URL
+  등록 한 줄.
+- 다음 세션(Codex 또는 Claude Code) 픽업용 핸드오프 정리:
+  - `README.md` Production 섹션에 `https://www.justdo.co.kr` LIVE 표시.
+  - `docs/claude_handoff.md`:
+    - Date `2026-05-14` → `2026-05-18`.
+    - 운영 LIVE banner에 Redirect URLs 정리 사실 반영.
+    - "다음 작업자가 픽업할 우선순위" 섹션 추가 (Toss 심사 + Pro Checkout
+      B3/B4-c/B5/B6 + iOS 잔여).
+    - "Recommended Next Work" 재정렬 (deployment 트랙 완료로 제거, Toss 심사를
+      1순위로 박음).
+    - "Amplify SSR 함정" 섹션 추가 — 신규 SSR route 추가 시 forwarded host /
+      server-only env injection / monorepo platform·framework 3가지 함정 가이드.
+    - Codex 세션 재개 가이드를 운영 LIVE 기준으로 갱신.
+  - `docs/next_steps.md` "Where We Are" 섹션을 2026-05-18 운영 LIVE 기준으로
+    갱신, 다음 우선순위 명시.
+
+### Verification
+
+- `git status` clean, `main` 기준 push 완료.
+- 메모리(`deployment_domain.md`, `MEMORY.md` index)도 운영 LIVE 기준으로 갱신
+  완료.
+
+### Follow-up
+
+- Toss 가맹점 심사 시작 (사용자 외부 트랙).
+- Pro Checkout B3 cron 구현 — Vercel Cron vs Supabase Cron 선택.
+- Pro Checkout B4-c onboarding billing step UI.
+- Pro Checkout B6 회귀 테스트 — Toss SDK mock + webhook fixture.
+- iOS Phase 6 잔여 (detail edit/delete / sync status UI / hosted offline sync
+  검증 / proto 시각 검증).

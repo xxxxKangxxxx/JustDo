@@ -3,6 +3,10 @@
 This repository holds the Just Do product documents, design references, web app,
 Supabase workspace, and the native iOS implementation track.
 
+**Production:** `https://www.justdo.co.kr` (LIVE 2026-05-17 — AWS Amplify
+Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
+`https://justdo.co.kr` → www redirect.
+
 ## Current Focus
 
 - **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일

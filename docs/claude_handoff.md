@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-14
+Date: 2026-05-18
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -20,8 +20,22 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > framework + `WEB_COMPUTE` platform + `AMPLIFY_MONOREPO_APP_ROOT=apps/web`).
 > Production smoke test 통과 — Google 로그인 / Task·Habit 생성·persist /
 > Settings 구독 패널 Trial 상태 노출 / 모바일 안내 페이지 (768px 기준).
-> 남은 Deployment 항목: Toss webhook URL 등록(가맹점 심사 후), Supabase
-> Redirect URLs에서 amplifyapp.com 백업 항목 제거.
+> Supabase Redirect URLs도 5개(운영 2 + 로컬 3)로 정리됨. 남은 Deployment
+> 항목은 **Toss webhook URL 등록 (`https://www.justdo.co.kr/api/webhook/toss`)
+> — Toss 가맹점 심사 후**.
+
+> **다음 작업자가 픽업할 우선순위 (2026-05-18)**:
+> 1. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
+>    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
+>    코드 트랙은 이와 병렬로 진행 가능.
+> 2. **Pro Checkout B3 cron** — 정기결제 실행 + 실패 retry/pause 로직.
+>    Vercel Cron vs Supabase Cron 선택 필요. Toss 테스트 키로 검증 가능.
+>    `next_steps.md` Phase 7-3 Track B.
+> 3. **Pro Checkout B4-c onboarding + B5 게스트 정책** — 회원가입 직후
+>    billing 등록 step 강제 UI. 게스트→로그인 전이 시 빌링 step 강제.
+> 4. **Pro Checkout B6 회귀 테스트** — Toss SDK mock + webhook fixture.
+> 5. **iOS Phase 6 잔여** — Phase 7과 독립 트랙. detail edit/delete,
+>    sync status UI, hosted Supabase offline sync 검증, proto 시각 검증.
 
 ## Resume Work — cold-start checklist
 
@@ -651,35 +665,35 @@ Recommended immediate next steps:
 
 ## Recommended Next Work
 
-> 2026-05-10 Platform Strategy 결정으로 우선순위가 재정렬됨. Phase 7 Web Desktop
-> Redesign이 v1 출시 차단 항목이며, iOS 잔여 작업은 Phase 7과 독립적으로 병렬
-> 진행 가능. Manual offline sync verification 은 Phase 7 완료 후 새 web UI 위에서
-> 회귀 검증으로 흡수됨 (`next_steps.md` Phase 7-5).
+> 2026-05-17 기준 — 배포 트랙은 운영 LIVE로 종료됨. Phase 7 Web Desktop
+> Redesign은 결제 백엔드 일부만 남아 있고, iOS 잔여 작업은 Phase 7과 독립
+> 트랙. Toss 가맹점 심사는 가장 긴 차단 항목 (~2–3주)이라 사용자 외부 트랙
+> 으로 먼저 시작하는 것이 유리.
 
-1. **Phase 7 Web Desktop Redesign** ← v1 출시 차단 항목, **결제 외 모두 완료
-   (2026-05-13)**.
-   - 진행 상태: shell / 모달 / 단축키 / 드래그 / Today / Settings / 카테고리·
-     습관 관리 / 태그 편집 / 모바일 안내 페이지 / 1024–1920 시각 검증 /
-     manual offline sync 재검증 모두 통과.
-   - 남은 단일 항목: **Pro checkout** (Toss Payments 빌링).
-   - **Pro checkout 결정 (2026-05-11, 2026-05-14 갱신)**:
-     provider = Toss Payments 빌링, Trial = 가입 즉시 결제수단 연결 + 30일 후
-     자동 결제. 사업자등록 / 가맹점 심사 등 외부 선결 조건은 사용자 트랙
-     (Track A). 코드 트랙은 Toss 테스트 키로 진행 가능.
-     2026-05-14 현재 B1 schema, B2 server endpoint 골격, B4-a Toss billing
-     UI wiring, B4-b subscription 상태 표시/취소 버튼은 구현됨. 남은 코드
-     항목은 B3 cron, B4-c onboarding billing step, B6 회귀 테스트.
-     네이버페이 자동결제 / 카카오페이 자동결제 / PortOne 경유 다중 PG는
-     v1 이후 결제수단 확장 트랙으로 문서화됨.
+1. **Toss 가맹점 심사 준비 (사용자 외부 트랙, 가장 긴 차단 항목)**
+   - 순서: 사업자등록 (개인사업자) → 통신판매업 신고 → Toss Payments 가맹점
+     신청 (~2–3주).
+   - 통과 후 운영 API/Webhook 키 발급 → Amplify 환경변수에서 Toss 키를 테스트
+     키 → 운영 키로 교체.
+   - Toss 대시보드에 webhook URL `https://www.justdo.co.kr/api/webhook/toss`
+     등록 (signature secret 발급 후 `route.ts`에서 signature 검증 보강).
+   - 코드 트랙(아래 2·3·4)은 Toss 테스트 키로 병렬 가능.
 
-2. **iOS 잔여 작업** (Phase 7과 독립, 병렬 가능)
+2. **Phase 7 Pro Checkout 남은 코드 작업** (Toss 테스트 키로 검증 가능)
+   - **B3 정기결제 cron** — `/api/billing/charge`를 `next_billing_at <= now AND
+     status='active'` 행에 호출. 실패 3회 시 `status='paused'`. Vercel Cron vs
+     Supabase Cron 결정 필요. 절차: `next_steps.md` Phase 7-3 Track B.
+   - **B4-c onboarding billing step** — 회원가입 직후 빌링 등록 step 강제 UI.
+   - **B5 게스트 모드 정책** — 비로그인 = localStorage 유지, 로그인 진입 시
+     빌링 등록 step 강제. 게스트→로그인 전이 시 `mergePersisted` 유지.
+   - **B6 회귀 테스트** — Toss SDK mock + webhook fixture 단위 테스트.
+
+3. **iOS Phase 6 잔여 작업** (Phase 7과 독립 트랙, 병렬 가능)
    - Native detail editing (edit/delete from pushed task/habit detail screens).
    - Sync status UI (Settings 또는 root status surface 에 큐 flush 에러 노출).
+   - Hosted Supabase 대상 manual offline sync 검증.
+   - 로그인 후 root 화면 `reference/proto/` 시각 검증.
    - 나머지: `ios_phase6_status.md` "Next Work" 참고.
-
-3. **배포 트랙** (Phase 7 후속)
-   - Gabia 도메인, Route 53, Amplify Hosting, Supabase production callback URL
-     등록, smoke test. 절차: `docs/deployment_domain_aws_plan.md`.
 
 4. **Xcode polish (defer until needed)**
    - Trim `JustDoApp` Supported Destinations to iPhone-only for v1.
@@ -688,24 +702,48 @@ Recommended immediate next steps:
    - Configure real iPhone for device testing (resolves the Personal
      Team provisioning warnings).
 
-### Codex 세션을 재개하는 경우 (2026-05-14 갱신)
+### Amplify SSR 함정 — 신규 SSR route 추가 시 주의
 
-- 가장 먼저: `docs/just_do_prd.md` §1.5 와 `next_steps.md` Phase 7 읽기.
+배포 트랙에서 발견하고 fix한 함정 3개. 새 SSR route를 추가할 때 같은 함정에
+다시 빠지지 않도록 주의:
+
+1. **Forwarded host header** — Amplify SSR Lambda의 `request.url`은 호스트가
+   `localhost`로 들어옴. 외부 호스트는 `x-forwarded-host` / `x-forwarded-proto`
+   헤더에 들어 있음. `app/(auth)/callback/route.ts`에 가이드 패턴 적용됨
+   (`requestOrigin` 헬퍼). redirect를 만들거나 absolute URL이 필요하면 같은
+   패턴 사용할 것.
+2. **Server-only env injection** — Amplify 환경변수는 빌드 shell에는 노출되
+   지만 SSR Lambda runtime에는 자동 전달되지 않음. `NEXT_PUBLIC_*`은 Next.js
+   가 server bundle에도 inline해서 영향 없음. server-only secret을 새로 추가
+   하면 `amplify.yml` build 단계의 `printenv | grep -E "^(...)="` 패턴에 변수
+   이름을 추가해서 `.env.production` 파일에 같이 박아야 SSR runtime에서 읽힘.
+3. **Monorepo + Next.js SSR auto-detect** — 이미 fix됨 (`AMPLIFY_MONOREPO_APP_ROOT=apps/web`
+   환경변수 + CLI로 platform `WEB_COMPUTE` + framework `Next.js - SSR` 명시).
+   새 Amplify 앱을 다시 만들 일이 생기면 이 세 가지 모두 적용해야 SSR로 배포됨.
+
+### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-18 갱신)
+
+- 가장 먼저: `docs/just_do_prd.md` §1.5, `next_steps.md` Phase 7 + Deployment
+  Backlog, 그리고 본 문서의 운영 LIVE banner 읽기.
+- 운영 도메인은 `https://www.justdo.co.kr` LIVE (Amplify SSR + Route 53).
+  앱 ID `dcsdzu0ew3l2m`, 리전 `ap-northeast-2`. 운영 검증/모니터링은 Amplify
+  콘솔 또는 CloudShell에서 `aws amplify ...` 명령으로.
 - Web 작업은 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`을
   desktop reference로 삼고, iOS `reference/proto/`와 분리해서 진행.
 - `apps/web/src/features/just-do/app-shell.tsx`에 Phase 7 desktop shell과 후속
-  편집/관리 흐름이 들어가 있음. **완료된 항목 (2026-05-13 기준)**:
-  desktop shell, mobile 안내 페이지(iOS App Store CTA + Android waitlist 폼),
-  desktop interaction tests, Task tag edit, Habit edit, Category reorder,
-  1024–1920 시각 검증, manual offline sync 5-stage 검증.
-- **남은 v1 ship 차단 항목은 Pro checkout 잔여 작업**. Toss Payments 빌링
-  기준으로 DB migration, API route 골격, Toss JS SDK UI wiring,
-  SubscriptionPanel의 `user_subscriptions` 상태 조회/취소 버튼은 들어가 있음.
-  다음 우선순위는 `/api/billing/charge` cron 선택/설정, onboarding billing
-  step, Toss webhook signature 보강. 자세한 단계 / Track A·B 분리는
-  `next_steps.md` Phase 7-3.
+  편집/관리 흐름이 들어가 있음. **완료된 항목 (2026-05-18 기준)**:
+  desktop shell, mobile 안내 페이지(iOS App Store CTA + Android waitlist 폼,
+  breakpoint 768px), desktop interaction tests, Task tag edit, Habit edit,
+  Category reorder, 1024–1920 시각 검증, manual offline sync 5-stage 검증,
+  Toss Pro checkout B1·B2·B4-a·B4-b, 운영 배포 + smoke test.
+- **남은 v1 ship 차단 항목은 Pro checkout 잔여 (B3·B4-c·B5·B6) + Toss 가맹점
+  심사**. 코드 트랙은 Toss 테스트 키로 진행 가능. 자세한 단계 / Track A·B
+  분리는 `next_steps.md` Phase 7-3.
 - iOS 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7 과 독립
   트랙. `ios_phase6_status.md` "Next Work" 참고.
+- **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
+  주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
+  monorepo platform/framework 설정 유지.
 - 도메인/sync 레이어 (persistence, supabase-mapping, store)는 기존 구현을 유지.
 - 태그 입력은 `#운동` → `운동`으로 정규화하고, Korean IME composition 중 Enter
   커밋을 막도록 보정됨. Supabase `task_tags` join write는 `upsert` 대신 신규 row

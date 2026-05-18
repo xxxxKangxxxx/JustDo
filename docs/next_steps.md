@@ -12,7 +12,24 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Where We Are (2026-05-11)
+## Where We Are (2026-05-18)
+
+- **운영 LIVE**: `https://www.justdo.co.kr` (apex → www redirect). AWS Amplify
+  Hosting Compute (`dcsdzu0ew3l2m`, ap-northeast-2) + Route 53 + ACM TLS +
+  hosted Supabase backend. Production smoke test 통과.
+- Phase 7 Web Desktop Redesign은 **Pro checkout 백엔드 잔여 (B3 cron, B4-c
+  onboarding, B5 게스트 정책, B6 회귀 테스트)**만 남음. Toss 운영 키는
+  가맹점 심사 후 교체.
+- 태블릿 viewport 정책: 모바일 안내 vs 데스크탑 shell 분기 breakpoint를
+  Tailwind `md` (768px)로 낮춤. iPad Pro/Air portrait도 데스크탑 shell,
+  iPad mini와 phone만 모바일 안내.
+- iOS Phase 6 잔여 작업 (detail edit/delete, sync status UI, hosted
+  Supabase offline sync 검증, proto 시각 검증) 은 Phase 7과 독립 트랙.
+- 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
+  **Pro Checkout B3 cron + B4-c onboarding + B6 회귀 테스트** + **iOS 잔여
+  마무리**. Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.
+
+## Where We Were (2026-05-11)
 
 - Phase 7 desktop web shell first pass is implemented.
 - Mobile web now has a viewport-based 안내 page for narrow screens. The
