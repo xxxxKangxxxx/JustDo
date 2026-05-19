@@ -32,6 +32,9 @@ implementation gaps, and checks to run before testing or shipping.
   screens from the Core Data mirror.
 - Deep-linked task/habit screens are pushed with a SwiftUI `NavigationStack`
   route instead of being rendered inline on the root scaffold.
+- Pushed task/habit detail screens support local edit and delete actions. Saves
+  apply to the Core Data mirror and enqueue `taskUpsert` / `habitUpsert`; deletes
+  enqueue `taskDelete` / `habitDelete` and return to the previous screen.
 - The signed-in root shell now renders native Home / Stats / Settings tabs
   based on `reference/proto/`.
 - The Home tab includes the month calendar, selected-day panel, task/habit
@@ -63,8 +66,6 @@ implementation gaps, and checks to run before testing or shipping.
 
 ## Remaining App Gaps
 
-- Detail screens currently display read-only fields from the Core Data mirror.
-- Later edit actions should live on the pushed detail screens.
 - App-facing sync status/error UI is still minimal; failed queue flushes should
   be visible to the user.
 - Native UI still needs another visual pass against `reference/proto/` after
@@ -123,6 +124,9 @@ swift test
 - Tap task/habit row text in the widget.
   - Expected: app opens through `justdo://task/<id>` or `justdo://habit/<id>`.
   - Expected: matching local detail data is displayed.
+  - Expected: detail edit saves update the local mirror and enqueue sync.
+  - Expected: detail delete removes the local row, enqueues sync, and returns to
+    the previous screen.
 - Relaunch app and widget.
   - Expected: remote read-sync preserves flushed changes.
 
@@ -153,7 +157,6 @@ swift test
 - Verify signed-in iOS root home, add sheet, stats, and settings visually
   against `reference/proto/`.
 - Add app-facing sync status/error UI so failed queue flushes are visible.
-- Implement edit/delete from pushed task/habit detail screens.
 - Add UI tests for deep-link opening once the app shell is more complete.
 - Consider a narrower Supabase task completion patch endpoint in iOS if full
   task upsert starts carrying fields that should remain remote-owned.

@@ -2357,11 +2357,29 @@ private struct TaskDetailScreen: View {
     let id: UUID
     let snapshotStore: CoreDataAppSnapshotStore?
 
+    @Environment(\.dismiss) private var dismiss
+    @State private var detail: DeepLinkDetail?
+    @State private var isEditing = false
+    @State private var message: DetailActionMessage?
+    @State private var showingDeleteConfirmation = false
+
     var body: some View {
         DetailScreenScaffold(title: "Task Detail") {
-            switch detail {
+            switch detail ?? loadDetail() {
             case .task(let task):
-                TaskDetailContent(task: task)
+                if isEditing {
+                    TaskDetailEditor(
+                        task: task,
+                        onCancel: { isEditing = false },
+                        onSave: saveTask
+                    )
+                } else {
+                    TaskDetailContent(task: task)
+                    DetailActionBar(
+                        onEdit: { isEditing = true },
+                        onDelete: { showingDeleteConfirmation = true }
+                    )
+                }
             case .missing(let link):
                 FallbackDetailContent(
                     title: "Detail not found",
@@ -2375,11 +2393,65 @@ private struct TaskDetailScreen: View {
             case .habit:
                 EmptyView()
             }
+            if let message {
+                DetailMessageView(message: message)
+            }
+        }
+        .onAppear(perform: refresh)
+        .alert("Task 삭제", isPresented: $showingDeleteConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive, action: deleteTask)
+        } message: {
+            Text("이 Task를 삭제하고 동기화 대기열에 반영합니다.")
         }
     }
 
-    private var detail: DeepLinkDetail {
+    private func loadDetail() -> DeepLinkDetail {
         DeepLinkDetail(link: .task(id), snapshotStore: snapshotStore)
+    }
+
+    private func refresh() {
+        detail = loadDetail()
+    }
+
+    private func saveTask(_ task: Task) {
+        guard let snapshotStore else {
+            message = .error("로컬 저장소에 접근할 수 없습니다.")
+            return
+        }
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .taskUpsert(task)
+                )
+            )
+            isEditing = false
+            message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
+            refresh()
+        } catch {
+            message = .error("Task 저장에 실패했습니다.")
+        }
+    }
+
+    private func deleteTask() {
+        guard let snapshotStore else {
+            message = .error("로컬 저장소에 접근할 수 없습니다.")
+            return
+        }
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .taskDelete(id: id)
+                )
+            )
+            dismiss()
+        } catch {
+            message = .error("Task 삭제에 실패했습니다.")
+        }
     }
 }
 
@@ -2387,11 +2459,29 @@ private struct HabitDetailScreen: View {
     let id: UUID
     let snapshotStore: CoreDataAppSnapshotStore?
 
+    @Environment(\.dismiss) private var dismiss
+    @State private var detail: DeepLinkDetail?
+    @State private var isEditing = false
+    @State private var message: DetailActionMessage?
+    @State private var showingDeleteConfirmation = false
+
     var body: some View {
         DetailScreenScaffold(title: "Habit Detail") {
-            switch detail {
+            switch detail ?? loadDetail() {
             case .habit(let habit):
-                HabitDetailContent(habit: habit)
+                if isEditing {
+                    HabitDetailEditor(
+                        habit: habit,
+                        onCancel: { isEditing = false },
+                        onSave: saveHabit
+                    )
+                } else {
+                    HabitDetailContent(habit: habit)
+                    DetailActionBar(
+                        onEdit: { isEditing = true },
+                        onDelete: { showingDeleteConfirmation = true }
+                    )
+                }
             case .missing(let link):
                 FallbackDetailContent(
                     title: "Detail not found",
@@ -2405,11 +2495,65 @@ private struct HabitDetailScreen: View {
             case .task:
                 EmptyView()
             }
+            if let message {
+                DetailMessageView(message: message)
+            }
+        }
+        .onAppear(perform: refresh)
+        .alert("Habit 삭제", isPresented: $showingDeleteConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive, action: deleteHabit)
+        } message: {
+            Text("이 Habit을 삭제하고 동기화 대기열에 반영합니다.")
         }
     }
 
-    private var detail: DeepLinkDetail {
+    private func loadDetail() -> DeepLinkDetail {
         DeepLinkDetail(link: .habit(id), snapshotStore: snapshotStore)
+    }
+
+    private func refresh() {
+        detail = loadDetail()
+    }
+
+    private func saveHabit(_ habit: Habit) {
+        guard let snapshotStore else {
+            message = .error("로컬 저장소에 접근할 수 없습니다.")
+            return
+        }
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .habitUpsert(habit)
+                )
+            )
+            isEditing = false
+            message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
+            refresh()
+        } catch {
+            message = .error("Habit 저장에 실패했습니다.")
+        }
+    }
+
+    private func deleteHabit() {
+        guard let snapshotStore else {
+            message = .error("로컬 저장소에 접근할 수 없습니다.")
+            return
+        }
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .habitDelete(id: id)
+                )
+            )
+            dismiss()
+        } catch {
+            message = .error("Habit 삭제에 실패했습니다.")
+        }
     }
 }
 
@@ -2484,6 +2628,313 @@ private struct HabitDetailContent: View {
             }
             return "Weekly"
         }
+    }
+}
+
+private struct TaskDetailEditor: View {
+    let task: Task
+    let onCancel: () -> Void
+    let onSave: (Task) -> Void
+
+    @State private var title: String
+    @State private var startDate: String
+    @State private var endDate: String
+    @State private var scheduledTime: String
+    @State private var selectedPriority: Priority
+    @State private var isCompleted: Bool
+    @State private var tagsText: String
+
+    private let priorities: [(Priority, String)] = [(.high, "높음"), (.medium, "중간"), (.low, "낮음")]
+
+    init(task: Task, onCancel: @escaping () -> Void, onSave: @escaping (Task) -> Void) {
+        self.task = task
+        self.onCancel = onCancel
+        self.onSave = onSave
+        _title = State(initialValue: task.title)
+        _startDate = State(initialValue: task.startDate)
+        _endDate = State(initialValue: task.endDate)
+        _scheduledTime = State(initialValue: task.scheduledTime ?? "")
+        _selectedPriority = State(initialValue: task.priority ?? .medium)
+        _isCompleted = State(initialValue: task.isCompleted)
+        _tagsText = State(initialValue: task.tags.joined(separator: ", "))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TextField("무엇을 할까요?", text: $title)
+                .font(.title3.weight(.semibold))
+                .textInputAutocapitalization(.never)
+                .padding(.bottom, 12)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(JDTheme.divider)
+                        .frame(height: 0.5)
+                }
+
+            AddSheetFieldRow(label: "시작") {
+                TextField("YYYY-MM-DD", text: $startDate)
+                    .font(.system(size: 13, weight: .medium))
+                    .textInputAutocapitalization(.never)
+            }
+            AddSheetFieldRow(label: "종료") {
+                TextField("YYYY-MM-DD", text: $endDate)
+                    .font(.system(size: 13, weight: .medium))
+                    .textInputAutocapitalization(.never)
+            }
+            AddSheetFieldRow(label: "시간") {
+                HStack {
+                    TextField("HH:MM", text: $scheduledTime)
+                        .font(.system(size: 13, weight: .medium))
+                        .textInputAutocapitalization(.never)
+                    if !scheduledTime.isEmpty {
+                        Button("지우기") {
+                            scheduledTime = ""
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                    }
+                }
+            }
+            AddSheetFieldRow(label: "우선순위") {
+                HStack(spacing: 6) {
+                    ForEach(priorities, id: \.0) { priority, label in
+                        Button {
+                            selectedPriority = priority
+                        } label: {
+                            Text(label)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(selectedPriority == priority ? .white : JDTheme.secondaryText)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(selectedPriority == priority ? JDTheme.primaryText : JDTheme.surfaceAlt)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            AddSheetFieldRow(label: "태그") {
+                TextField("쉼표로 구분", text: $tagsText)
+                    .font(.system(size: 13, weight: .medium))
+                    .textInputAutocapitalization(.never)
+            }
+            Toggle("완료", isOn: $isCompleted)
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.vertical, 11)
+
+            DetailEditorActions(onCancel: onCancel) {
+                let normalizedStart = JDDate.normalizedISODate(startDate, fallback: task.startDate)
+                let normalizedEnd = JDDate.normalizedISODate(endDate, fallback: normalizedStart)
+                onSave(
+                    Task(
+                        id: task.id,
+                        title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? task.title : title,
+                        categoryID: task.categoryID,
+                        startDate: normalizedStart,
+                        endDate: normalizedEnd,
+                        priority: selectedPriority,
+                        isCompleted: isCompleted,
+                        scheduledTime: scheduledTime.nilIfBlank,
+                        tags: parsedTags
+                    )
+                )
+            }
+        }
+    }
+
+    private var parsedTags: [String] {
+        tagsText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+}
+
+private struct HabitDetailEditor: View {
+    let habit: Habit
+    let onCancel: () -> Void
+    let onSave: (Habit) -> Void
+
+    @State private var title: String
+    @State private var emoji: String
+    @State private var startedAt: String
+    @State private var recurType: HabitRecurType
+    @State private var selectedDays: Set<Int>
+    @State private var reminderTime: String
+
+    private let weekdays: [(Int, String)] = [
+        (0, "일"), (1, "월"), (2, "화"), (3, "수"), (4, "목"), (5, "금"), (6, "토")
+    ]
+
+    init(habit: Habit, onCancel: @escaping () -> Void, onSave: @escaping (Habit) -> Void) {
+        self.habit = habit
+        self.onCancel = onCancel
+        self.onSave = onSave
+        _title = State(initialValue: habit.title)
+        _emoji = State(initialValue: habit.emoji)
+        _startedAt = State(initialValue: habit.startedAt)
+        _recurType = State(initialValue: habit.recurType)
+        _selectedDays = State(initialValue: Set(habit.recurDays ?? []))
+        _reminderTime = State(initialValue: habit.reminderTime ?? "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                TextField("🌱", text: $emoji)
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 44)
+                    .multilineTextAlignment(.center)
+                TextField("어떤 습관인가요?", text: $title)
+                    .font(.title3.weight(.semibold))
+                    .textInputAutocapitalization(.never)
+            }
+            .padding(.bottom, 12)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+            }
+
+            AddSheetFieldRow(label: "시작") {
+                TextField("YYYY-MM-DD", text: $startedAt)
+                    .font(.system(size: 13, weight: .medium))
+                    .textInputAutocapitalization(.never)
+            }
+            AddSheetFieldRow(label: "반복") {
+                Picker("반복", selection: $recurType) {
+                    Text("매일").tag(HabitRecurType.daily)
+                    Text("매주").tag(HabitRecurType.weekly)
+                }
+                .pickerStyle(.segmented)
+            }
+            if recurType == .weekly {
+                AddSheetFieldRow(label: "요일") {
+                    HStack(spacing: 6) {
+                        ForEach(weekdays, id: \.0) { day, label in
+                            Button {
+                                toggleDay(day)
+                            } label: {
+                                Text(label)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(selectedDays.contains(day) ? .white : JDTheme.secondaryText)
+                                    .frame(width: 28, height: 28)
+                                    .background(selectedDays.contains(day) ? JDTheme.habit : JDTheme.surfaceAlt)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            AddSheetFieldRow(label: "알림") {
+                HStack {
+                    TextField("HH:MM", text: $reminderTime)
+                        .font(.system(size: 13, weight: .medium))
+                        .textInputAutocapitalization(.never)
+                    if !reminderTime.isEmpty {
+                        Button("지우기") {
+                            reminderTime = ""
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                    }
+                }
+            }
+
+            DetailEditorActions(onCancel: onCancel) {
+                let normalizedStartedAt = JDDate.normalizedISODate(startedAt, fallback: habit.startedAt)
+                let days = selectedDays.sorted()
+                onSave(
+                    Habit(
+                        id: habit.id,
+                        title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? habit.title : title,
+                        emoji: emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? habit.emoji : emoji,
+                        startedAt: normalizedStartedAt,
+                        recurType: recurType,
+                        recurDays: recurType == .weekly ? (days.isEmpty ? habit.recurDays : days) : nil,
+                        reminderTime: reminderTime.nilIfBlank,
+                        log: habit.log
+                    )
+                )
+            }
+        }
+    }
+
+    private func toggleDay(_ day: Int) {
+        if selectedDays.contains(day) {
+            selectedDays.remove(day)
+        } else {
+            selectedDays.insert(day)
+        }
+    }
+}
+
+private struct DetailActionBar: View {
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onEdit) {
+                Label("편집", systemImage: "pencil")
+            }
+            .buttonStyle(.borderedProminent)
+            Button(role: .destructive, action: onDelete) {
+                Label("삭제", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .padding(.top, 4)
+    }
+}
+
+private struct DetailEditorActions: View {
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button("취소", action: onCancel)
+                .buttonStyle(.bordered)
+            Button("저장", action: onSave)
+                .buttonStyle(.borderedProminent)
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .padding(.top, 16)
+    }
+}
+
+private enum DetailActionMessage: Equatable {
+    case success(String)
+    case error(String)
+
+    var text: String {
+        switch self {
+        case .success(let text), .error(let text):
+            return text
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .success:
+            return .green
+        case .error:
+            return .red
+        }
+    }
+}
+
+private struct DetailMessageView: View {
+    let message: DetailActionMessage
+
+    var body: some View {
+        Text(message.text)
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(message.color)
+            .padding(.top, 2)
     }
 }
 

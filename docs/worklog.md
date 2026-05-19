@@ -2639,3 +2639,24 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Toss 테스트 키 E2E smoke.
 - Webhook signature verification after Toss dashboard secret/header details are
   available.
+
+## 2026-05-19 iOS Phase 6 detail edit/delete
+
+### Codex
+
+- `apps/ios/JustDoApp/JustDoApp/ContentView.swift`
+  - Pushed `TaskDetailScreen` and `HabitDetailScreen` are no longer read-only.
+  - Added edit forms for task title/date/time/priority/tags/completion and habit
+    title/emoji/start date/repeat/reminder.
+  - Save actions call `CoreDataAppSnapshotStore.applyAndEnqueue` with
+    `taskUpsert` / `habitUpsert`, then refresh the local detail from the mirror.
+  - Delete actions show a destructive confirmation, enqueue `taskDelete` /
+    `habitDelete`, and dismiss back to the previous screen.
+- `docs/ios_phase6_status.md` and `docs/next_steps.md` updated to mark detail
+  edit/delete complete and keep sync status UI / visual verification as the next
+  iOS gaps.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 30 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
