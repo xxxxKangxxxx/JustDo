@@ -20,6 +20,24 @@ const authMock = vi.hoisted(() => ({
   },
 }));
 
+const signedInAuth = () => ({
+  user: { id: "user-1", email: "user@example.com", displayName: "Tester" },
+  status: "signedIn" as const,
+  error: null,
+  clearError: vi.fn(),
+  signInWithProvider: vi.fn(),
+  signOut: vi.fn(),
+});
+
+const signedOutAuth = () => ({
+  user: null,
+  status: "signedOut" as const,
+  error: null,
+  clearError: vi.fn(),
+  signInWithProvider: vi.fn(),
+  signOut: vi.fn(),
+});
+
 vi.mock("@/lib/auth/useAuth", async () => {
   return {
     AuthProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -101,6 +119,7 @@ const submitOpenModal = () => {
 };
 
 beforeEach(() => {
+  authMock.value = signedInAuth();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
@@ -115,6 +134,40 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
 });
+
+const mockSubscriptionFetch = (subscription: {
+  status: string;
+  billing_provider?: string | null;
+}) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        subscription: {
+          id: "sub-1",
+          plan_name: "pro",
+          status: subscription.status,
+          trial_start_at: null,
+          trial_end_at: "2026-06-18T00:00:00.000Z",
+          subscribed_at: null,
+          expires_at: null,
+          billing_provider: subscription.billing_provider ?? null,
+          plan_interval: "monthly",
+          amount_krw: 1900,
+          currency: "KRW",
+          next_billing_at: null,
+          cancel_at: null,
+          cancelled_at: null,
+          last_payment_at: null,
+          payment_failures: 0,
+          payment_method_label: null,
+          payment_method_last4: null,
+        },
+      }),
+    }),
+  );
+};
 
 const click = (element: Element) => {
   act(() => {
@@ -142,6 +195,14 @@ const keyDown = (element: Element, key: string) => {
 };
 
 describe("desktop app shell interactions", () => {
+  it("keeps signed-out users on the login screen", async () => {
+    authMock.value = signedOutAuth();
+    renderApp();
+
+    expect(await screen.findByRole("button", { name: "Google로 로그인" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /새 Task/ })).not.toBeInTheDocument();
+  });
+
   it("adds a task with tag chips from the desktop add modal", async () => {
     renderApp();
 
@@ -233,6 +294,38 @@ describe("desktop app shell interactions", () => {
     click(screen.getByRole("button", { name: "카테고리" }));
     expect(await screen.findByText("카테고리 관리")).toBeInTheDocument();
     expect(screen.queryByText("프로필")).not.toBeInTheDocument();
+  });
+
+  it("allows Trial users to open the Pro stats dashboard", async () => {
+    mockSubscriptionFetch({ status: "trial" });
+    renderApp();
+
+    click(await screen.findByRole("button", { name: "통계" }));
+
+    expect(await screen.findByText("이번 주 활동")).toBeInTheDocument();
+    expect(screen.queryByText("통계는 Pro 기능입니다")).not.toBeInTheDocument();
+  });
+
+  it("gates Pro stats when the subscription is cancelled", async () => {
+    mockSubscriptionFetch({ status: "cancelled" });
+    renderApp();
+
+    click(await screen.findByRole("button", { name: "통계" }));
+
+    expect(await screen.findByText("통계는 Pro 기능입니다")).toBeInTheDocument();
+    expect(screen.getByText("해지됨")).toBeInTheDocument();
+  });
+
+  it("keeps Trial Pro access while prompting for a payment method", async () => {
+    mockSubscriptionFetch({ status: "trial" });
+    renderApp();
+
+    click(await screen.findByRole("button", { name: "설정" }));
+    click(screen.getByRole("button", { name: "구독" }));
+
+    expect(await screen.findByText("Trial")).toBeInTheDocument();
+    expect(screen.getByText(/Trial 동안 Pro 기능을 사용할 수 있습니다/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Toss 결제 연결" }).length).toBeGreaterThan(0);
   });
 
   it("reorders categories from desktop settings", async () => {

@@ -2514,3 +2514,92 @@ This document records coordination notes for work done with Codex and Claude Cod
   - enabled, retry off, no DLQ
 - 남은 B3 운영 작업: schedule 생성 버튼 클릭 여부 최종 확인 및 첫 scheduled
   invocation CloudWatch 확인.
+
+## 2026-05-19 Pro Checkout B4-c/B5 정책 재정의
+
+### Codex + User
+
+- 사용자가 현재 production 비로그인 화면을 확인해 정책을 명확히 함:
+  - 비로그인 사용자는 `Just Do.` 로그인 화면과 Google / Apple 로그인 버튼만
+    본다.
+  - 비로그인 사용자는 앱 shell, Task/Habit 기능으로 진입하지 못한다.
+  - 따라서 v1 Web은 게스트 모드를 사용자-facing 기능으로 지원하지 않는다.
+- 기존 문서의 "회원가입 직후 billing 등록 step 강제" / "게스트 모드 유지 후
+  로그인 진입 시 빌링 등록 강제" 계획은 현재 제품 방향과 맞지 않아 폐기.
+- 최신 정책:
+  - 로그인한 사용자는 기본 앱을 사용할 수 있다.
+  - 회원가입/로그인 후 생성되는 30일 Trial 동안 Pro 기능도 사용할 수 있다.
+  - 결제수단 등록은 앱 전체 진입 조건이 아니라 Trial 이후 Pro 기능을 계속
+    사용하기 위한 조건이다.
+  - `billing_provider` / `toss_billing_key` 유무는 entitlement 조건이 아니라
+    Trial 종료 후 자동결제 준비 상태로 표시한다.
+  - `trial` / `active`는 Pro entitlement 보유 상태로 본다.
+  - `past_due` / `paused` / `cancelled` / `expired` / `free`는 Pro 기능 gate에서
+    구독/결제 CTA로 유도한다.
+
+### Follow-up
+
+- B4-c 구현은 전체 앱 gate가 아니라 Pro 기능별 entitlement / upgrade gate로
+  진행.
+- B5는 "게스트 모드 지원"이 아니라 로그인 필수 정책을 문서/테스트로 고정하고,
+  남아 있는 localStorage guest 경로를 레거시 hydration/개발 fallback 설명과
+  구분하는 작업으로 진행.
+
+## 2026-05-19 Pro Checkout B4-c/B5 구현
+
+### Codex
+
+- `apps/web/src/features/just-do/app-shell.tsx`
+  - `useBillingSubscription()` helper 추가. `/api/billing/subscription`을 읽고
+    subscription 상태/로딩/에러/refresh를 공유.
+  - Pro entitlement helper 추가:
+    - `trial` / `active` + `plan_name='pro'` 는 Pro 기능 사용 가능.
+    - `past_due` / `paused` / `cancelled` / `expired` / `free` 는 Pro 기능
+      gate에서 구독/결제 CTA로 유도.
+    - `billing_provider` 유무는 entitlement 조건이 아니라 Trial 이후
+      자동결제 준비 상태로만 사용.
+  - 현재 구현된 Pro 대상 기능인 Stats dashboard에 gate 적용. Trial 사용자는
+    통계 화면을 그대로 볼 수 있고, cancelled 등 비-entitled 상태는 upgrade
+    gate를 본다.
+  - SubscriptionPanel 정책 수정:
+    - Trial + 결제수단 미등록 상태는 Pro로 표시하되, Toss 결제 연결 CTA와
+      안내문 노출.
+    - Trial + 결제수단 등록 또는 active 상태는 사용 중으로 표시.
+  - Account 설정의 fallback 문구를 `게스트`에서 `로그인 필요` 기준으로 정리.
+- `apps/web/src/features/just-do/app-shell.test.tsx`
+  - signed-out 사용자는 로그인 화면에 머물고 `새 Task` 버튼이 보이지 않음을
+    테스트로 고정.
+  - Trial 사용자는 Stats dashboard를 열 수 있음을 검증.
+  - Cancelled 구독은 Stats Pro gate로 막힘을 검증.
+  - Trial + 결제수단 미등록 상태에서 구독 패널이 Toss 결제 연결 CTA를 보여줌을
+    검증.
+
+### Verification
+
+- `npm --prefix apps/web test` — pass, 7 files / 90 tests.
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web run build` — pass. 최초 sandbox 실행은 Turbopack
+  내부 port bind 권한 문제로 실패했고, 동일 명령을 escalated로 재실행해 통과.
+
+### Follow-up
+
+- B6 Toss 회귀 테스트: SDK mock, billing API routes, webhook fixture /
+  idempotency.
+- B3 EventBridge 첫 scheduled invocation CloudWatch 확인.
+
+## 2026-05-19 Free / Pro 기능 경계 결정
+
+### User + Codex
+
+- v1 기능 경계:
+  - **Free**: Task/Habit 기록·관리, 캘린더, 카테고리, 태그, 기본 동기화,
+    데이터 export, 기본 위젯 3종.
+  - **Trial / Pro**: 분석·리포트·고급 기능.
+- 현재 구현된 Pro gate 대상은 통계 화면 전체로 유지.
+- 월간 리포트는 v2 도입 예정이며 구현 시 Pro gate 대상.
+- Task Dependency 시각화는 v2 도입 예정이며 구현 시 Pro gate 대상.
+- 데이터 export는 Free 대상.
+- 위젯은 제품에서 중점을 두고 구현해야 하는 핵심 기능이므로 기본 3종은 Free에
+  제공한다.
+- 추후 위젯 커스터마이징을 도입할 경우, 기본 위젯 사용성은 Free로 유지하고
+  고급 커스터마이징 범위만 별도 정책으로 확정한다.

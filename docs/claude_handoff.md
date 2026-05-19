@@ -33,8 +33,9 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 >    결정됨. `infra/aws/billing-cron-lambda.mjs`와
 >    `docs/aws_eventbridge_billing_cron.md` 참고.
 >    `next_steps.md` Phase 7-3 Track B.
-> 3. **Pro Checkout B4-c onboarding + B5 게스트 정책** — 회원가입 직후
->    billing 등록 step 강제 UI. 게스트→로그인 전이 시 빌링 step 강제.
+> 3. **Pro Checkout B4-c/B5 완료** — Web 앱은 로그인 필수, 30일 Trial 동안
+>    Pro 기능 사용 가능, 결제수단 등록은 앱 전체 진입 조건이 아니라 Trial
+>    이후 Pro 기능 지속 사용 조건. Stats dashboard에 Pro gate 적용 완료.
 > 4. **Pro Checkout B6 회귀 테스트** — Toss SDK mock + webhook fixture.
 > 5. **iOS Phase 6 잔여** — Phase 7과 독립 트랙. detail edit/delete,
 >    sync status UI, hosted Supabase offline sync 검증, proto 시각 검증.
@@ -236,9 +237,9 @@ cdd5b1f docs(ios): start phase 6 planning
     - Hosted Supabase migration was pushed by the user on 2026-05-14.
       `/api/billing/subscription` returned 200 afterward. Before the push it
       failed because hosted `user_subscriptions.billing_provider` did not exist.
-    - Remaining: B3 cron, B4-c onboarding billing step, B6 tests, Toss webhook
-      signature verification once official dashboard secret/header details are
-      available.
+    - Remaining: B3 first scheduled invocation confirmation, B6 tests, Toss
+      webhook signature verification once official dashboard secret/header
+      details are available.
     - v1 keeps Toss Payments billing. Naver Pay recurring, Kakao Pay recurring,
       and PortOne multi-PG are documented as future payment-method expansion.
   - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
@@ -617,8 +618,10 @@ Important current limitations:
   EventBridge Scheduler should invoke the Lambda wrapper in
   `infra/aws/billing-cron-lambda.mjs` daily at 05:30 KST. The Lambda calls
   `/api/billing/charge`.
-- B4-c onboarding billing step is not implemented. Users can still log in and
-  use the app without forced billing setup.
+- B4-c/B5 are implemented for the current Web surface. Do not force billing
+  setup immediately after login. Signed-in users can use the app, Trial users
+  can use Pro features, and billing setup is required only to keep Pro access
+  after Trial. Stats dashboard is currently gated as a Pro feature.
 - Toss webhook signature verification is not implemented. Add it after
   confirming the official dashboard secret/header behavior for this account.
 - There are no Toss-specific automated tests yet. B6 remains open.
@@ -634,8 +637,8 @@ Recommended immediate next steps:
    `toss_billing_key`, `toss_customer_key`, `next_billing_at`, and payment
    method metadata.
 3. Confirm Settings -> 구독 shows Trial/next billing/payment method after refresh.
-4. Then create the B3 AWS resources or move to B4-c onboarding. B3 is
-   backend-critical; B4-c is product-policy critical.
+4. Then confirm the B3 scheduled invocation or continue with B6 Toss billing
+   regression tests.
 
 ## Known Notes / Risks
 
@@ -689,9 +692,13 @@ Recommended immediate next steps:
      `/api/billing/charge`, 매일 05:30 KST로 결정. Lambda wrapper:
      `infra/aws/billing-cron-lambda.mjs`. 운영 설정:
      `docs/aws_eventbridge_billing_cron.md`.
-   - **B4-c onboarding billing step** — 회원가입 직후 빌링 등록 step 강제 UI.
-   - **B5 게스트 모드 정책** — 비로그인 = localStorage 유지, 로그인 진입 시
-     빌링 등록 step 강제. 게스트→로그인 전이 시 `mergePersisted` 유지.
+   - **B4-c Pro entitlement / upgrade gate** — 완료. `trial` / `active`는 Pro
+     기능 사용 가능, `past_due` / `paused` / `cancelled` / `expired` / `free`는
+     Pro 기능 gate에서 구독/결제 CTA로 유도. 현재 Pro 대상인 Stats dashboard에
+     gate 적용.
+   - **B5 로그인 필수 정책 정리** — 완료. 비로그인 사용자는 로그인 화면에서
+     앱 shell로 진입하지 못한다. Trial + 결제수단 미등록 상태는 Pro 사용 가능,
+     구독 패널에서 Toss 결제 연결 CTA 표시.
    - **B6 회귀 테스트** — Toss SDK mock + webhook fixture 단위 테스트.
 
 3. **iOS Phase 6 잔여 작업** (Phase 7과 독립 트랙, 병렬 가능)
@@ -741,10 +748,10 @@ Recommended immediate next steps:
   desktop shell, mobile 안내 페이지(iOS App Store CTA + Android waitlist 폼,
   breakpoint 768px), desktop interaction tests, Task tag edit, Habit edit,
   Category reorder, 1024–1920 시각 검증, manual offline sync 5-stage 검증,
-  Toss Pro checkout B1·B2·B4-a·B4-b, 운영 배포 + smoke test.
-- **남은 v1 ship 차단 항목은 Pro checkout 잔여 (B3·B4-c·B5·B6) + Toss 가맹점
-  심사**. 코드 트랙은 Toss 테스트 키로 진행 가능. 자세한 단계 / Track A·B
-  분리는 `next_steps.md` Phase 7-3.
+  Toss Pro checkout B1·B2·B4-a·B4-b·B4-c·B5, 운영 배포 + smoke test.
+- **남은 v1 ship 차단 항목은 Pro checkout 잔여 (B3 첫 자동 실행 확인·B6)
+  + Toss 가맹점 심사**. 코드 트랙은 Toss 테스트 키로 진행 가능. 자세한 단계 /
+  Track A·B 분리는 `next_steps.md` Phase 7-3.
 - iOS 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7 과 독립
   트랙. `ios_phase6_status.md` "Next Work" 참고.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에

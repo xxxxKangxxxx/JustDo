@@ -62,6 +62,12 @@ type BillingSubscription = {
 type BillingSubscriptionResponse = {
   subscription: BillingSubscription | null;
 };
+type BillingState = {
+  subscription: BillingSubscription | null;
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+};
 
 const paymentMethods: Array<{
   key: PaymentMethodKey;
@@ -85,6 +91,63 @@ const subscriptionStatusLabels: Record<string, string> = {
   expired: "만료",
   cancelled: "해지됨",
 };
+
+const proEntitlementStatuses = new Set(["trial", "active"]);
+
+const hasProEntitlement = (subscription: BillingSubscription | null) =>
+  Boolean(
+    subscription &&
+      subscription.plan_name === "pro" &&
+      proEntitlementStatuses.has(subscription.status),
+  );
+
+const hasBillingMethod = (subscription: BillingSubscription | null) =>
+  Boolean(subscription?.billing_provider);
+
+const proAccessReason = (subscription: BillingSubscription | null) => {
+  if (hasProEntitlement(subscription)) {
+    return subscription?.status === "trial" ? "Trial 기간" : "Pro 활성";
+  }
+  if (!subscription) return "구독 정보 없음";
+  return subscriptionStatusLabels[subscription.status] ?? subscription.status;
+};
+
+function useBillingSubscription(): BillingState {
+  const auth = useAuth();
+  const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
+  const [loading, setLoading] = useState(Boolean(auth.user));
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    if (!auth.user) {
+      setSubscription(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetch("/api/billing/subscription")
+      .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as
+          | BillingSubscriptionResponse
+          | { error?: string };
+        if (!response.ok) {
+          throw new Error("error" in body && body.error ? body.error : "subscription_fetch_failed");
+        }
+        setSubscription((body as BillingSubscriptionResponse).subscription);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "subscription_fetch_failed"))
+      .finally(() => setLoading(false));
+  }, [auth.user]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(refresh, 0);
+    return () => window.clearTimeout(timer);
+  }, [refresh]);
+
+  return { subscription, loading, error, refresh };
+}
 
 const formatDateLabel = (value: string | null | undefined) => {
   if (!value) return "-";
@@ -1577,6 +1640,9 @@ function CommandPalette({
 function StatsDashboard({ mode }: { mode: ThemeMode }) {
   const s = useJustDo();
   const t = webTokens(mode);
+  const billing = useBillingSubscription();
+  const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
+  const canUseStats = hasProEntitlement(billing.subscription);
   const tasks = s.state.tasks;
   const done = tasks.filter((task) => task.isCompleted).length;
   const open = tasks.length - done;
@@ -1587,6 +1653,41 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
     return { day, total: dayTasks.length, done: dayTasks.filter((task) => task.isCompleted).length };
   });
   const max = Math.max(1, ...dayCounts.map((item) => item.total));
+  if (billing.loading) {
+    return (
+      <div className="flex-1 overflow-auto px-7 py-5">
+        <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하고 있습니다.">
+          <div className="h-20 rounded-lg" style={{ background: t.surfaceAlt }} />
+        </Panel>
+      </div>
+    );
+  }
+  if (billing.error) {
+    return (
+      <div className="flex-1 overflow-auto px-7 py-5">
+        <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하지 못했습니다.">
+          <div className="text-[13px]" style={{ color: t.danger }}>{billing.error}</div>
+          <button type="button" onClick={billing.refresh} className="mt-3 rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.text }}>
+            다시 확인
+          </button>
+        </Panel>
+      </div>
+    );
+  }
+  if (!canUseStats) {
+    return (
+      <div className="flex-1 overflow-auto px-7 py-5">
+        <ProFeatureGate
+          mode={mode}
+          title="통계는 Pro 기능입니다"
+          description="주간/월간 통계와 리포트는 Trial 또는 Pro 상태에서 사용할 수 있습니다."
+          reason={proAccessReason(billing.subscription)}
+          onUpgrade={setUpgradePlan}
+        />
+        {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
+      </div>
+    );
+  }
   return (
     <div className="flex-1 overflow-auto px-7 py-5">
       <div className="mx-auto max-w-[1100px]">
@@ -1626,6 +1727,39 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
           </Panel>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProFeatureGate({
+  mode,
+  title,
+  description,
+  reason,
+  onUpgrade,
+}: {
+  mode: ThemeMode;
+  title: string;
+  description: string;
+  reason: string;
+  onUpgrade: (plan: UpgradePlan) => void;
+}) {
+  const t = webTokens(mode);
+  return (
+    <div className="mx-auto max-w-[760px]">
+      <Panel mode={mode} title={title} subtitle={description}>
+        <div className="mb-4 rounded-lg border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>현재 상태</div>
+          <div className="text-[18px] font-bold">{reason}</div>
+          <p className="mt-2 text-[12px] leading-5" style={{ color: t.textSecondary }}>
+            로그인한 사용자는 기본 기능을 계속 사용할 수 있습니다. Pro 기능은 Trial 또는 활성 구독 상태에서 열립니다.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <PlanCard mode={mode} plan="monthly" title="월간 Pro" price="₩1,900 / 월" onUpgrade={onUpgrade} disabled={false} />
+          <PlanCard mode={mode} plan="yearly" title="연간 Pro" price="₩9,900 / 년" badge="추천" onUpgrade={onUpgrade} disabled={false} />
+        </div>
+      </Panel>
     </div>
   );
 }
@@ -1670,8 +1804,8 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
         <div>
           {section === "account" ? (
           <Panel mode={mode} title="계정">
-            <SettingRow mode={mode} label="상태" value={auth.user ? "로그인됨" : "게스트"} />
-            <SettingRow mode={mode} label="프로필" value={auth.user?.displayName ?? auth.user?.email ?? "게스트"} />
+            <SettingRow mode={mode} label="상태" value={auth.user ? "로그인됨" : "로그인 필요"} />
+            <SettingRow mode={mode} label="프로필" value={auth.user?.displayName ?? auth.user?.email ?? "-"} />
             <button type="button" onClick={() => void auth.signOut().catch(() => undefined)} className="mt-2 rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.danger }}>로그아웃</button>
           </Panel>
           ) : null}
@@ -1863,20 +1997,18 @@ function HabitEditModalBody({ mode, habit, onClose }: { mode: ThemeMode; habit: 
 function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (plan: UpgradePlan) => void }) {
   const auth = useAuth();
   const t = webTokens(mode);
-  const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const billing = useBillingSubscription();
   const [cancelling, setCancelling] = useState(false);
-  const isPro = Boolean(
-    subscription &&
-      subscription.plan_name === "pro" &&
-      !["cancelled", "expired"].includes(subscription.status),
-  );
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { subscription, loading, error, refresh } = billing;
+  const isPro = hasProEntitlement(subscription);
+  const billingReady = hasBillingMethod(subscription);
+  const needsBillingMethod = isPro && !billingReady;
   const statusLabel = subscription
     ? subscriptionStatusLabels[subscription.status] ?? subscription.status
     : auth.user
       ? "Free"
-      : "게스트";
+      : "로그인 필요";
   const billingAmount = subscription
     ? `₩${subscription.amount_krw.toLocaleString("ko-KR")} / ${subscription.plan_interval === "yearly" ? "년" : "월"}`
     : null;
@@ -1885,33 +2017,6 @@ function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
     : subscription?.billing_provider === "toss_payments"
       ? "Toss Payments"
       : "등록 전";
-
-  const refresh = useCallback(() => {
-    if (!auth.user) {
-      setSubscription(null);
-      setError(null);
-      return;
-    }
-    setLoading(true);
-    fetch("/api/billing/subscription")
-      .then(async (response) => {
-        const body = (await response.json().catch(() => ({}))) as
-          | BillingSubscriptionResponse
-          | { error?: string };
-        if (!response.ok) {
-          throw new Error("error" in body && body.error ? body.error : "subscription_fetch_failed");
-        }
-        setSubscription((body as BillingSubscriptionResponse).subscription);
-        setError(null);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "subscription_fetch_failed"))
-      .finally(() => setLoading(false));
-  }, [auth.user]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(refresh, 0);
-    return () => window.clearTimeout(timer);
-  }, [refresh]);
 
   const cancelSubscription = () => {
     if (!subscription || cancelling) return;
@@ -1922,9 +2027,10 @@ function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
         if (!response.ok) {
           throw new Error(body.error ?? "subscription_cancel_failed");
         }
+        setActionError(null);
         refresh();
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "subscription_cancel_failed"))
+      .catch((err) => setActionError(err instanceof Error ? err.message : "subscription_cancel_failed"))
       .finally(() => setCancelling(false));
   };
 
@@ -1944,7 +2050,12 @@ function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
           <SettingRow mode={mode} label="결제수단" value={paymentMethod} />
           <SettingRow mode={mode} label="Trial 종료" value={formatDateLabel(subscription?.trial_end_at)} />
         </div>
-        {error ? <div className="mt-3 text-[12px]" style={{ color: t.danger }}>{error}</div> : null}
+        {needsBillingMethod ? (
+          <div className="mt-3 rounded-lg border p-3 text-[12px] leading-5" style={{ borderColor: t.divider, background: t.surface, color: t.textSecondary }}>
+            Trial 동안 Pro 기능을 사용할 수 있습니다. Trial 이후에도 Pro 기능을 계속 쓰려면 Toss 결제를 연결하세요.
+          </div>
+        ) : null}
+        {error || actionError ? <div className="mt-3 text-[12px]" style={{ color: t.danger }}>{error ?? actionError}</div> : null}
         <div className="mt-3 flex gap-2">
           {auth.user ? (
             <button type="button" onClick={refresh} className="rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.textSecondary }}>
@@ -1965,8 +2076,8 @@ function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <PlanCard mode={mode} plan="monthly" title="월간 Pro" price="₩1,900 / 월" onUpgrade={onUpgrade} disabled={isPro} />
-        <PlanCard mode={mode} plan="yearly" title="연간 Pro" price="₩9,900 / 년" badge="추천" onUpgrade={onUpgrade} disabled={isPro} />
+        <PlanCard mode={mode} plan="monthly" title="월간 Pro" price="₩1,900 / 월" onUpgrade={onUpgrade} disabled={isPro && billingReady} cta={needsBillingMethod ? "Toss 결제 연결" : undefined} />
+        <PlanCard mode={mode} plan="yearly" title="연간 Pro" price="₩9,900 / 년" badge="추천" onUpgrade={onUpgrade} disabled={isPro && billingReady} cta={needsBillingMethod ? "Toss 결제 연결" : undefined} />
       </div>
     </Panel>
   );
@@ -1979,6 +2090,7 @@ function PlanCard({
   price,
   badge,
   disabled,
+  cta,
   onUpgrade,
 }: {
   mode: ThemeMode;
@@ -1987,6 +2099,7 @@ function PlanCard({
   price: string;
   badge?: string;
   disabled: boolean;
+  cta?: string;
   onUpgrade: (plan: UpgradePlan) => void;
 }) {
   const t = webTokens(mode);
@@ -2004,7 +2117,7 @@ function PlanCard({
         className="w-full rounded-lg px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-45"
         style={{ background: disabled ? t.dividerStrong : t.accent }}
       >
-        {disabled ? "사용 중" : "Pro로 업그레이드"}
+        {disabled ? "사용 중" : cta ?? "Pro로 업그레이드"}
       </button>
     </div>
   );

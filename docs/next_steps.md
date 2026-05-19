@@ -17,8 +17,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - **운영 LIVE**: `https://www.justdo.co.kr` (apex → www redirect). AWS Amplify
   Hosting Compute (`dcsdzu0ew3l2m`, ap-northeast-2) + Route 53 + ACM TLS +
   hosted Supabase backend. Production smoke test 통과.
-- Phase 7 Web Desktop Redesign은 **Pro checkout 백엔드 잔여 (B3 cron, B4-c
-  onboarding, B5 게스트 정책, B6 회귀 테스트)**만 남음. Toss 운영 키는
+- Phase 7 Web Desktop Redesign은 **Pro checkout 백엔드 잔여 (B3 cron 첫
+  자동 실행 확인, B6 회귀 테스트, Toss webhook signature 보강)** 위주로 남음.
+  Toss 운영 키는
   가맹점 심사 후 교체.
 - 태블릿 viewport 정책: 모바일 안내 vs 데스크탑 shell 분기 breakpoint를
   Tailwind `md` (768px)로 낮춤. iPad Pro/Air portrait도 데스크탑 shell,
@@ -26,8 +27,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - iOS Phase 6 잔여 작업 (detail edit/delete, sync status UI, hosted
   Supabase offline sync 검증, proto 시각 검증) 은 Phase 7과 독립 트랙.
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
-  **Pro Checkout B3 cron + B4-c onboarding + B6 회귀 테스트** + **iOS 잔여
-  마무리**. Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.
+  **B3 cron 첫 자동 실행 확인 + B6 회귀 테스트** + **iOS 잔여 마무리**.
+  Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.
 - Toss 가맹점 심사 준비 체크리스트는 `docs/toss_merchant_review_plan.md`에
   별도로 정리.
 - Pro Checkout B3 cron 결정: AWS EventBridge Scheduler -> Lambda ->
@@ -335,8 +336,27 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   요일 / 알림 수정.
 - [ ] Pro checkout API / webhook / `user_subscriptions` 갱신 구현.
   - 2026-05-11 결정: 결제 provider = **Toss Payments 빌링** (월 ₩1,900 / 연 ₩9,900).
-    Trial 정책 = 회원가입 즉시 빌링 정보 요구 → 30일 Trial 후 자동 결제.
     iOS 결제는 별도 트랙(Apple IAP, Phase 6 v1 ship 후).
+  - 2026-05-19 Trial / entitlement 정책 재정의:
+    - Web 앱 사용은 로그인 필수. 비로그인 사용자는 로그인 화면에서 앱 shell로
+      진입하지 못한다.
+    - 회원가입/로그인 후 생성되는 30일 Trial 동안은 Pro 기능 사용 가능.
+    - 결제수단 등록은 앱 전체 진입 조건이 아니며, Trial 이후 Pro 기능을 계속
+      쓰기 위한 조건이다.
+    - `billing_provider` / `toss_billing_key` 유무는 entitlement 조건이 아니라
+      Trial 종료 후 자동결제 준비 상태로 표시한다.
+    - B4-c는 더 이상 "회원가입 직후 billing 강제"가 아니라 Pro 기능 접근
+      권한과 upgrade gate 구현으로 진행한다.
+  - 2026-05-19 Free / Trial / Pro 기능 경계:
+    - Free는 Task/Habit 기록·관리, 캘린더, 카테고리, 태그, 기본 동기화,
+      데이터 export, 기본 위젯 3종을 제공한다.
+    - Trial / Pro는 분석·리포트·고급 기능을 제공한다.
+    - v1 현재 Pro gate 대상은 통계 화면 전체.
+    - 월간 리포트는 v2 도입 예정이며 구현 시 Pro gate 대상.
+    - Task Dependency 시각화는 v2 도입 예정이며 구현 시 Pro gate 대상.
+    - 위젯은 제품 핵심 기능이므로 기본 3종은 Free에 제공한다. 추후
+      커스터마이징을 도입할 경우 기본 위젯 사용성은 Free로 유지하고,
+      고급 커스터마이징 범위는 별도 정책으로 확정한다.
   - 2026-05-14 UX/확장 결정:
     - v1은 Toss Payments 빌링을 유지한다.
     - 사용자-facing CTA는 내부 billing-key 발급 구조를 직접 드러내지 않고
@@ -370,8 +390,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
       `/api/billing/charge`, 매일 05:30 KST. Lambda wrapper:
       `infra/aws/billing-cron-lambda.mjs`, 운영 설정 문서:
       `docs/aws_eventbridge_billing_cron.md`.
-    - [ ] B3 운영 리소스 생성 — AWS Lambda 생성, EventBridge Scheduler 연결,
-      첫 scheduled invocation CloudWatch 확인.
+    - [ ] B3 운영 리소스 확인 — AWS Lambda 생성 및 수동 테스트는 완료. 남은
+      항목은 EventBridge Scheduler 생성 여부 최종 확인과 첫 scheduled
+      invocation CloudWatch 확인.
     - [x] B4-a UI 연동 — `apps/web/src/features/just-do/app-shell.tsx`의
       `UpgradeModal` placeholder를 Toss JS SDK 호출로 교체.
       2026-05-14 현재 `https://js.tosspayments.com/v2/standard` 기반
@@ -383,10 +404,13 @@ This document tracks the next implementation steps for Codex and Claude Code cro
       2026-05-14 `/api/billing/subscription` 추가. Settings → 구독 패널에서
       status / 다음 결제일 / 결제수단 / Trial 종료일을 읽고, Toss 구독 해지
       버튼은 `/api/billing/cancel`로 연결.
-    - [ ] B4-c 회원가입 직후 `onboarding/billing` step 추가.
-    - [ ] B5 게스트 모드 정책 — 비로그인 = localStorage 유지, 로그인 진입 시
-      빌링 등록 step 강제. 게스트 → 로그인 전이 데이터 보존은 기존
-      `mergePersisted` 그대로.
+    - [x] B4-c Pro entitlement / upgrade gate — `trial` / `active`는 Pro 기능
+      사용 가능, `past_due` / `paused` / `cancelled` / `expired` / `free`는
+      Pro 기능 gate에서 구독/결제 CTA로 유도. 현재 Pro 대상인 Stats dashboard에
+      gate 적용. 앱 전체 진입은 막지 않는다.
+    - [x] B5 로그인 필수 정책 정리 — 비로그인 사용자는 로그인 화면에서 앱
+      shell로 진입하지 못하는 현재 정책을 테스트로 고정하고, Trial + 결제수단
+      미등록 상태는 Pro 사용 가능하되 구독 패널에서 Toss 결제 연결 CTA를 표시.
     - [ ] B6 회귀 테스트 — Toss SDK mock + webhook fixture 단위 테스트, E2E는
       Toss 테스트 키.
   - 진행 순서: B1 → B2 → B4 → B3. Track A 완료 후 운영 키만 교체.
