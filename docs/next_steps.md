@@ -28,6 +28,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
   **Pro Checkout B3 cron + B4-c onboarding + B6 회귀 테스트** + **iOS 잔여
   마무리**. Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.
+- Toss 가맹점 심사 준비 체크리스트는 `docs/toss_merchant_review_plan.md`에
+  별도로 정리.
+- Pro Checkout B3 cron 결정: AWS EventBridge Scheduler -> Lambda ->
+  `/api/billing/charge`, 매일 05:30 KST. 설정 문서:
+  `docs/aws_eventbridge_billing_cron.md`.
 
 ## Where We Were (2026-05-11)
 
@@ -349,6 +354,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     - [ ] Toss Payments 가입 + 가맹점 심사 (~2–3주).
     - [ ] 운영 API 키 / Webhook secret 발급.
     - [ ] 운영 도메인 결정 (Webhook URL 등록용, deployment 트랙과 동시).
+    - 세부 체크리스트: `docs/toss_merchant_review_plan.md`.
   - Track B — 코드 작업 (Toss 테스트 키로 동작):
     - [x] B1 Schema 마이그레이션 — `user_subscriptions` 보강
       (`toss_billing_key`, `toss_customer_key`, `next_billing_at`, `cancel_at`,
@@ -360,9 +366,12 @@ This document tracks the next implementation steps for Codex and Claude Code cro
       2026-05-14 현재 테스트 키 기준 REST 래퍼와 endpoint 골격 구현 완료.
       Toss webhook signature 방식은 운영 심사/대시보드 설정 단계에서 공식
       secret/헤더 스펙 확인 후 보강 필요.
-    - [ ] B3 정기결제 cron — `next_billing_at <= now AND status='active'` 행에
-      `requestBillingPayment` 호출. 실패 3회 누적 시 `status='paused'`. v1은
-      Vercel Cron 또는 Supabase Cron 중 선택.
+    - [x] B3 정기결제 cron 방향 결정 — AWS EventBridge Scheduler -> Lambda ->
+      `/api/billing/charge`, 매일 05:30 KST. Lambda wrapper:
+      `infra/aws/billing-cron-lambda.mjs`, 운영 설정 문서:
+      `docs/aws_eventbridge_billing_cron.md`.
+    - [ ] B3 운영 리소스 생성 — AWS Lambda 생성, EventBridge Scheduler 연결,
+      첫 scheduled invocation CloudWatch 확인.
     - [x] B4-a UI 연동 — `apps/web/src/features/just-do/app-shell.tsx`의
       `UpgradeModal` placeholder를 Toss JS SDK 호출로 교체.
       2026-05-14 현재 `https://js.tosspayments.com/v2/standard` 기반

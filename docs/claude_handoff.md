@@ -28,8 +28,10 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 1. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    코드 트랙은 이와 병렬로 진행 가능.
-> 2. **Pro Checkout B3 cron** — 정기결제 실행 + 실패 retry/pause 로직.
->    Vercel Cron vs Supabase Cron 선택 필요. Toss 테스트 키로 검증 가능.
+> 2. **Pro Checkout B3 cron 운영 리소스 생성** — cron 방향은 AWS
+>    EventBridge Scheduler -> Lambda -> `/api/billing/charge`, 매일 05:30 KST로
+>    결정됨. `infra/aws/billing-cron-lambda.mjs`와
+>    `docs/aws_eventbridge_billing_cron.md` 참고.
 >    `next_steps.md` Phase 7-3 Track B.
 > 3. **Pro Checkout B4-c onboarding + B5 게스트 정책** — 회원가입 직후
 >    billing 등록 step 강제 UI. 게스트→로그인 전이 시 빌링 step 강제.
@@ -611,7 +613,10 @@ Implemented files:
 
 Important current limitations:
 
-- B3 cron is not configured. `/api/billing/charge` exists but nothing calls it.
+- B3 cron direction is decided but AWS resources are not created yet.
+  EventBridge Scheduler should invoke the Lambda wrapper in
+  `infra/aws/billing-cron-lambda.mjs` daily at 05:30 KST. The Lambda calls
+  `/api/billing/charge`.
 - B4-c onboarding billing step is not implemented. Users can still log in and
   use the app without forced billing setup.
 - Toss webhook signature verification is not implemented. Add it after
@@ -629,8 +634,8 @@ Recommended immediate next steps:
    `toss_billing_key`, `toss_customer_key`, `next_billing_at`, and payment
    method metadata.
 3. Confirm Settings -> 구독 shows Trial/next billing/payment method after refresh.
-4. Then choose between B3 cron and B4-c onboarding. B3 is backend-critical;
-   B4-c is product-policy critical.
+4. Then create the B3 AWS resources or move to B4-c onboarding. B3 is
+   backend-critical; B4-c is product-policy critical.
 
 ## Known Notes / Risks
 
@@ -680,9 +685,10 @@ Recommended immediate next steps:
    - 코드 트랙(아래 2·3·4)은 Toss 테스트 키로 병렬 가능.
 
 2. **Phase 7 Pro Checkout 남은 코드 작업** (Toss 테스트 키로 검증 가능)
-   - **B3 정기결제 cron** — `/api/billing/charge`를 `next_billing_at <= now AND
-     status='active'` 행에 호출. 실패 3회 시 `status='paused'`. Vercel Cron vs
-     Supabase Cron 결정 필요. 절차: `next_steps.md` Phase 7-3 Track B.
+   - **B3 정기결제 cron** — AWS EventBridge Scheduler -> Lambda ->
+     `/api/billing/charge`, 매일 05:30 KST로 결정. Lambda wrapper:
+     `infra/aws/billing-cron-lambda.mjs`. 운영 설정:
+     `docs/aws_eventbridge_billing_cron.md`.
    - **B4-c onboarding billing step** — 회원가입 직후 빌링 등록 step 강제 UI.
    - **B5 게스트 모드 정책** — 비로그인 = localStorage 유지, 로그인 진입 시
      빌링 등록 step 강제. 게스트→로그인 전이 시 `mergePersisted` 유지.

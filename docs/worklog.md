@@ -2427,3 +2427,90 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Pro Checkout B6 회귀 테스트 — Toss SDK mock + webhook fixture.
 - iOS Phase 6 잔여 (detail edit/delete / sync status UI / hosted offline sync
   검증 / proto 시각 검증).
+
+## 2026-05-19 Toss 가맹점 심사 준비 시작
+
+### Codex
+
+- Toss 가맹점 심사 외부 트랙을 시작하기 위해 공식 문서 기준으로 요구사항을
+  재확인:
+  - 국세청 사업자등록 안내: 사업자등록은 사업장마다 필요하고, 사업개시 전
+    또는 사업 시작 후 20일 이내에 신청. 홈택스로 온라인 신청/전자제출 가능.
+  - Toss Payments 자동결제 문서: 자동결제는 추가 리스크 검토 및 계약 후 사용,
+    정기 구독형 서비스가 아니면 정책적으로 제한 가능. 전자결제 계약 완료 후
+    자동결제(빌링) MID의 라이브 client/secret key 사용.
+  - Toss Payments 자동결제 문서: 구독 주기마다 빌링키로 결제 승인하는
+    스케줄링은 상점이 직접 구현해야 함.
+  - Toss 통신판매업 문서: 온라인으로 서비스/상품 판매 시 통신판매업 신고 및
+    사이트 내 사업자 정보/통신판매업 신고번호 표시 필요. 면제 가능성이 있어도
+    PG 심사와 운영 footer 정합성을 위해 v1에서는 신고 완료 방향을 추천.
+- `docs/toss_merchant_review_plan.md` 추가:
+  - 사업자등록 → 통신판매업 신고 → Toss 신청 → 승인 후 운영 키/webhook 등록
+    체크리스트.
+  - 사용자가 결정해야 할 항목: 상호, 사업장 주소, 과세유형, 업종코드,
+    통신판매업 신고 진행 여부.
+- `docs/next_steps.md` 에 Toss 심사 체크리스트 문서 링크 추가.
+
+### Follow-up
+
+- 사용자 결정 필요:
+  - 상호
+  - 사업장 주소 공개/사용 방식
+  - 간이과세자 vs 일반과세자
+  - 사업자등록 업종코드
+  - 통신판매업 신고를 면제 검토 없이 바로 진행할지 여부
+- 결정 후 Hometax 사업자등록 신청을 진행하고, 사업자등록증이 나오면
+  통신판매업 신고 및 Toss Payments 가맹점 신청으로 이동.
+
+## 2026-05-19 Pro Checkout B3 cron 결정
+
+### Codex
+
+- 사용자와 B3 cron을 AWS 기반으로 진행하기로 결정.
+- 실행 시각은 매일 **05:30 KST** 로 확정.
+- 공식 AWS 문서 확인 결과, 임의 HTTPS endpoint 직접 호출은 EventBridge
+  Scheduler target이 아니라 EventBridge API Destination 영역이며, API
+  Destination endpoint timeout은 5초 제한이 있음.
+- 결제 route는 Toss API 호출과 DB update를 포함하므로, 최종 구조는
+  **EventBridge Scheduler -> Lambda -> `POST /api/billing/charge`** 로 결정.
+  이 구조는 AWS 운영 경계 안에 있고, 향후 Supabase에서 다른 RDBMS/backend로
+  이동해도 scheduler가 app HTTP endpoint만 호출하므로 교체 비용이 낮음.
+- `infra/aws/billing-cron-lambda.mjs` 추가:
+  - `BILLING_CHARGE_URL`
+  - `BILLING_CRON_SECRET`
+  - optional `BILLING_CHARGE_TIMEOUT_MS`
+  를 받아 production billing endpoint를 bearer token으로 호출.
+- `docs/aws_eventbridge_billing_cron.md` 추가:
+  - 05:30 KST schedule
+  - Lambda env vars
+  - manual smoke test
+  - production enablement checklist
+
+### Follow-up
+
+- AWS 콘솔에서 Lambda 생성 후 `infra/aws/billing-cron-lambda.mjs` 배포.
+- EventBridge Scheduler schedule `cron(30 5 * * ? *)`, timezone
+  `Asia/Seoul`, target Lambda로 생성.
+- 수동 Lambda invoke 후 CloudWatch logs와 `/api/billing/charge` 200 응답 확인.
+- 운영 Toss 키 전환 전까지는 테스트 billing key가 있는 row로만 smoke.
+
+### Lambda smoke result
+
+- AWS Lambda `justdo-prod-billing-cron` 생성 완료.
+- 환경변수 설정 완료:
+  - `BILLING_CHARGE_URL=https://www.justdo.co.kr/api/billing/charge`
+  - `BILLING_CRON_SECRET`
+  - `BILLING_CHARGE_TIMEOUT_MS=25000`
+- 수동 테스트 성공:
+  - status `200`
+  - body `{ ok: true, charged: [], failed: [] }`
+  - duration 약 4.4초
+- EventBridge Scheduler final review screen 확인:
+  - schedule `justdo-prod-billing-charge-daily`
+  - cron `30 5 * * ? *`
+  - timezone `Asia/Seoul`
+  - target Lambda `justdo-prod-billing-cron`
+  - payload `{ "source": "aws.eventbridge.scheduler" }`
+  - enabled, retry off, no DLQ
+- 남은 B3 운영 작업: schedule 생성 버튼 클릭 여부 최종 확인 및 첫 scheduled
+  invocation CloudWatch 확인.
