@@ -36,7 +36,9 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 3. **Pro Checkout B4-c/B5 완료** — Web 앱은 로그인 필수, 30일 Trial 동안
 >    Pro 기능 사용 가능, 결제수단 등록은 앱 전체 진입 조건이 아니라 Trial
 >    이후 Pro 기능 지속 사용 조건. Stats dashboard에 Pro gate 적용 완료.
-> 4. **Pro Checkout B6 회귀 테스트** — Toss SDK mock + webhook fixture.
+> 4. **Pro Checkout B6 잔여 회귀 테스트** — route 단위 테스트 1차 완료.
+>    남은 항목은 Toss SDK client mock, cancel edge cases, Toss 테스트 키 E2E,
+>    webhook signature 보강.
 > 5. **iOS Phase 6 잔여** — Phase 7과 독립 트랙. detail edit/delete,
 >    sync status UI, hosted Supabase offline sync 검증, proto 시각 검증.
 
@@ -624,7 +626,11 @@ Important current limitations:
   after Trial. Stats dashboard is currently gated as a Pro feature.
 - Toss webhook signature verification is not implemented. Add it after
   confirming the official dashboard secret/header behavior for this account.
-- There are no Toss-specific automated tests yet. B6 remains open.
+- B6 has first-pass route tests for `issue-key`, `charge` success/failure
+  retry-pause, and Toss webhook fixture/idempotent upsert. Remaining B6 gaps:
+  Toss SDK client mock, cancel route edge cases, Toss test-key E2E, and webhook
+  signature verification after official dashboard secret/header details are
+  available.
 - `SubscriptionPanel` does not auto-refresh after `/billing/success` redirect
   unless the user returns/reloads or clicks refresh; this is acceptable for now
   but can be improved.
@@ -637,8 +643,8 @@ Recommended immediate next steps:
    `toss_billing_key`, `toss_customer_key`, `next_billing_at`, and payment
    method metadata.
 3. Confirm Settings -> 구독 shows Trial/next billing/payment method after refresh.
-4. Then confirm the B3 scheduled invocation or continue with B6 Toss billing
-   regression tests.
+4. Then confirm the B3 scheduled invocation or continue the remaining B6 Toss
+   billing regression tests.
 
 ## Known Notes / Risks
 
@@ -699,7 +705,8 @@ Recommended immediate next steps:
    - **B5 로그인 필수 정책 정리** — 완료. 비로그인 사용자는 로그인 화면에서
      앱 shell로 진입하지 못한다. Trial + 결제수단 미등록 상태는 Pro 사용 가능,
      구독 패널에서 Toss 결제 연결 CTA 표시.
-   - **B6 회귀 테스트** — Toss SDK mock + webhook fixture 단위 테스트.
+   - **B6 회귀 테스트** — route 단위 테스트 1차 완료. 남은 항목은 Toss SDK
+     client mock, cancel edge cases, Toss 테스트 키 E2E, webhook signature 보강.
 
 3. **iOS Phase 6 잔여 작업** (Phase 7과 독립 트랙, 병렬 가능)
    - Native detail editing (edit/delete from pushed task/habit detail screens).

@@ -2603,3 +2603,39 @@ This document records coordination notes for work done with Codex and Claude Cod
   제공한다.
 - 추후 위젯 커스터마이징을 도입할 경우, 기본 위젯 사용성은 Free로 유지하고
   고급 커스터마이징 범위만 별도 정책으로 확정한다.
+
+## 2026-05-19 Pro Checkout B6 route regression tests
+
+### Codex
+
+- `apps/web/src/app/api/billing/billing-routes.test.ts` 추가.
+- 테스트 범위:
+  - `/api/billing/issue-key`
+    - 인증된 사용자의 Toss billing key 발급 후 `user_subscriptions` upsert
+      payload 검증.
+    - 비인증 요청 401 검증.
+  - `/api/billing/charge`
+    - due subscription 결제 성공 시 Toss charge 호출, `payment_events` insert,
+      subscription active/update payload 검증.
+    - 실패 3회째에 `status='paused'`, `next_billing_at=null`,
+      `BILLING_CHARGE_FAILED` event insert 검증.
+  - `/api/webhook/toss`
+    - Toss webhook fixture 저장, `provider_event_id` 기반 idempotent upsert,
+      DONE payment의 subscription active/update payload 검증.
+- 테스트 환경에서 `server-only` import가 막히므로 route test에서 빈 mock으로
+  대체. Supabase server/service-role client와 Toss wrapper는 mock 주입.
+
+### Verification
+
+- `npm --prefix apps/web test` — pass, 8 files / 95 tests.
+- `npm --prefix apps/web run lint` — pass.
+- `npm --prefix apps/web run build` — pass (escalated; Turbopack internal port
+  bind requires elevated execution in this sandbox).
+
+### Remaining B6 gaps
+
+- Toss SDK client mock (`toss-client.ts` / UpgradeModal button flow).
+- Cancel route edge cases.
+- Toss 테스트 키 E2E smoke.
+- Webhook signature verification after Toss dashboard secret/header details are
+  available.

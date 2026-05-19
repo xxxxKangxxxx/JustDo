@@ -27,7 +27,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - iOS Phase 6 잔여 작업 (detail edit/delete, sync status UI, hosted
   Supabase offline sync 검증, proto 시각 검증) 은 Phase 7과 독립 트랙.
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
-  **B3 cron 첫 자동 실행 확인 + B6 회귀 테스트** + **iOS 잔여 마무리**.
+  **B3 cron 첫 자동 실행 확인 + B6 잔여 회귀 테스트** + **iOS 잔여 마무리**.
   Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.
 - Toss 가맹점 심사 준비 체크리스트는 `docs/toss_merchant_review_plan.md`에
   별도로 정리.
@@ -411,8 +411,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     - [x] B5 로그인 필수 정책 정리 — 비로그인 사용자는 로그인 화면에서 앱
       shell로 진입하지 못하는 현재 정책을 테스트로 고정하고, Trial + 결제수단
       미등록 상태는 Pro 사용 가능하되 구독 패널에서 Toss 결제 연결 CTA를 표시.
-    - [ ] B6 회귀 테스트 — Toss SDK mock + webhook fixture 단위 테스트, E2E는
-      Toss 테스트 키.
+    - [ ] B6 회귀 테스트 — 1차 route 단위 테스트 완료:
+      `issue-key`, `charge` 성공/실패 retry-pause, `webhook` fixture/idempotent
+      upsert. 남은 항목: Toss SDK client mock, cancel route edge cases, 운영
+      Toss 테스트 키 E2E, webhook signature는 운영 dashboard secret/header 확인 후.
   - 진행 순서: B1 → B2 → B4 → B3. Track A 완료 후 운영 키만 교체.
 
 ### 7-4. 모바일 진입 페이지
