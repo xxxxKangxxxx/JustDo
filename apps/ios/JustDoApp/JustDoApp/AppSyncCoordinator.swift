@@ -8,6 +8,81 @@
 import Foundation
 import JustDoShared
 import Security
+import Combine
+
+enum AppSyncStatus: Equatable {
+    case unknown
+    case syncing
+    case synced
+    case pending(Int)
+    case failed(String, pendingCount: Int)
+
+    var title: String {
+        switch self {
+        case .unknown:
+            return "확인 전"
+        case .syncing:
+            return "동기화 중"
+        case .synced:
+            return "동기화 완료"
+        case .pending(let count):
+            return "동기화 대기 중 \(count)개"
+        case .failed:
+            return "동기화 실패"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .unknown:
+            return "아직 동기화 상태를 확인하지 않았습니다."
+        case .syncing:
+            return "로컬 변경 사항을 서버와 맞추는 중입니다."
+        case .synced:
+            return "모든 변경 사항이 서버에 반영되었습니다."
+        case .pending(let count):
+            return "\(count)개의 로컬 변경 사항이 서버 반영을 기다리고 있습니다."
+        case .failed(let message, let pendingCount):
+            if pendingCount > 0 {
+                return "\(message) 대기 중인 변경 사항 \(pendingCount)개는 보존됩니다."
+            }
+            return message
+        }
+    }
+
+    var isFailed: Bool {
+        if case .failed = self {
+            return true
+        }
+        return false
+    }
+}
+
+@MainActor
+final class AppSyncStatusStore: ObservableObject {
+    @Published private(set) var status: AppSyncStatus = .unknown
+
+    func markSyncing() {
+        status = .syncing
+    }
+
+    func markFailed(_ error: Error, snapshotStore: CoreDataAppSnapshotStore?) {
+        let pendingCount = pendingMutationCount(snapshotStore: snapshotStore)
+        status = .failed("네트워크 또는 서버 오류로 동기화하지 못했습니다.", pendingCount: pendingCount)
+    }
+
+    func refreshPendingCount(snapshotStore: CoreDataAppSnapshotStore?) {
+        let count = pendingMutationCount(snapshotStore: snapshotStore)
+        status = count == 0 ? .synced : .pending(count)
+    }
+
+    private func pendingMutationCount(snapshotStore: CoreDataAppSnapshotStore?) -> Int {
+        guard let snapshotStore else {
+            return 0
+        }
+        return (try? snapshotStore.queuedMutations().count) ?? 0
+    }
+}
 
 struct SupabaseAppSession {
     var projectURL: URL

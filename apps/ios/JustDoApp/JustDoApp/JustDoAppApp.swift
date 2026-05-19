@@ -12,6 +12,7 @@ import JustDoShared
 @main
 struct JustDoAppApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var syncStatus = AppSyncStatusStore()
     private let coreDataStack = CoreDataStack()
 
     var body: some Scene {
@@ -19,7 +20,8 @@ struct JustDoAppApp: App {
             ContentView(
                 snapshotStore: CoreDataAppSnapshotStore(
                     context: coreDataStack.container.viewContext
-                )
+                ),
+                syncStatus: syncStatus
             ) {
                 await refreshWidgetSnapshot()
             }
@@ -40,16 +42,23 @@ struct JustDoAppApp: App {
         }
     }
 
+    @MainActor
     private func refreshWidgetSnapshot() async {
         do {
             let snapshotStore = CoreDataAppSnapshotStore(
                 context: coreDataStack.container.viewContext
             )
+            syncStatus.markSyncing()
             try await AppSyncCoordinator(
                 snapshotStore: snapshotStore,
                 widgetWriter: try WidgetSnapshotWriter()
             ).refreshWidgetSnapshot(selectedDate: "2026-04-30")
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
         } catch {
+            let snapshotStore = CoreDataAppSnapshotStore(
+                context: coreDataStack.container.viewContext
+            )
+            syncStatus.markFailed(error, snapshotStore: snapshotStore)
             #if DEBUG
             print("Failed to refresh widget snapshot: \(error)")
             #endif

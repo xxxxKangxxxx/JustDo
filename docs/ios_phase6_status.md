@@ -35,6 +35,8 @@ implementation gaps, and checks to run before testing or shipping.
 - Pushed task/habit detail screens support local edit and delete actions. Saves
   apply to the Core Data mirror and enqueue `taskUpsert` / `habitUpsert`; deletes
   enqueue `taskDelete` / `habitDelete` and return to the previous screen.
+- Settings includes an app-facing sync status row. It shows syncing, synced,
+  pending mutation count, and failed states; failed syncs expose a retry action.
 - The signed-in root shell now renders native Home / Stats / Settings tabs
   based on `reference/proto/`.
 - The Home tab includes the month calendar, selected-day panel, task/habit
@@ -66,8 +68,8 @@ implementation gaps, and checks to run before testing or shipping.
 
 ## Remaining App Gaps
 
-- App-facing sync status/error UI is still minimal; failed queue flushes should
-  be visible to the user.
+- Hosted OAuth/offline sync still needs a manual verification pass against the
+  deployed Supabase project.
 - Native UI still needs another visual pass against `reference/proto/` after
   task/habit CRUD coverage settles.
 
@@ -110,6 +112,9 @@ swift test
 - Manage data from Settings:
   - Expected: Settings > 습관 관리 supports add/delete.
   - Expected: Settings > 카테고리 관리 supports add/delete.
+- Check Settings > 데이터 > 동기화:
+  - Expected: synced, syncing, pending, and failed states render in Settings only.
+  - Expected: failed state shows a retry button and keeps pending local changes.
 - Launch app on simulator.
 - Confirm the app writes a Keychain session and refreshes the widget snapshot.
 - Add the widget to the simulator home screen.
@@ -156,7 +161,6 @@ swift test
 
 - Verify signed-in iOS root home, add sheet, stats, and settings visually
   against `reference/proto/`.
-- Add app-facing sync status/error UI so failed queue flushes are visible.
 - Add UI tests for deep-link opening once the app shell is more complete.
 - Consider a narrower Supabase task completion patch endpoint in iOS if full
   task upsert starts carrying fields that should remain remote-owned.

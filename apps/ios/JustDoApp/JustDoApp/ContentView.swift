@@ -13,9 +13,21 @@ private typealias JDCategory = JustDoShared.Category
 
 struct ContentView: View {
     @StateObject private var auth = AuthViewModel()
+    @ObservedObject private var syncStatus: AppSyncStatusStore
     @State private var navigationPath = NavigationPath()
     var snapshotStore: CoreDataAppSnapshotStore?
     var onSessionChanged: () async -> Void = {}
+
+    @MainActor
+    init(
+        snapshotStore: CoreDataAppSnapshotStore? = nil,
+        syncStatus: AppSyncStatusStore,
+        onSessionChanged: @escaping () async -> Void = {}
+    ) {
+        self.snapshotStore = snapshotStore
+        self.onSessionChanged = onSessionChanged
+        _syncStatus = ObservedObject(wrappedValue: syncStatus)
+    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -23,9 +35,9 @@ struct ContentView: View {
             .navigationDestination(for: DetailRoute.self) { route in
                 switch route {
                 case .task(let id):
-                    TaskDetailScreen(id: id, snapshotStore: snapshotStore)
+                    TaskDetailScreen(id: id, snapshotStore: snapshotStore, syncStatus: syncStatus)
                 case .habit(let id):
-                    HabitDetailScreen(id: id, snapshotStore: snapshotStore)
+                    HabitDetailScreen(id: id, snapshotStore: snapshotStore, syncStatus: syncStatus)
                 }
             }
         }
@@ -53,6 +65,7 @@ struct ContentView: View {
         case .signedIn:
             HomeRootView(
                 snapshotStore: snapshotStore,
+                syncStatus: syncStatus,
                 onOpenTask: { navigationPath.append(DetailRoute.task($0)) },
                 onOpenHabit: { navigationPath.append(DetailRoute.habit($0)) },
                 onSignOut: {
@@ -396,6 +409,7 @@ private struct EmailIcon: View {
 
 private struct HomeRootView: View {
     let snapshotStore: CoreDataAppSnapshotStore?
+    @ObservedObject var syncStatus: AppSyncStatusStore
     let onOpenTask: (UUID) -> Void
     let onOpenHabit: (UUID) -> Void
     let onSignOut: () -> Void
@@ -495,9 +509,11 @@ private struct HomeRootView: View {
                 settings: snapshot?.settings,
                 isDarkMode: $isDarkMode,
                 actionMessage: actionMessage,
+                syncStatus: syncStatus.status,
                 onToggleWeekStart: toggleWeekStart,
                 onManageHabits: { isShowingHabitManager = true },
                 onManageCategories: { isShowingCategoryManager = true },
+                onRetrySync: retrySync,
                 onSignOut: onSignOut
             )
                 .padding(.bottom, 100)
@@ -571,6 +587,7 @@ private struct HomeRootView: View {
             selectedDate = loaded.view.selectedDate
             displayYear = loaded.view.year
             displayMonth = loaded.view.month
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             loadError = nil
         } catch {
             loadError = "Could not load local mirror."
@@ -612,6 +629,7 @@ private struct HomeRootView: View {
                 )
             )
             loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Task added."
         } catch {
             actionMessage = "Could not add task."
@@ -650,6 +668,7 @@ private struct HomeRootView: View {
                 )
             )
             loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Habit added."
         } catch {
             actionMessage = "Could not add habit."
@@ -672,6 +691,7 @@ private struct HomeRootView: View {
                 )
             )
             loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Habit updated."
         } catch {
             actionMessage = "Could not update habit."
@@ -694,6 +714,7 @@ private struct HomeRootView: View {
                 )
             )
             loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Settings updated."
         } catch {
             actionMessage = "Could not update settings."
@@ -729,6 +750,7 @@ private struct HomeRootView: View {
                 )
             )
             loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Category added."
         } catch {
             actionMessage = "Could not add category."
@@ -750,6 +772,7 @@ private struct HomeRootView: View {
                 )
             )
             loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Category deleted."
         } catch {
             actionMessage = "Could not delete category."
@@ -771,9 +794,30 @@ private struct HomeRootView: View {
                 )
             )
             loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Habit deleted."
         } catch {
             actionMessage = "Could not delete habit."
+        }
+    }
+
+    private func retrySync() {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+        syncStatus.markSyncing()
+        _Concurrency.Task {
+            do {
+                try await AppSyncCoordinator(
+                    snapshotStore: snapshotStore,
+                    widgetWriter: try WidgetSnapshotWriter()
+                ).refreshWidgetSnapshot(selectedDate: selectedDate)
+                loadSnapshot()
+                syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            } catch {
+                syncStatus.markFailed(error, snapshotStore: snapshotStore)
+            }
         }
     }
 }
@@ -1588,9 +1632,11 @@ private struct SettingsRootTabView: View {
     let settings: Settings?
     @Binding var isDarkMode: Bool
     let actionMessage: String?
+    let syncStatus: AppSyncStatus
     let onToggleWeekStart: () -> Void
     let onManageHabits: () -> Void
     let onManageCategories: () -> Void
+    let onRetrySync: () -> Void
     let onSignOut: () -> Void
 
     @State private var localNotify = true
@@ -1626,7 +1672,7 @@ private struct SettingsRootTabView: View {
                     SettingsRow(title: "Pro로 업그레이드", pro: true, chevron: true, isLast: true)
                 }
                 SettingGroup(label: "데이터") {
-                    SettingsRow(title: "동기화", detail: actionMessage ?? "Core Data mirror active.")
+                    SyncStatusRow(status: syncStatus, actionMessage: actionMessage, onRetry: onRetrySync)
                     SettingsRow(title: "습관 관리", chevron: true, action: onManageHabits)
                     SettingsRow(title: "카테고리 관리", chevron: true, action: onManageCategories)
                     SettingsRow(title: "데이터 내보내기", chevron: true)
@@ -2010,6 +2056,90 @@ private struct SettingsRow: View {
     }
 }
 
+private struct SyncStatusRow: View {
+    let status: AppSyncStatus
+    let actionMessage: String?
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: iconName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(statusColor)
+                    .frame(width: 24, height: 24)
+                    .background(statusColor.opacity(0.12))
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("동기화")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(JDTheme.primaryText)
+                    Text(status.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                }
+                Spacer()
+                if case .syncing = status {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            Text(actionMessage ?? status.message)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(JDTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            if status.isFailed {
+                Button("다시 시도", action: onRetry)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(JDTheme.primaryText)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(JDTheme.divider)
+                .frame(height: 0.5)
+                .padding(.leading, 14)
+        }
+    }
+
+    private var iconName: String {
+        switch status {
+        case .unknown:
+            return "questionmark.circle.fill"
+        case .syncing:
+            return "arrow.triangle.2.circlepath"
+        case .synced:
+            return "checkmark.circle.fill"
+        case .pending:
+            return "clock.fill"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch status {
+        case .unknown:
+            return JDTheme.tertiaryText
+        case .syncing:
+            return JDTheme.me
+        case .synced:
+            return JDTheme.habit
+        case .pending:
+            return JDTheme.accent
+        case .failed:
+            return JDTheme.external
+        }
+    }
+}
+
 private struct ToggleSwitch: View {
     @Binding var isOn: Bool
 
@@ -2356,6 +2486,7 @@ private enum DeepLinkDetail: Equatable {
 private struct TaskDetailScreen: View {
     let id: UUID
     let snapshotStore: CoreDataAppSnapshotStore?
+    let syncStatus: AppSyncStatusStore
 
     @Environment(\.dismiss) private var dismiss
     @State private var detail: DeepLinkDetail?
@@ -2430,6 +2561,7 @@ private struct TaskDetailScreen: View {
             isEditing = false
             message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
             refresh()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
         } catch {
             message = .error("Task 저장에 실패했습니다.")
         }
@@ -2448,6 +2580,7 @@ private struct TaskDetailScreen: View {
                     mutation: .taskDelete(id: id)
                 )
             )
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             dismiss()
         } catch {
             message = .error("Task 삭제에 실패했습니다.")
@@ -2458,6 +2591,7 @@ private struct TaskDetailScreen: View {
 private struct HabitDetailScreen: View {
     let id: UUID
     let snapshotStore: CoreDataAppSnapshotStore?
+    let syncStatus: AppSyncStatusStore
 
     @Environment(\.dismiss) private var dismiss
     @State private var detail: DeepLinkDetail?
@@ -2532,6 +2666,7 @@ private struct HabitDetailScreen: View {
             isEditing = false
             message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
             refresh()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
         } catch {
             message = .error("Habit 저장에 실패했습니다.")
         }
@@ -2550,6 +2685,7 @@ private struct HabitDetailScreen: View {
                     mutation: .habitDelete(id: id)
                 )
             )
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             dismiss()
         } catch {
             message = .error("Habit 삭제에 실패했습니다.")
@@ -2986,5 +3122,5 @@ private extension JustDoDeepLink {
 }
 
 #Preview {
-    ContentView()
+    ContentView(syncStatus: AppSyncStatusStore())
 }

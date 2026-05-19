@@ -2660,3 +2660,27 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - `cd apps/ios && swift test` — pass, 30 tests.
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-19 iOS Settings sync status UI
+
+### Codex
+
+- Added `AppSyncStatus` and `AppSyncStatusStore` in the iOS app target.
+- `JustDoAppApp` now owns the shared sync status store and updates it around
+  app launch / foreground sync:
+  - `syncing` while `AppSyncCoordinator.refreshWidgetSnapshot` is running.
+  - `synced` when the local mutation queue is empty after sync.
+  - `pending(n)` when local queued mutations remain.
+  - `failed(message, pendingCount)` when refresh/flush/read-sync fails.
+- `HomeRootView` and pushed task/habit detail screens refresh the pending count
+  after local mutations are applied and enqueued.
+- Settings > 데이터 now shows a web-like sync row only in Settings, including
+  status icon/title/message, pending count, spinner while syncing, and a retry
+  button for failed syncs.
+- Updated `docs/ios_phase6_status.md` and `docs/next_steps.md`; remaining iOS
+  gaps are hosted offline sync verification and proto visual pass.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 30 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
