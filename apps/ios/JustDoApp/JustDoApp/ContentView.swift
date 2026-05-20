@@ -425,8 +425,12 @@ private struct HomeRootView: View {
     @State private var isDarkMode = false
     @State private var loadError: String?
     @State private var actionMessage: String?
+    @State private var selectedDayPanelHeight: CGFloat = 320
+    @State private var selectedDayPanelDragOffset: CGFloat = 0
 
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+    private let selectedDayPanelCollapsedHeight: CGFloat = 320
+    private let selectedDayPanelExpandedHeight: CGFloat = 520
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -473,29 +477,32 @@ private struct HomeRootView: View {
     private var activeRootTab: some View {
         switch selectedTab {
         case .home:
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
-                    homeHeader
-                    MonthCalendarView(
-                        year: displayYear,
-                        month: displayMonth,
-                        selectedDate: selectedDate,
-                        tasks: snapshot?.tasks ?? [],
-                        habits: snapshot?.habits ?? [],
-                        categories: snapshot?.categories ?? [],
-                        onSelectDate: { selectedDate = $0 }
-                    )
-                    SelectedDayPanel(
-                        selectedDate: selectedDate,
-                        tasks: tasksForSelectedDate,
-                        habits: snapshot?.habits ?? [],
-                        categories: snapshot?.categories ?? [],
-                        onOpenTask: onOpenTask,
-                        onOpenHabit: onOpenHabit
-                    )
-                }
-                .padding(.bottom, 140)
+            VStack(spacing: 14) {
+                homeHeader
+                MonthCalendarView(
+                    year: displayYear,
+                    month: displayMonth,
+                    selectedDate: selectedDate,
+                    tasks: snapshot?.tasks ?? [],
+                    categories: snapshot?.categories ?? [],
+                    onSelectDate: { selectedDate = $0 }
+                )
+                SelectedDayPanel(
+                    selectedDate: selectedDate,
+                    tasks: tasksForSelectedDate,
+                    habits: snapshot?.habits ?? [],
+                    categories: snapshot?.categories ?? [],
+                    onToggleTask: toggleTask(_:),
+                    onToggleHabit: toggleHabit(_:on:),
+                    onOpenTask: onOpenTask,
+                    onOpenHabit: onOpenHabit,
+                    onResizeDragChanged: { selectedDayPanelDragOffset = $0 },
+                    onResizeDragEnded: finishSelectedDayPanelResize(_:)
+                )
+                .frame(height: currentSelectedDayPanelHeight)
             }
+            .padding(.bottom, 100)
+            .frame(maxHeight: .infinity, alignment: .top)
         case .stats:
             StatsRootTabView(
                 snapshot: snapshot,
@@ -518,6 +525,23 @@ private struct HomeRootView: View {
             )
                 .padding(.bottom, 100)
         }
+    }
+
+    private var currentSelectedDayPanelHeight: CGFloat {
+        clampedSelectedDayPanelHeight(selectedDayPanelHeight - selectedDayPanelDragOffset)
+    }
+
+    private func finishSelectedDayPanelResize(_ translationHeight: CGFloat) {
+        let proposedHeight = clampedSelectedDayPanelHeight(selectedDayPanelHeight - translationHeight)
+        let snapThreshold = (selectedDayPanelCollapsedHeight + selectedDayPanelExpandedHeight) / 2
+        selectedDayPanelHeight = proposedHeight >= snapThreshold
+            ? selectedDayPanelExpandedHeight
+            : selectedDayPanelCollapsedHeight
+        selectedDayPanelDragOffset = 0
+    }
+
+    private func clampedSelectedDayPanelHeight(_ height: CGFloat) -> CGFloat {
+        min(max(height, selectedDayPanelCollapsedHeight), selectedDayPanelExpandedHeight)
     }
 
     private var homeHeader: some View {
@@ -698,6 +722,31 @@ private struct HomeRootView: View {
         }
     }
 
+    private func toggleTask(_ task: Task) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        var updated = task
+        updated.isCompleted.toggle()
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .taskUpsert(updated)
+                )
+            )
+            loadSnapshot()
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "Task updated."
+        } catch {
+            actionMessage = "Could not update task."
+        }
+    }
+
     private func toggleWeekStart() {
         guard let snapshotStore else {
             actionMessage = "Local mirror is unavailable."
@@ -842,11 +891,12 @@ private struct MonthCalendarView: View {
     let month: Int
     let selectedDate: String
     let tasks: [Task]
-    let habits: [Habit]
     let categories: [JDCategory]
     let onSelectDate: (String) -> Void
 
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+    private let barLaneHeight: CGFloat = 14
+    private let barLaneSpacing: CGFloat = 2
 
     var body: some View {
         VStack(spacing: 0) {
@@ -861,32 +911,12 @@ private struct MonthCalendarView: View {
             }
 
             ForEach(weeks, id: \.self) { week in
-                VStack(spacing: 3) {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 0) {
-                        ForEach(Array(week.enumerated()), id: \.element.iso) { index, day in
-                            CalendarDayCell(
-                                day: day,
-                                index: index,
-                                isSelected: day.iso == selectedDate,
-                                hasTask: tasks.contains { $0.startDate <= day.iso && day.iso <= $0.endDate },
-                                hasHabit: habits.contains { $0.log[day.iso] == 1 },
-                                categoryColor: categoryColor(for: day.iso),
-                                onSelect: { onSelectDate(day.iso) }
-                            )
-                        }
-                    }
-                    WeekTaskBars(
-                        week: week,
-                        tasks: tasks.filter { $0.startDate != $0.endDate },
-                        categories: categories
-                    )
-                }
-                .padding(.vertical, 4)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(JDTheme.divider)
-                        .frame(height: 0.5)
-                }
+                CalendarWeekRow(
+                    week: week,
+                    selectedDate: selectedDate,
+                    bars: weekBars(for: week),
+                    onSelectDate: onSelectDate
+                )
             }
         }
         .padding(.horizontal, 14)
@@ -906,9 +936,155 @@ private struct MonthCalendarView: View {
         return JDTheme.tertiaryText
     }
 
-    private func categoryColor(for iso: String) -> Color {
-        let categoryID = tasks.first { $0.startDate <= iso && iso <= $0.endDate }?.categoryID
-        return categories.first { $0.id == categoryID }?.displayColor ?? JDTheme.me
+    private var monthStart: String {
+        JDDate.iso(year: year, month: month, day: 1)
+    }
+
+    private var monthEnd: String {
+        JDDate.iso(year: year, month: month, day: JDDate.days(year: year, month: month))
+    }
+
+    private var monthTaskBars: [MonthTaskBar] {
+        let overlapping = tasks
+            .filter { $0.endDate >= monthStart && $0.startDate <= monthEnd }
+            .sorted {
+                if $0.startDate == $1.startDate {
+                    return $0.endDate > $1.endDate
+                }
+                return $0.startDate < $1.startDate
+            }
+
+        var laneEndDates: [String] = []
+        return overlapping.map { task in
+            let lane: Int
+            if let openLane = laneEndDates.firstIndex(where: { $0 < task.startDate }) {
+                lane = openLane
+                laneEndDates[openLane] = task.endDate
+            } else {
+                lane = laneEndDates.count
+                laneEndDates.append(task.endDate)
+            }
+
+            return MonthTaskBar(
+                task: task,
+                lane: lane,
+                color: categories.first { $0.id == task.categoryID }?.displayColor ?? JDTheme.me
+            )
+        }
+    }
+
+    private func weekBars(for week: [CalendarDay]) -> [WeekTaskBar] {
+        monthTaskBars.compactMap { bar in
+            var startIndex: Int?
+            var endIndex: Int?
+            for index in week.indices where week[index].isCurrentMonth {
+                let iso = week[index].iso
+                if bar.task.startDate <= iso && iso <= bar.task.endDate {
+                    startIndex = startIndex ?? index
+                    endIndex = index
+                }
+            }
+            guard let startIndex, let endIndex else {
+                return nil
+            }
+
+            return WeekTaskBar(
+                task: bar.task,
+                startIndex: startIndex,
+                endIndex: endIndex,
+                lane: bar.lane,
+                color: bar.color,
+                continuesLeft: bar.task.startDate < week[startIndex].iso,
+                continuesRight: bar.task.endDate > week[endIndex].iso
+            )
+        }
+    }
+
+}
+
+private struct CalendarWeekRow: View {
+    let week: [CalendarDay]
+    let selectedDate: String
+    let bars: [WeekTaskBar]
+    let onSelectDate: (String) -> Void
+
+    private let barLaneHeight: CGFloat = 14
+    private let barLaneSpacing: CGFloat = 2
+
+    var body: some View {
+        GeometryReader { proxy in
+            let cellWidth = proxy.size.width / 7
+            ZStack(alignment: .topLeading) {
+                HStack(spacing: 0) {
+                    ForEach(Array(week.enumerated()), id: \.element.iso) { index, day in
+                        CalendarDayCell(
+                            day: day,
+                            index: index,
+                            isSelected: day.iso == selectedDate,
+                            onSelect: { onSelectDate(day.iso) }
+                        )
+                        .frame(width: cellWidth, height: 32, alignment: .top)
+                    }
+                }
+
+                ForEach(bars, id: \.task.id) { bar in
+                    CalendarTaskBar(bar: bar)
+                        .frame(
+                            width: cellWidth * CGFloat(bar.endIndex - bar.startIndex + 1) - 4,
+                            height: barLaneHeight
+                        )
+                        .offset(
+                            x: cellWidth * CGFloat(bar.startIndex) + 2,
+                            y: 32 + CGFloat(bar.lane) * (barLaneHeight + barLaneSpacing)
+                        )
+                }
+            }
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+            }
+        }
+        .frame(height: rowHeight)
+    }
+
+    private var rowHeight: CGFloat {
+        32 + CGFloat(max(2, laneCount)) * (barLaneHeight + barLaneSpacing) + 4
+    }
+
+    private var laneCount: Int {
+        (bars.map(\.lane).max() ?? -1) + 1
+    }
+}
+
+private struct CalendarTaskBar: View {
+    let bar: WeekTaskBar
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
+            .lineLimit(1)
+            .foregroundStyle(bar.color)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
+            .background(bar.color.opacity(0.14))
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: bar.continuesLeft ? 0 : 4,
+                    bottomLeadingRadius: bar.continuesLeft ? 0 : 4,
+                    bottomTrailingRadius: bar.continuesRight ? 0 : 4,
+                    topTrailingRadius: bar.continuesRight ? 0 : 4
+                )
+            )
+            .opacity(bar.task.isCompleted ? 0.5 : 1)
+            .strikethrough(bar.task.isCompleted)
+    }
+
+    private var title: String {
+        if bar.continuesLeft {
+            return "← \(bar.task.title)"
+        }
+        return bar.task.title
     }
 }
 
@@ -916,39 +1092,21 @@ private struct CalendarDayCell: View {
     let day: CalendarDay
     let index: Int
     let isSelected: Bool
-    let hasTask: Bool
-    let hasHabit: Bool
-    let categoryColor: Color
     let onSelect: () -> Void
 
     var body: some View {
         Button(action: day.isCurrentMonth ? onSelect : {}) {
-            VStack(spacing: 2) {
-                Text(String(day.day))
-                    .font(.system(size: 14, weight: isSelected || day.iso == JDDate.todayISO ? .semibold : .medium))
-                    .monospacedDigit()
-                    .frame(width: 24, height: 24)
-                    .foregroundStyle(textColor)
-                    .background(day.iso == JDDate.todayISO ? JDTheme.accent : isSelected ? Color.black.opacity(0.06) : .clear)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(isSelected && day.iso != JDDate.todayISO ? JDTheme.accent : .clear, lineWidth: 1.5)
-                    )
-                HStack(spacing: 2) {
-                    if hasTask && day.isCurrentMonth {
-                        Circle()
-                            .fill(categoryColor)
-                            .frame(width: 4, height: 4)
-                    }
-                    if hasHabit && day.isCurrentMonth {
-                        Circle()
-                            .fill(JDTheme.habit)
-                            .frame(width: 4, height: 4)
-                    }
-                }
-                .frame(height: 4)
-            }
+            Text(String(day.day))
+                .font(.system(size: 14, weight: isSelected || day.iso == JDDate.todayISO ? .semibold : .medium))
+                .monospacedDigit()
+                .frame(width: 24, height: 24)
+                .foregroundStyle(textColor)
+                .background(day.iso == JDDate.todayISO ? JDTheme.accent : isSelected ? Color.black.opacity(0.06) : .clear)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(isSelected && day.iso != JDDate.todayISO ? JDTheme.accent : .clear, lineWidth: 1.5)
+                )
             .frame(maxWidth: .infinity, minHeight: 32)
         }
         .buttonStyle(.plain)
@@ -972,61 +1130,20 @@ private struct CalendarDayCell: View {
     }
 }
 
-private struct WeekTaskBars: View {
-    let week: [CalendarDay]
-    let tasks: [Task]
-    let categories: [JDCategory]
-
-    var body: some View {
-        VStack(spacing: 2) {
-            ForEach(bars.prefix(2), id: \.task.id) { bar in
-                HStack(spacing: 0) {
-                    ForEach(0..<7, id: \.self) { index in
-                        if index >= bar.startIndex && index <= bar.endIndex {
-                            Text(index == bar.startIndex ? bar.task.title : "")
-                                .font(.system(size: 10, weight: .semibold))
-                                .lineLimit(1)
-                                .foregroundStyle(bar.color)
-                                .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
-                                .padding(.horizontal, index == bar.startIndex ? 6 : 0)
-                                .background(bar.color.opacity(0.14))
-                        } else {
-                            Color.clear
-                                .frame(maxWidth: .infinity, minHeight: 14)
-                        }
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
-        }
-        .frame(minHeight: 30, alignment: .top)
-    }
-
-    private var bars: [WeekTaskBar] {
-        tasks.compactMap { task in
-            var startIndex: Int?
-            var endIndex: Int?
-            for index in week.indices where week[index].isCurrentMonth {
-                let iso = week[index].iso
-                if task.startDate <= iso && iso <= task.endDate {
-                    startIndex = startIndex ?? index
-                    endIndex = index
-                }
-            }
-            guard let startIndex, let endIndex else {
-                return nil
-            }
-            let color = categories.first { $0.id == task.categoryID }?.displayColor ?? JDTheme.me
-            return WeekTaskBar(task: task, startIndex: startIndex, endIndex: endIndex, color: color)
-        }
-    }
+private struct MonthTaskBar {
+    let task: Task
+    let lane: Int
+    let color: Color
 }
 
 private struct WeekTaskBar {
     let task: Task
     let startIndex: Int
     let endIndex: Int
+    let lane: Int
     let color: Color
+    let continuesLeft: Bool
+    let continuesRight: Bool
 }
 
 private struct SelectedDayPanel: View {
@@ -1034,16 +1151,65 @@ private struct SelectedDayPanel: View {
     let tasks: [Task]
     let habits: [Habit]
     let categories: [JDCategory]
+    let onToggleTask: (Task) -> Void
+    let onToggleHabit: (Habit, String) -> Void
     let onOpenTask: (UUID) -> Void
     let onOpenHabit: (UUID) -> Void
+    let onResizeDragChanged: (CGFloat) -> Void
+    let onResizeDragEnded: (CGFloat) -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            dragHeader
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(groupedTasks, id: \.category.id) { group in
+                        TaskGroupSection(
+                            category: group.category,
+                            tasks: group.tasks,
+                            onToggleTask: onToggleTask,
+                            onOpenTask: onOpenTask
+                        )
+                    }
+
+                    if !habits.isEmpty {
+                        HabitGroupSection(
+                            habits: habits,
+                            selectedDate: selectedDate,
+                            onToggleHabit: onToggleHabit,
+                            onOpenHabit: onOpenHabit
+                        )
+                    }
+
+                    if tasks.isEmpty && habits.isEmpty {
+                        Text("이 날엔 할일이 없어요. + 로 추가해보세요.")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(JDTheme.tertiaryText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 32)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 24)
+        .background(JDTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+    }
+
+    private var dragHeader: some View {
         VStack(alignment: .leading, spacing: 0) {
             Capsule()
                 .fill(JDTheme.dividerStrong)
                 .frame(width: 36, height: 4)
                 .frame(maxWidth: .infinity)
+                .padding(.top, 10)
                 .padding(.bottom, 14)
+
             HStack(alignment: .firstTextBaseline) {
                 Text("\(components.month)월 \(components.day)일")
                     .font(.system(size: 18, weight: .bold))
@@ -1056,38 +1222,17 @@ private struct SelectedDayPanel: View {
                     .foregroundStyle(JDTheme.tertiaryText)
             }
             .padding(.bottom, 6)
-
-            ForEach(groupedTasks, id: \.category.id) { group in
-                TaskGroupSection(
-                    category: group.category,
-                    tasks: group.tasks,
-                    onOpenTask: onOpenTask
-                )
-            }
-
-            if !habits.isEmpty {
-                HabitGroupSection(
-                    habits: habits,
-                    selectedDate: selectedDate,
-                    onOpenHabit: onOpenHabit
-                )
-            }
-
-            if tasks.isEmpty && habits.isEmpty {
-                Text("이 날엔 할일이 없어요. + 로 추가해보세요.")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(JDTheme.tertiaryText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
-            }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 24)
-        .background(JDTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 8)
+                .onChanged { value in
+                    onResizeDragChanged(value.translation.height)
+                }
+                .onEnded { value in
+                    onResizeDragEnded(value.translation.height)
+                }
+        )
     }
 
     private var components: (month: Int, day: Int) {
@@ -1110,15 +1255,20 @@ private struct SelectedDayPanel: View {
 private struct TaskGroupSection: View {
     let category: JDCategory
     let tasks: [Task]
+    let onToggleTask: (Task) -> Void
     let onOpenTask: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionHeader(title: category.name, count: tasks.count, color: category.displayColor)
             ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
-                TaskRow(task: task, color: category.displayColor, isLast: index == tasks.count - 1) {
-                    onOpenTask(task.id)
-                }
+                TaskRow(
+                    task: task,
+                    color: category.displayColor,
+                    isLast: index == tasks.count - 1,
+                    onToggle: { onToggleTask(task) },
+                    onOpen: { onOpenTask(task.id) }
+                )
             }
         }
         .padding(.top, 14)
@@ -1128,6 +1278,7 @@ private struct TaskGroupSection: View {
 private struct HabitGroupSection: View {
     let habits: [Habit]
     let selectedDate: String
+    let onToggleHabit: (Habit, String) -> Void
     let onOpenHabit: (UUID) -> Void
 
     var body: some View {
@@ -1138,7 +1289,8 @@ private struct HabitGroupSection: View {
                     habit: habit,
                     selectedDate: selectedDate,
                     isLast: index == habits.count - 1,
-                    onTap: { onOpenHabit(habit.id) }
+                    onToggle: { onToggleHabit(habit, selectedDate) },
+                    onOpen: { onOpenHabit(habit.id) }
                 )
             }
         }
@@ -1171,52 +1323,64 @@ private struct TaskRow: View {
     let task: Task
     let color: Color
     let isLast: Bool
-    let onTap: () -> Void
+    let onToggle: () -> Void
+    let onOpen: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
+        HStack(spacing: 12) {
+            Button(action: onToggle) {
                 CheckCircle(isChecked: task.isCompleted, color: color)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(task.title)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(task.isCompleted ? JDTheme.tertiaryText : JDTheme.primaryText)
-                            .strikethrough(task.isCompleted)
-                            .lineLimit(1)
-                        if task.priority == .high {
-                            Text("!")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(JDTheme.external)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(JDTheme.external.opacity(0.14))
-                                .clipShape(RoundedRectangle(cornerRadius: 3))
-                        }
-                    }
-                    if !task.tags.isEmpty {
-                        Text(task.tags.joined(separator: " "))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(JDTheme.tertiaryText)
-                    }
-                }
-                Spacer()
-                Text(taskDetailText)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(JDTheme.secondaryText)
-                    .monospacedDigit()
             }
-            .padding(.vertical, 11)
-            .overlay(alignment: .bottom) {
-                if !isLast {
-                    Rectangle()
-                        .fill(JDTheme.divider)
-                        .frame(height: 0.5)
-                        .padding(.leading, 32)
+            .buttonStyle(.plain)
+            .accessibilityLabel(task.isCompleted ? "Task 완료 취소" : "Task 완료")
+
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    taskContent
+                    Spacer()
+                    Text(taskDetailText)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .monospacedDigit()
                 }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 11)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+                    .padding(.leading, 32)
             }
         }
-        .buttonStyle(.plain)
+    }
+
+    private var taskContent: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(task.title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(task.isCompleted ? JDTheme.tertiaryText : JDTheme.primaryText)
+                    .strikethrough(task.isCompleted)
+                    .lineLimit(1)
+                if task.priority == .high {
+                    Text("!")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(JDTheme.external)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(JDTheme.external.opacity(0.14))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+            }
+            if !task.tags.isEmpty {
+                Text(task.tags.joined(separator: " "))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(JDTheme.tertiaryText)
+            }
+        }
     }
 
     private var taskDetailText: String {
@@ -1231,38 +1395,46 @@ private struct HabitRow: View {
     let habit: Habit
     let selectedDate: String
     let isLast: Bool
-    let onTap: () -> Void
+    let onToggle: () -> Void
+    let onOpen: () -> Void
 
     private var isDone: Bool {
         habit.log[selectedDate] == 1
     }
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
+        HStack(spacing: 12) {
+            Button(action: onToggle) {
                 CheckCircle(isChecked: isDone, color: JDTheme.habit)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(habit.emoji) \(habit.title)")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(isDone ? JDTheme.tertiaryText : JDTheme.primaryText)
-                        .strikethrough(isDone)
-                    Text("🔥 \(JDDate.habitStreak(habit, selectedDate: selectedDate))일째")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(JDTheme.habit)
-                }
-                Spacer()
             }
-            .padding(.vertical, 11)
-            .overlay(alignment: .bottom) {
-                if !isLast {
-                    Rectangle()
-                        .fill(JDTheme.divider)
-                        .frame(height: 0.5)
-                        .padding(.leading, 32)
+            .buttonStyle(.plain)
+            .accessibilityLabel(isDone ? "Habit 완료 취소" : "Habit 완료")
+
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(habit.emoji) \(habit.title)")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(isDone ? JDTheme.tertiaryText : JDTheme.primaryText)
+                            .strikethrough(isDone)
+                        Text("🔥 \(JDDate.habitStreak(habit, selectedDate: selectedDate))일째")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(JDTheme.habit)
+                    }
+                    Spacer()
                 }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 11)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+                    .padding(.leading, 32)
             }
         }
-        .buttonStyle(.plain)
     }
 }
 

@@ -41,6 +41,10 @@ implementation gaps, and checks to run before testing or shipping.
   based on `reference/proto/`.
 - The Home tab includes the month calendar, selected-day panel, task/habit
   rows, add button, and bottom tab bar.
+- The Home calendar keeps date cells free of dot indicators; tasks are shown by
+  horizontal bars with title text. The calendar area remains fixed while the
+  selected-day task/habit panel starts at its default height and expands when
+  its top handle/date header is dragged upward.
 - The add flow uses a partial-height bottom sheet with Task/Habit modes,
   task date/time/category/priority fields, and habit emoji entry.
 - Settings owns dark-mode control. The home header no longer has a separate
@@ -68,8 +72,6 @@ implementation gaps, and checks to run before testing or shipping.
 
 ## Remaining App Gaps
 
-- Hosted OAuth/offline sync still needs a manual verification pass against the
-  deployed Supabase project.
 - Native UI still needs another visual pass against `reference/proto/` after
   task/habit CRUD coverage settles.
 
@@ -105,6 +107,10 @@ swift test
     `reference/proto/home.jsx`.
   - Expected: month header, calendar grid, selected-day panel, task/habit rows,
     and bottom tab bar render without overlap.
+  - Expected: task bars render with title text and no separate date-cell dots.
+  - Expected: dragging the selected-day panel top area upward expands only the
+    panel; dragging it down returns it to default height. The calendar itself
+    does not scroll with the task/habit list.
   - Expected: home header has a `+` add button only; dark mode is controlled
     from Settings.
   - Expected: `+` opens a partial-height bottom sheet, not a full-screen sheet.
@@ -150,7 +156,7 @@ swift test
 - For web deployment and custom domain work, follow
   `docs/deployment_domain_aws_plan.md`.
 - Run hosted OAuth/offline sync verification once before declaring v1 sync
-  stable.
+  stable. Last passed: 2026-05-20 against hosted Supabase.
 
 ## Next Work
 

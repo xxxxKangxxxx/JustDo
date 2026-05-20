@@ -24,9 +24,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - 태블릿 viewport 정책: 모바일 안내 vs 데스크탑 shell 분기 breakpoint를
   Tailwind `md` (768px)로 낮춤. iPad Pro/Air portrait도 데스크탑 shell,
   iPad mini와 phone만 모바일 안내.
-- iOS Phase 6 잔여 작업 (hosted Supabase offline sync 검증, proto 시각 검증)
-  은 Phase 7과 독립 트랙. Detail edit/delete와 Settings sync status UI는
-  반영 완료.
+- iOS Phase 6 잔여 작업은 proto 시각 검증 중심. Detail edit/delete,
+  Settings sync status UI, hosted Supabase offline sync 검증, Home row check,
+  calendar task bar/no-dot rendering, fixed-calendar/resizable-panel 동작은
+  반영/통과 완료.
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
   **B3 cron 첫 자동 실행 확인 + B6 잔여 회귀 테스트** + **iOS 잔여 마무리**.
   Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.

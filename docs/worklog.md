@@ -2661,6 +2661,32 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `cd apps/ios && swift test` — pass, 30 tests.
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
 
+## 2026-05-20 iOS hosted offline sync verification + row check fix
+
+### User + Codex
+
+- User confirmed hosted iOS OAuth and sync setup:
+  - Supabase Redirect URLs include `justdo://auth-callback`.
+  - iOS Google sign-in reached the signed-in Settings screen.
+  - Settings > 데이터 > 동기화 showed `동기화 완료` initially.
+- User ran offline sync verification against hosted Supabase:
+  - Offline local changes showed `동기화 대기 중 2개`.
+  - After restoring network and relaunching the app, Settings showed
+    `동기화 완료`.
+  - Supabase Table Editor reflected the changes.
+- During testing, tapping the empty circle on Home task/habit rows opened the
+  detail screen instead of toggling completion.
+- Fix in `apps/ios/JustDoApp/JustDoApp/ContentView.swift`:
+  - Split Home row interactions so the check circle toggles completion and the
+    rest of the row opens detail.
+  - Added Home task completion toggle through `taskUpsert`.
+  - Habit check circle now calls the existing `habitLogSet` path.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 30 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
 ## 2026-05-19 iOS Settings sync status UI
 
 ### Codex
@@ -2679,6 +2705,30 @@ This document records coordination notes for work done with Codex and Claude Cod
   button for failed syncs.
 - Updated `docs/ios_phase6_status.md` and `docs/next_steps.md`; remaining iOS
   gaps are hosted offline sync verification and proto visual pass.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 30 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-20 iOS Home calendar interaction pass
+
+### Codex
+
+- Updated `apps/ios/JustDoApp/JustDoApp/ContentView.swift`.
+- Removed calendar day-cell dot indicators so Home no longer shows task dots
+  and task bars at the same time. Tasks are represented by the horizontal
+  calendar bars with title text.
+- Reworked the calendar week rows to match `reference/proto/home.jsx`: each
+  week has a relative row, date buttons occupy the top 32px, and task bars are
+  placed below them in non-overlapping lanes.
+- Changed the Home tab from a full-screen scroll view to a fixed calendar area
+  plus a selected-day task/habit panel.
+- Added a bottom-sheet-style selected-day panel interaction: the top handle/date
+  header acts as the drag area, the panel starts at the default height, and an
+  upward drag snaps it to the expanded height while the calendar stays fixed.
+- Made the selected-day panel content internally scrollable so long task/habit
+  lists remain usable after resizing.
 
 ### Verification
 
