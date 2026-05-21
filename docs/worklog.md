@@ -2874,3 +2874,45 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` — pass, 2 UI tests.
 - `cd apps/ios && swift test` — pass, 40 tests.
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-21 Web Pro Checkout B6 test pass
+
+### User + Codex
+
+- Moved back to Web Phase 7 / Pro Checkout B6 work after iOS deep-link UI tests.
+- Added Toss SDK client mock coverage in `app-shell.test.tsx`:
+  - Trial user opens Settings > 구독.
+  - `Toss 결제 연결` opens the Pro upgrade modal.
+  - Toss payment-method button calls `createTossPayment`.
+  - `requestBillingAuth` receives the expected customer, success URL, fail URL,
+    and `planInterval=monthly`.
+- Added cancel route edge-case coverage in `billing-routes.test.ts`:
+  - active Toss subscription cancellation deletes the Toss billing key, updates
+    local subscription state, and records `BILLING_CANCELLED`.
+  - subscription rows without a Toss billing key still cancel locally without
+    calling Toss.
+  - Toss billing-key deletion failure returns the Toss error and does not clear
+    local subscription state.
+  - missing subscription returns `404 subscription_not_found`.
+- Updated `docs/next_steps.md` so B6 remaining work is now narrowed to:
+  - Toss test-key E2E smoke
+  - webhook signature verification after official Toss dashboard
+    secret/header details are available.
+
+### Errors / Failed Attempts
+
+- First `npm run build` failed under the default sandbox with a Turbopack panic:
+  - `creating new process`
+  - `binding to a port`
+  - `Operation not permitted (os error 1)`
+- This was an environment permission issue, not a code failure. The same build
+  passed after rerunning with elevated command permissions.
+
+### Verification
+
+- `cd apps/web && npm run test -- app-shell.test.tsx` — pass, 13 tests.
+- `cd apps/web && npm run test -- billing-routes.test.ts` — pass, 9 tests.
+- `cd apps/web && npm run test` — pass, 100 tests.
+- `cd apps/web && npm run lint` — pass.
+- `cd apps/web && npm run build` — first run failed due sandbox/Turbopack process
+  permission; elevated rerun passed.

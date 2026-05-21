@@ -12,24 +12,29 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Where We Are (2026-05-18)
+## Where We Are (2026-05-21)
 
 - **운영 LIVE**: `https://www.justdo.co.kr` (apex → www redirect). AWS Amplify
   Hosting Compute (`dcsdzu0ew3l2m`, ap-northeast-2) + Route 53 + ACM TLS +
   hosted Supabase backend. Production smoke test 통과.
-- Phase 7 Web Desktop Redesign은 **Pro checkout 백엔드 잔여 (B3 cron 첫
-  자동 실행 확인, B6 회귀 테스트, Toss webhook signature 보강)** 위주로 남음.
-  Toss 운영 키는
-  가맹점 심사 후 교체.
+- Phase 7 Web Desktop Redesign은 **Pro checkout 운영/외부 의존 확인** 위주로
+  남음. B3 cron은 AWS EventBridge Scheduler + Lambda 운영 리소스 생성 및
+  수동 테스트까지 완료했고, 첫 자동 실행 확인만 남음. B6 회귀 테스트는 route
+  단위, Toss SDK client mock, cancel edge cases, webhook fixture/idempotency까지
+  보강 완료. 남은 것은 Toss 테스트 키 E2E smoke와 공식 dashboard secret/header
+  확인 후 webhook signature 검증.
 - 태블릿 viewport 정책: 모바일 안내 vs 데스크탑 shell 분기 breakpoint를
   Tailwind `md` (768px)로 낮춤. iPad Pro/Air portrait도 데스크탑 shell,
   iPad mini와 phone만 모바일 안내.
-- iOS Phase 6 잔여 작업은 proto 시각 검증 중심. Detail edit/delete,
-  Settings sync status UI, hosted Supabase offline sync 검증, Home row check,
-  calendar task bar/no-dot rendering, fixed-calendar/resizable-panel 동작은
-  반영/통과 완료.
+- iOS Phase 6 잔여 작업은 실기기 시각 검증 중심. Detail edit/delete,
+  Settings sync status UI, hosted Supabase offline sync, Home row check,
+  calendar task bar/no-dot rendering, fixed-calendar/resizable-panel, widget
+  task/habit toggle, widget deep link, compact task-completion mutation은
+  구현/검증 완료. 남은 검증은 Expo Go가 아니라 Xcode 직접 설치 또는 추후
+  TestFlight로 진행.
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
-  **B3 cron 첫 자동 실행 확인 + B6 잔여 회귀 테스트** + **iOS 잔여 마무리**.
+  **B3 cron 첫 자동 실행 확인 + Toss test-key E2E/webhook signature 확인** +
+  **iOS 실기기 시각 검증**.
   Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.
 - Toss 가맹점 심사 준비 체크리스트는 `docs/toss_merchant_review_plan.md`에
   별도로 정리.
@@ -443,8 +448,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
       미등록 상태는 Pro 사용 가능하되 구독 패널에서 Toss 결제 연결 CTA를 표시.
     - [ ] B6 회귀 테스트 — 1차 route 단위 테스트 완료:
       `issue-key`, `charge` 성공/실패 retry-pause, `webhook` fixture/idempotent
-      upsert. 남은 항목: Toss SDK client mock, cancel route edge cases, 운영
-      Toss 테스트 키 E2E, webhook signature는 운영 dashboard secret/header 확인 후.
+      upsert.
+      2026-05-21 추가: Toss SDK client mock 기반 upgrade modal billing auth
+      흐름과 cancel route edge cases를 테스트로 보강.
+      남은 항목: 운영 Toss 테스트 키 E2E, webhook signature는 운영 dashboard
+      secret/header 확인 후.
   - 진행 순서: B1 → B2 → B4 → B3. Track A 완료 후 운영 키만 교체.
 
 ### 7-4. 모바일 진입 페이지

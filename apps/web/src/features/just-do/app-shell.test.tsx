@@ -20,6 +20,12 @@ const authMock = vi.hoisted(() => ({
   },
 }));
 
+const tossMock = vi.hoisted(() => ({
+  requestBillingAuth: vi.fn(),
+  destroy: vi.fn(),
+  createTossPayment: vi.fn(),
+}));
+
 const signedInAuth = () => ({
   user: { id: "user-1", email: "user@example.com", displayName: "Tester" },
   status: "signedIn" as const,
@@ -44,6 +50,24 @@ vi.mock("@/lib/auth/useAuth", async () => {
     useAuth: () => authMock.value,
   };
 });
+
+vi.mock("@/lib/billing/toss-client", () => ({
+  tossBillingPlans: {
+    monthly: {
+      label: "월간 Pro",
+      price: "₩1,900 / 월",
+      amount: 1900,
+      orderName: "Just Do Pro 월간",
+    },
+    yearly: {
+      label: "연간 Pro",
+      price: "₩9,900 / 년",
+      amount: 9900,
+      orderName: "Just Do Pro 연간",
+    },
+  },
+  createTossPayment: tossMock.createTossPayment,
+}));
 
 const mountedRoots: Root[] = [];
 
@@ -120,6 +144,14 @@ const submitOpenModal = () => {
 
 beforeEach(() => {
   authMock.value = signedInAuth();
+  process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY = "test-client-key";
+  tossMock.requestBillingAuth.mockReset();
+  tossMock.destroy.mockReset();
+  tossMock.createTossPayment.mockReset();
+  tossMock.createTossPayment.mockResolvedValue({
+    requestBillingAuth: tossMock.requestBillingAuth,
+    destroy: tossMock.destroy,
+  });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
@@ -133,6 +165,7 @@ afterEach(() => {
   });
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
+  delete process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY;
 });
 
 const mockSubscriptionFetch = (subscription: {
@@ -326,6 +359,38 @@ describe("desktop app shell interactions", () => {
     expect(await screen.findByText("Trial")).toBeInTheDocument();
     expect(screen.getByText(/Trial 동안 Pro 기능을 사용할 수 있습니다/)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Toss 결제 연결" }).length).toBeGreaterThan(0);
+  });
+
+  it("starts Toss billing auth from the Trial payment-method CTA", async () => {
+    mockSubscriptionFetch({ status: "trial" });
+    renderApp();
+
+    click(await screen.findByRole("button", { name: "설정" }));
+    click(screen.getByRole("button", { name: "구독" }));
+    click((await screen.findAllByRole("button", { name: "Toss 결제 연결" }))[0]);
+
+    expect(await screen.findByText("Pro 업그레이드")).toBeInTheDocument();
+    click(screen.getByRole("button", { name: "토스" }));
+
+    await waitFor(() => {
+      expect(tossMock.createTossPayment).toHaveBeenCalledWith({
+        clientKey: "test-client-key",
+        customerKey: "user-1",
+      });
+    });
+    expect(tossMock.requestBillingAuth).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "CARD",
+        customerName: "Tester",
+        customerEmail: "user@example.com",
+        windowTarget: "iframe",
+      }),
+    );
+    const billingAuthInput = tossMock.requestBillingAuth.mock.calls[0][0];
+    expect(billingAuthInput.successUrl).toContain("/billing/success");
+    expect(billingAuthInput.successUrl).toContain("planInterval=monthly");
+    expect(billingAuthInput.failUrl).toContain("/billing/fail");
+    expect(billingAuthInput.failUrl).toContain("planInterval=monthly");
   });
 
   it("reorders categories from desktop settings", async () => {

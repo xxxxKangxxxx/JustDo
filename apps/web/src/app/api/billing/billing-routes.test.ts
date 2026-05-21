@@ -267,6 +267,124 @@ describe("billing charge route", () => {
   });
 });
 
+describe("billing cancel route", () => {
+  it("cancels an active Toss subscription, deletes the billing key, and records an event", async () => {
+    const subscriptionId = "44444444-4444-4444-8444-444444444444";
+    const subscriptionQuery = queryBuilder({
+      data: {
+        id: subscriptionId,
+        user_id: "user-1",
+        toss_billing_key: "billing-key",
+      },
+      error: null,
+    });
+    const updateSubscription = vi.fn(() => mutationBuilder());
+    const insertEvent = vi.fn(async () => ({ error: null }));
+    mocks.serviceClient = createServiceClient({
+      user_subscriptions: { ...subscriptionQuery, update: updateSubscription },
+      payment_events: { insert: insertEvent },
+    });
+    mocks.deleteTossBillingKey.mockResolvedValue({});
+
+    const { POST } = await import("./cancel/route");
+    const response = await POST();
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+    expect(mocks.deleteTossBillingKey).toHaveBeenCalledWith("billing-key");
+    expect(updateSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "cancelled",
+        next_billing_at: null,
+        toss_billing_key: null,
+        payment_failures: 0,
+      }),
+    );
+    expect(insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "toss_payments",
+        event_type: "BILLING_CANCELLED",
+        subscription_id: subscriptionId,
+        user_id: "user-1",
+      }),
+    );
+  });
+
+  it("cancels local subscription state even when no Toss billing key exists", async () => {
+    const subscriptionId = "55555555-5555-4555-8555-555555555555";
+    const subscriptionQuery = queryBuilder({
+      data: {
+        id: subscriptionId,
+        user_id: "user-1",
+        toss_billing_key: null,
+      },
+      error: null,
+    });
+    const updateSubscription = vi.fn(() => mutationBuilder());
+    mocks.serviceClient = createServiceClient({
+      user_subscriptions: { ...subscriptionQuery, update: updateSubscription },
+      payment_events: { insert: vi.fn(async () => ({ error: null })) },
+    });
+
+    const { POST } = await import("./cancel/route");
+    const response = await POST();
+
+    expect(response.status).toBe(200);
+    expect(mocks.deleteTossBillingKey).not.toHaveBeenCalled();
+    expect(updateSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "cancelled",
+        toss_billing_key: null,
+      }),
+    );
+  });
+
+  it("returns a Toss error without clearing local subscription state when billing-key deletion fails", async () => {
+    const subscriptionQuery = queryBuilder({
+      data: {
+        id: "66666666-6666-4666-8666-666666666666",
+        user_id: "user-1",
+        toss_billing_key: "billing-key",
+      },
+      error: null,
+    });
+    const updateSubscription = vi.fn(() => mutationBuilder());
+    mocks.serviceClient = createServiceClient({
+      user_subscriptions: { ...subscriptionQuery, update: updateSubscription },
+      payment_events: { insert: vi.fn(async () => ({ error: null })) },
+    });
+    const { TossPaymentsError } = await import("@/lib/billing/toss");
+    mocks.deleteTossBillingKey.mockRejectedValue(
+      new TossPaymentsError("invalid billing key", 400, "INVALID_BILLING_KEY"),
+    );
+
+    const { POST } = await import("./cancel/route");
+    const response = await POST();
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "toss_error",
+      code: "INVALID_BILLING_KEY",
+      message: "invalid billing key",
+    });
+    expect(updateSubscription).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when there is no subscription to cancel", async () => {
+    mocks.serviceClient = createServiceClient({
+      user_subscriptions: queryBuilder({ data: null, error: null }),
+    });
+
+    const { POST } = await import("./cancel/route");
+    const response = await POST();
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "subscription_not_found",
+    });
+  });
+});
+
 describe("toss webhook route", () => {
   it("stores webhook events idempotently and activates completed payments", async () => {
     const subscriptionId = "33333333-3333-4333-8333-333333333333";

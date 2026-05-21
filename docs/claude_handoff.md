@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-18
+Date: 2026-05-21
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -24,23 +24,30 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 항목은 **Toss webhook URL 등록 (`https://www.justdo.co.kr/api/webhook/toss`)
 > — Toss 가맹점 심사 후**.
 
-> **다음 작업자가 픽업할 우선순위 (2026-05-18)**:
+> **다음 작업자가 픽업할 우선순위 (2026-05-21)**:
 > 1. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    코드 트랙은 이와 병렬로 진행 가능.
-> 2. **Pro Checkout B3 cron 운영 리소스 생성** — cron 방향은 AWS
->    EventBridge Scheduler -> Lambda -> `/api/billing/charge`, 매일 05:30 KST로
->    결정됨. `infra/aws/billing-cron-lambda.mjs`와
+> 2. **Pro Checkout B3 첫 자동 실행 확인** — cron 방향은 AWS EventBridge
+>    Scheduler -> Lambda -> `/api/billing/charge`, 매일 05:30 KST로 결정됨.
+>    사용자 콘솔 작업으로 Lambda `justdo-prod-billing-cron`과 EventBridge
+>    schedule `justdo-prod-billing-charge-daily` 생성 완료, Lambda 수동 테스트도
+>    성공. 남은 것은 첫 실제 scheduled invocation을 CloudWatch/Lambda logs와
+>    billing event로 확인하는 것. `infra/aws/billing-cron-lambda.mjs`와
 >    `docs/aws_eventbridge_billing_cron.md` 참고.
->    `next_steps.md` Phase 7-3 Track B.
-> 3. **Pro Checkout B4-c/B5 완료** — Web 앱은 로그인 필수, 30일 Trial 동안
+> 3. **Pro Checkout B4-c/B5 정책 완료 상태 유지** — Web 앱은 로그인 필수,
+>    비로그인 사용자는 로그인 화면에서 더 진행하지 못함. 30일 Trial 동안
 >    Pro 기능 사용 가능, 결제수단 등록은 앱 전체 진입 조건이 아니라 Trial
 >    이후 Pro 기능 지속 사용 조건. Stats dashboard에 Pro gate 적용 완료.
-> 4. **Pro Checkout B6 잔여 회귀 테스트** — route 단위 테스트 1차 완료.
->    남은 항목은 Toss SDK client mock, cancel edge cases, Toss 테스트 키 E2E,
->    webhook signature 보강.
-> 5. **iOS Phase 6 잔여** — Phase 7과 독립 트랙. detail edit/delete,
->    sync status UI, hosted Supabase offline sync 검증, proto 시각 검증.
+> 4. **Pro Checkout B6 외부 의존 검증만 남음** — route 단위 테스트,
+>    Toss SDK client mock, cancel edge cases, webhook fixture/idempotency는 보강
+>    완료. 남은 항목은 운영/테스트 Toss 키를 이용한 E2E smoke와 Toss 공식
+>    dashboard secret/header 확인 후 webhook signature 검증.
+> 5. **iOS 실기기 시각 검증** — detail edit/delete, Settings sync status,
+>    hosted Supabase offline sync, Home calendar/task bar, widget/deep link,
+>    compact task-completion mutation은 구현 및 시뮬레이터 검증 완료. 남은 것은
+>    Xcode 직접 설치 또는 TestFlight 기반 실기기 시각 검증. Expo Go는 사용하지
+>    않음.
 
 ## Resume Work — cold-start checklist
 
@@ -239,25 +246,48 @@ cdd5b1f docs(ios): start phase 6 planning
     - Hosted Supabase migration was pushed by the user on 2026-05-14.
       `/api/billing/subscription` returned 200 afterward. Before the push it
       failed because hosted `user_subscriptions.billing_provider` did not exist.
-    - Remaining: B3 first scheduled invocation confirmation, B6 tests, Toss
-      webhook signature verification once official dashboard secret/header
-      details are available.
+    - B6 regression coverage was expanded on 2026-05-21:
+      - route tests cover `issue-key`, `charge` success/failure retry-pause,
+        Toss webhook fixture/idempotent upsert, and cancel route edge cases.
+      - app-shell tests mock the Toss SDK client and verify Settings -> 구독
+        -> `Toss 결제 연결` -> upgrade modal -> Toss billing auth request.
+      - Current web suite: `npm run test` passes 100 tests.
+    - Remaining: B3 first scheduled invocation confirmation, Toss test-key E2E
+      smoke, and Toss webhook signature verification once official dashboard
+      secret/header details are available.
     - v1 keeps Toss Payments billing. Naver Pay recurring, Kakao Pay recurring,
       and PortOne multi-PG are documented as future payment-method expansion.
   - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
-- Phase 6 iOS / Widget — SwiftPM shared-code track is underway:
-  - Swift domain and mutation queue contracts.
-  - Drift JSON fixtures.
-  - Initial Core Data model/mappers.
-  - App Group `WidgetSnapshot` read/write store.
-  - Initial small/medium/large SwiftUI widget layouts.
-- Phase 6 iOS / Widget — Xcode track started (2026-04-30):
-  - `apps/ios/JustDoApp/JustDoApp.xcodeproj` created via Xcode GUI.
-  - Targets: `JustDoApp` (iOS app), `JustDoWidgetExtension` (WidgetKit).
-  - Bundle IDs: `com.justdo.app` / `com.justdo.app.widget`.
-  - Both targets depend on local `JustDoShared` SwiftPM package.
+- Phase 6 iOS / Widget — current state (2026-05-21):
+  - `JustDoShared` includes Swift domain models, mutation queue schema, drift
+    fixtures, Core Data model/mappers, App Group snapshot/mutation stores,
+    Supabase REST read/flush sync, and WidgetKit display models.
+  - Xcode project targets:
+    - `JustDoApp` (`com.justdo.app`)
+    - `JustDoWidgetExtension` (`com.justdo.app.widget`)
+    - `JustDoAppUITests`
+  - Native signed-in shell includes Home / Stats / Settings based on
+    `reference/proto/`.
+  - Settings includes sync status/error UI.
+  - Home calendar task bars/no-dot rendering and resizable selected-day panel
+    were implemented.
+  - Detail edit/delete from pushed task/habit detail screens is implemented.
+  - Widget Task/Habit mode toggle is implemented for small/medium/large widgets.
+  - Widget row text deep-links through `justdo://task/<id>` and
+    `justdo://habit/<id>`.
+  - UI automation covers app deep-link detail opening with DEBUG-only seeded
+    Core Data data.
+  - App and widget task completion toggles now use compact
+    `task_completion_set` mutations instead of full task upsert.
+  - Last verified:
+    - `cd apps/ios && swift test` -> pass, 40 tests.
+    - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` -> pass, 2 UI tests.
+    - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+  - Remaining iOS work is mostly real-device visual verification. Because this
+    is a native SwiftUI/Xcode app, do **not** use Expo Go; install directly from
+    Xcode to a real iPhone or use TestFlight later.
   - Both targets share App Group `group.com.justdo.app`.
   - Auto-generated `JustDoWidgetControl` (iOS 18-only) removed.
   - `JustDoWidget.swift` now reads `widget_snapshot.json` from the App Group,
@@ -616,21 +646,34 @@ Implemented files:
 
 Important current limitations:
 
-- B3 cron direction is decided but AWS resources are not created yet.
-  EventBridge Scheduler should invoke the Lambda wrapper in
-  `infra/aws/billing-cron-lambda.mjs` daily at 05:30 KST. The Lambda calls
-  `/api/billing/charge`.
+- B3 cron direction and resources:
+  - Direction: EventBridge Scheduler -> Lambda ->
+    `POST https://www.justdo.co.kr/api/billing/charge`, daily 05:30 KST.
+  - Lambda wrapper: `infra/aws/billing-cron-lambda.mjs`.
+  - Runbook: `docs/aws_eventbridge_billing_cron.md`.
+  - User created Lambda `justdo-prod-billing-cron` and EventBridge schedule
+    `justdo-prod-billing-charge-daily` in AWS console.
+  - Manual Lambda test succeeded. Remaining B3 task is first real scheduled
+    invocation confirmation in CloudWatch/Lambda logs and, if a due test
+    subscription exists, `/api/billing/charge` response/payment event check.
 - B4-c/B5 are implemented for the current Web surface. Do not force billing
   setup immediately after login. Signed-in users can use the app, Trial users
   can use Pro features, and billing setup is required only to keep Pro access
   after Trial. Stats dashboard is currently gated as a Pro feature.
 - Toss webhook signature verification is not implemented. Add it after
   confirming the official dashboard secret/header behavior for this account.
-- B6 has first-pass route tests for `issue-key`, `charge` success/failure
-  retry-pause, and Toss webhook fixture/idempotent upsert. Remaining B6 gaps:
-  Toss SDK client mock, cancel route edge cases, Toss test-key E2E, and webhook
-  signature verification after official dashboard secret/header details are
-  available.
+- B6 test status (2026-05-21):
+  - Covered: `issue-key`, `charge` success/failure retry-pause, Toss webhook
+    fixture/idempotent upsert, cancel route edge cases, and Toss SDK client mock
+    for the upgrade modal billing-auth flow.
+  - Remaining: Toss test-key E2E smoke and webhook signature verification after
+    official dashboard secret/header details are available.
+  - Latest verification:
+    - `cd apps/web && npm run test` -> pass, 100 tests.
+    - `cd apps/web && npm run lint` -> pass.
+    - `cd apps/web && npm run build` -> pass after rerunning with elevated
+      permissions. First sandboxed run failed because Turbopack attempted to
+      spawn/bind a helper process and hit `Operation not permitted`.
 - `SubscriptionPanel` does not auto-refresh after `/billing/success` redirect
   unless the user returns/reloads or clicks refresh; this is acceptable for now
   but can be improved.
@@ -643,8 +686,8 @@ Recommended immediate next steps:
    `toss_billing_key`, `toss_customer_key`, `next_billing_at`, and payment
    method metadata.
 3. Confirm Settings -> 구독 shows Trial/next billing/payment method after refresh.
-4. Then confirm the B3 scheduled invocation or continue the remaining B6 Toss
-   billing regression tests.
+4. Confirm the B3 scheduled invocation in CloudWatch/Lambda logs.
+5. When Toss test keys/merchant flow are ready, run manual Toss test-key E2E.
 
 ## Known Notes / Risks
 
@@ -679,10 +722,10 @@ Recommended immediate next steps:
 
 ## Recommended Next Work
 
-> 2026-05-17 기준 — 배포 트랙은 운영 LIVE로 종료됨. Phase 7 Web Desktop
-> Redesign은 결제 백엔드 일부만 남아 있고, iOS 잔여 작업은 Phase 7과 독립
-> 트랙. Toss 가맹점 심사는 가장 긴 차단 항목 (~2–3주)이라 사용자 외부 트랙
-> 으로 먼저 시작하는 것이 유리.
+> 2026-05-21 기준 — 배포 트랙은 운영 LIVE로 종료됨. Phase 7 Web Desktop
+> Redesign은 Pro checkout 운영 확인/외부 의존만 남아 있고, iOS 잔여 작업은
+> 실기기 시각 검증 중심. Toss 가맹점 심사는 가장 긴 차단 항목 (~2–3주)이라
+> 사용자 외부 트랙으로 먼저 시작하는 것이 유리.
 
 1. **Toss 가맹점 심사 준비 (사용자 외부 트랙, 가장 긴 차단 항목)**
    - 순서: 사업자등록 (개인사업자) → 통신판매업 신고 → Toss Payments 가맹점
@@ -697,7 +740,8 @@ Recommended immediate next steps:
    - **B3 정기결제 cron** — AWS EventBridge Scheduler -> Lambda ->
      `/api/billing/charge`, 매일 05:30 KST로 결정. Lambda wrapper:
      `infra/aws/billing-cron-lambda.mjs`. 운영 설정:
-     `docs/aws_eventbridge_billing_cron.md`.
+     `docs/aws_eventbridge_billing_cron.md`. Lambda 수동 테스트와 schedule
+     생성은 완료되었고, 남은 것은 첫 자동 실행 CloudWatch 확인.
    - **B4-c Pro entitlement / upgrade gate** — 완료. `trial` / `active`는 Pro
      기능 사용 가능, `past_due` / `paused` / `cancelled` / `expired` / `free`는
      Pro 기능 gate에서 구독/결제 CTA로 유도. 현재 Pro 대상인 Stats dashboard에
@@ -705,14 +749,15 @@ Recommended immediate next steps:
    - **B5 로그인 필수 정책 정리** — 완료. 비로그인 사용자는 로그인 화면에서
      앱 shell로 진입하지 못한다. Trial + 결제수단 미등록 상태는 Pro 사용 가능,
      구독 패널에서 Toss 결제 연결 CTA 표시.
-   - **B6 회귀 테스트** — route 단위 테스트 1차 완료. 남은 항목은 Toss SDK
-     client mock, cancel edge cases, Toss 테스트 키 E2E, webhook signature 보강.
+   - **B6 회귀 테스트** — route + UI mock 테스트 보강 완료. 남은 항목은 Toss
+     테스트 키 E2E와 webhook signature 보강(운영 dashboard secret/header 확인
+     후).
 
 3. **iOS Phase 6 잔여 작업** (Phase 7과 독립 트랙, 병렬 가능)
-   - Native detail editing (edit/delete from pushed task/habit detail screens).
-   - Sync status UI (Settings 또는 root status surface 에 큐 flush 에러 노출).
-   - Hosted Supabase 대상 manual offline sync 검증.
-   - 로그인 후 root 화면 `reference/proto/` 시각 검증.
+   - 실기기 시각 검증: Add Sheet, Stats, Settings, 최신 Widget UI.
+   - Home calendar/panel은 simulator pass 완료. 최종 spacing/tap ergonomics는
+     실제 iPhone에서 확인.
+   - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 또는 추후 TestFlight.
    - 나머지: `ios_phase6_status.md` "Next Work" 참고.
 
 4. **Xcode polish (defer until needed)**
@@ -741,7 +786,7 @@ Recommended immediate next steps:
    환경변수 + CLI로 platform `WEB_COMPUTE` + framework `Next.js - SSR` 명시).
    새 Amplify 앱을 다시 만들 일이 생기면 이 세 가지 모두 적용해야 SSR로 배포됨.
 
-### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-18 갱신)
+### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-21 갱신)
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5, `next_steps.md` Phase 7 + Deployment
   Backlog, 그리고 본 문서의 운영 LIVE banner 읽기.
@@ -751,16 +796,18 @@ Recommended immediate next steps:
 - Web 작업은 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`을
   desktop reference로 삼고, iOS `reference/proto/`와 분리해서 진행.
 - `apps/web/src/features/just-do/app-shell.tsx`에 Phase 7 desktop shell과 후속
-  편집/관리 흐름이 들어가 있음. **완료된 항목 (2026-05-18 기준)**:
+  편집/관리 흐름이 들어가 있음. **완료된 항목 (2026-05-21 기준)**:
   desktop shell, mobile 안내 페이지(iOS App Store CTA + Android waitlist 폼,
   breakpoint 768px), desktop interaction tests, Task tag edit, Habit edit,
   Category reorder, 1024–1920 시각 검증, manual offline sync 5-stage 검증,
-  Toss Pro checkout B1·B2·B4-a·B4-b·B4-c·B5, 운영 배포 + smoke test.
-- **남은 v1 ship 차단 항목은 Pro checkout 잔여 (B3 첫 자동 실행 확인·B6)
-  + Toss 가맹점 심사**. 코드 트랙은 Toss 테스트 키로 진행 가능. 자세한 단계 /
-  Track A·B 분리는 `next_steps.md` Phase 7-3.
-- iOS 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7 과 독립
-  트랙. `ios_phase6_status.md` "Next Work" 참고.
+  Toss Pro checkout B1·B2·B4-a·B4-b·B4-c·B5, B6 route/UI mock regression
+  tests, 운영 배포 + smoke test.
+- **남은 v1 ship 차단 항목은 Toss 가맹점 심사와 Pro checkout 외부 의존 확인**.
+  B3은 첫 자동 실행 확인만 남았고, B6은 Toss test-key E2E smoke와 webhook
+  signature 검증만 남음. 자세한 단계 / Track A·B 분리는 `next_steps.md`
+  Phase 7-3.
+- iOS는 Phase 7과 독립 트랙. 현재 남은 것은 Xcode 직접 설치 또는 TestFlight
+  기반 실기기 시각 검증이며, Expo Go로 검증하지 않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
   주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
   monorepo platform/framework 설정 유지.
