@@ -241,6 +241,7 @@ private struct AuthLandingView: View {
             .padding(.bottom, 34)
         }
         .navigationBarHidden(true)
+        .preferredColorScheme(.light)
     }
 }
 
@@ -424,15 +425,11 @@ private struct HomeRootView: View {
     @State private var isShowingAddTask = false
     @State private var isShowingHabitManager = false
     @State private var isShowingCategoryManager = false
+    @State private var isShowingDayPanel = false
     @State private var isDarkMode = false
     @State private var loadError: String?
     @State private var actionMessage: String?
-    @State private var selectedDayPanelHeight: CGFloat = 320
-    @State private var selectedDayPanelDragOffset: CGFloat = 0
-
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
-    private let selectedDayPanelCollapsedHeight: CGFloat = 320
-    private let selectedDayPanelExpandedHeight: CGFloat = 520
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -470,6 +467,33 @@ private struct HomeRootView: View {
             )
             .presentationDetents([.large])
         }
+        .sheet(isPresented: $isShowingDayPanel) {
+            SelectedDayPanel(
+                selectedDate: selectedDate,
+                tasks: tasksForSelectedDate,
+                habits: snapshot?.habits ?? [],
+                categories: snapshot?.categories ?? [],
+                onToggleTask: toggleTask(_:),
+                onToggleHabit: toggleHabit(_:on:),
+                onOpenTask: onOpenTask,
+                onOpenHabit: onOpenHabit
+            )
+            .presentationDetents([.height(420)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30)
+                    .onEnded { value in
+                        let dx = value.translation.width
+                        let dy = value.translation.height
+                        guard abs(dx) > abs(dy), abs(dx) > 50 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedDate = JDDate.addDays(selectedDate, dx > 0 ? -1 : 1)
+                        }
+                    }
+            )
+        }
         .task {
             loadSnapshot()
         }
@@ -479,7 +503,7 @@ private struct HomeRootView: View {
     private var activeRootTab: some View {
         switch selectedTab {
         case .home:
-            VStack(spacing: 14) {
+            VStack(spacing: 20) {
                 homeHeader
                 MonthCalendarView(
                     year: displayYear,
@@ -487,21 +511,23 @@ private struct HomeRootView: View {
                     selectedDate: selectedDate,
                     tasks: snapshot?.tasks ?? [],
                     categories: snapshot?.categories ?? [],
-                    onSelectDate: { selectedDate = $0 }
+                    onSelectDate: { date in
+                        selectedDate = date
+                        isShowingDayPanel = true
+                    }
                 )
-                SelectedDayPanel(
-                    selectedDate: selectedDate,
-                    tasks: tasksForSelectedDate,
-                    habits: snapshot?.habits ?? [],
-                    categories: snapshot?.categories ?? [],
-                    onToggleTask: toggleTask(_:),
-                    onToggleHabit: toggleHabit(_:on:),
-                    onOpenTask: onOpenTask,
-                    onOpenHabit: onOpenHabit,
-                    onResizeDragChanged: { selectedDayPanelDragOffset = $0 },
-                    onResizeDragEnded: finishSelectedDayPanelResize(_:)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 30)
+                        .onEnded { value in
+                            let dx = value.translation.width
+                            let dy = value.translation.height
+                            guard abs(dx) > abs(dy), abs(dx) > 50 else { return }
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                moveMonth(dx > 0 ? -1 : 1)
+                            }
+                        }
                 )
-                .frame(height: currentSelectedDayPanelHeight)
+                Spacer(minLength: 0)
             }
             .padding(.bottom, 100)
             .frame(maxHeight: .infinity, alignment: .top)
@@ -529,26 +555,9 @@ private struct HomeRootView: View {
         }
     }
 
-    private var currentSelectedDayPanelHeight: CGFloat {
-        clampedSelectedDayPanelHeight(selectedDayPanelHeight - selectedDayPanelDragOffset)
-    }
-
-    private func finishSelectedDayPanelResize(_ translationHeight: CGFloat) {
-        let proposedHeight = clampedSelectedDayPanelHeight(selectedDayPanelHeight - translationHeight)
-        let snapThreshold = (selectedDayPanelCollapsedHeight + selectedDayPanelExpandedHeight) / 2
-        selectedDayPanelHeight = proposedHeight >= snapThreshold
-            ? selectedDayPanelExpandedHeight
-            : selectedDayPanelCollapsedHeight
-        selectedDayPanelDragOffset = 0
-    }
-
-    private func clampedSelectedDayPanelHeight(_ height: CGFloat) -> CGFloat {
-        min(max(height, selectedDayPanelCollapsedHeight), selectedDayPanelExpandedHeight)
-    }
-
     private var homeHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            JustDoWordmark(size: 17, dotSize: 4)
+        VStack(alignment: .leading, spacing: 16) {
+            JustDoWordmark(size: 24, dotSize: 6)
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(displayYear))
@@ -587,7 +596,7 @@ private struct HomeRootView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 10)
+        .padding(.top, 16)
     }
 
     private var tasksForSelectedDate: [Task] {
@@ -1030,7 +1039,7 @@ private struct CalendarWeekRow: View {
                             isSelected: day.iso == selectedDate,
                             onSelect: { onSelectDate(day.iso) }
                         )
-                        .frame(width: cellWidth, height: 32, alignment: .top)
+                        .frame(width: cellWidth, height: rowHeight, alignment: .top)
                     }
                 }
 
@@ -1044,6 +1053,7 @@ private struct CalendarWeekRow: View {
                             x: cellWidth * CGFloat(bar.startIndex) + 2,
                             y: 32 + CGFloat(bar.lane) * (barLaneHeight + barLaneSpacing)
                         )
+                        .allowsHitTesting(false)
                 }
             }
             .overlay(alignment: .top) {
@@ -1103,18 +1113,23 @@ private struct CalendarDayCell: View {
 
     var body: some View {
         Button(action: day.isCurrentMonth ? onSelect : {}) {
-            Text(String(day.day))
-                .font(.system(size: 14, weight: isSelected || day.iso == JDDate.todayISO ? .semibold : .medium))
-                .monospacedDigit()
-                .frame(width: 24, height: 24)
-                .foregroundStyle(textColor)
-                .background(day.iso == JDDate.todayISO ? JDTheme.accent : isSelected ? Color.black.opacity(0.06) : .clear)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(isSelected && day.iso != JDDate.todayISO ? JDTheme.accent : .clear, lineWidth: 1.5)
-                )
-            .frame(maxWidth: .infinity, minHeight: 32)
+            VStack(spacing: 0) {
+                Text(String(day.day))
+                    .font(.system(size: 14, weight: isSelected || day.iso == JDDate.todayISO ? .semibold : .medium))
+                    .monospacedDigit()
+                    .frame(width: 24, height: 24)
+                    .foregroundStyle(textColor)
+                    .background(day.iso == JDDate.todayISO ? JDTheme.accent : isSelected ? Color.black.opacity(0.06) : .clear)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(isSelected && day.iso != JDDate.todayISO ? JDTheme.accent : .clear, lineWidth: 1.5)
+                    )
+                    .padding(.top, 6)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!day.isCurrentMonth)
@@ -1162,8 +1177,6 @@ private struct SelectedDayPanel: View {
     let onToggleHabit: (Habit, String) -> Void
     let onOpenTask: (UUID) -> Void
     let onOpenHabit: (UUID) -> Void
-    let onResizeDragChanged: (CGFloat) -> Void
-    let onResizeDragEnded: (CGFloat) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1200,46 +1213,23 @@ private struct SelectedDayPanel: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 4)
         .padding(.bottom, 24)
-        .background(JDTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
     }
 
     private var dragHeader: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Capsule()
-                .fill(JDTheme.dividerStrong)
-                .frame(width: 36, height: 4)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 10)
-                .padding(.bottom, 14)
-
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(components.month)월 \(components.day)일")
-                    .font(.system(size: 18, weight: .bold))
-                Text("\(weekdayName)요일\(selectedDate == JDDate.todayISO ? " · 오늘" : "")")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(JDTheme.secondaryText)
-                Spacer()
-                Text("\(tasks.count + habits.count)개")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(JDTheme.tertiaryText)
-            }
-            .padding(.bottom, 6)
+        HStack(alignment: .firstTextBaseline) {
+            Text("\(components.month)월 \(components.day)일")
+                .font(.system(size: 18, weight: .bold))
+            Text("\(weekdayName)요일\(selectedDate == JDDate.todayISO ? " · 오늘" : "")")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(JDTheme.secondaryText)
+            Spacer()
+            Text("\(tasks.count + habits.count)개")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(JDTheme.tertiaryText)
         }
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 8)
-                .onChanged { value in
-                    onResizeDragChanged(value.translation.height)
-                }
-                .onEnded { value in
-                    onResizeDragEnded(value.translation.height)
-                }
-        )
+        .padding(.top, 18)
+        .padding(.bottom, 8)
     }
 
     private var components: (month: Int, day: Int) {
