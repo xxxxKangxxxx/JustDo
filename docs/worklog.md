@@ -2795,3 +2795,20 @@ This document records coordination notes for work done with Codex and Claude Cod
   Add Sheet, Stats, Settings, and widget UI.
 - Kept remaining development candidates explicit: widget deep-link UI tests and
   optional narrower task-completion patch path.
+
+## 2026-05-21 iOS deep-link route tests
+
+### User + Codex
+
+- Added shared `JustDoDetailRoute` for app detail navigation.
+- Updated `ContentView` to append `JustDoDetailRoute` for `NavigationStack`
+  destinations and incoming custom-scheme URLs.
+- Added tests that verify `justdo://task/<id>` and `justdo://habit/<id>` map to
+  the expected app detail route.
+- Kept full widget UI automation as a later Xcode UI-test task; the current
+  test fixes the app route contract that widget row links depend on.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 36 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.

@@ -306,7 +306,12 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     should be verified on an actual iPhone.
   - Add Sheet, Stats, Settings, and latest widget UI are deferred to one
     real-device verification pass.
-- [ ] Add UI tests for widget deep-link opening once the app shell is stable.
+- [x] Add route tests for widget deep-link opening.
+  - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
+    `JustDoDetailRoute`, and `ContentView` uses that route in its
+    `NavigationStack`.
+- [ ] Add full UI automation for widget deep-link opening once the app shell is
+  stable enough for Xcode UI tests.
 - [ ] Consider a narrower iOS task-completion patch path if full task upsert
   starts carrying fields that should remain remote-owned.
 

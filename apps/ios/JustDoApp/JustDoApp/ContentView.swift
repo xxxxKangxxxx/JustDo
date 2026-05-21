@@ -32,7 +32,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             rootScreen
-            .navigationDestination(for: DetailRoute.self) { route in
+            .navigationDestination(for: JustDoDetailRoute.self) { route in
                 switch route {
                 case .task(let id):
                     TaskDetailScreen(id: id, snapshotStore: snapshotStore, syncStatus: syncStatus)
@@ -66,8 +66,8 @@ struct ContentView: View {
             HomeRootView(
                 snapshotStore: snapshotStore,
                 syncStatus: syncStatus,
-                onOpenTask: { navigationPath.append(DetailRoute.task($0)) },
-                onOpenHabit: { navigationPath.append(DetailRoute.habit($0)) },
+                onOpenTask: { navigationPath.append(JustDoDetailRoute.task($0)) },
+                onOpenHabit: { navigationPath.append(JustDoDetailRoute.habit($0)) },
                 onSignOut: {
                     auth.signOut()
                     _Concurrency.Task { await onSessionChanged() }
@@ -92,21 +92,11 @@ struct ContentView: View {
     }
 
     private func open(_ url: URL) {
-        guard let link = JustDoDeepLink(url: url) else {
+        guard let route = JustDoDetailRoute(url: url) else {
             return
         }
-        switch link {
-        case .task(let id):
-            navigationPath.append(DetailRoute.task(id))
-        case .habit(let id):
-            navigationPath.append(DetailRoute.habit(id))
-        }
+        navigationPath.append(route)
     }
-}
-
-private enum DetailRoute: Hashable {
-    case task(UUID)
-    case habit(UUID)
 }
 
 private enum RootTab: String, CaseIterable, Identifiable {
