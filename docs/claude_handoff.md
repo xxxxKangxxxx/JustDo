@@ -24,30 +24,32 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 항목은 **Toss webhook URL 등록 (`https://www.justdo.co.kr/api/webhook/toss`)
 > — Toss 가맹점 심사 후**.
 
-> **다음 작업자가 픽업할 우선순위 (2026-05-21)**:
+> **다음 작업자가 픽업할 우선순위 (2026-05-21 갱신)**:
 > 1. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
->    코드 트랙은 이와 병렬로 진행 가능.
-> 2. **Pro Checkout B3 첫 자동 실행 확인** — cron 방향은 AWS EventBridge
->    Scheduler -> Lambda -> `/api/billing/charge`, 매일 05:30 KST로 결정됨.
->    사용자 콘솔 작업으로 Lambda `justdo-prod-billing-cron`과 EventBridge
->    schedule `justdo-prod-billing-charge-daily` 생성 완료, Lambda 수동 테스트도
->    성공. 남은 것은 첫 실제 scheduled invocation을 CloudWatch/Lambda logs와
->    billing event로 확인하는 것. `infra/aws/billing-cron-lambda.mjs`와
->    `docs/aws_eventbridge_billing_cron.md` 참고.
-> 3. **Pro Checkout B4-c/B5 정책 완료 상태 유지** — Web 앱은 로그인 필수,
->    비로그인 사용자는 로그인 화면에서 더 진행하지 못함. 30일 Trial 동안
->    Pro 기능 사용 가능, 결제수단 등록은 앱 전체 진입 조건이 아니라 Trial
->    이후 Pro 기능 지속 사용 조건. Stats dashboard에 Pro gate 적용 완료.
-> 4. **Pro Checkout B6 외부 의존 검증만 남음** — route 단위 테스트,
+>    코드 트랙은 이와 병렬로 진행 가능. 체크리스트:
+>    `docs/toss_merchant_review_plan.md`.
+> 2. **Pro Checkout B6 외부 의존 검증만 남음** — route 단위 테스트,
 >    Toss SDK client mock, cancel edge cases, webhook fixture/idempotency는 보강
 >    완료. 남은 항목은 운영/테스트 Toss 키를 이용한 E2E smoke와 Toss 공식
 >    dashboard secret/header 확인 후 webhook signature 검증.
-> 5. **iOS 실기기 시각 검증** — detail edit/delete, Settings sync status,
+> 3. **iOS 실기기 시각 검증** — detail edit/delete, Settings sync status,
 >    hosted Supabase offline sync, Home calendar/task bar, widget/deep link,
 >    compact task-completion mutation은 구현 및 시뮬레이터 검증 완료. 남은 것은
 >    Xcode 직접 설치 또는 TestFlight 기반 실기기 시각 검증. Expo Go는 사용하지
 >    않음.
+> 4. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
+>    invocation에 SQS DLQ 연결. Toss 가맹점 심사 통과 + live billing 활성화
+>    직전에 진행.
+>
+> **유지 상태 (참고)**:
+> - **B3 cron**: AWS EventBridge Scheduler -> Lambda -> `/api/billing/charge`,
+>   매일 05:30 KST. Lambda + schedule 생성, 수동 테스트, 첫 자동 실행 두 번
+>   (2026-05-20 / 2026-05-21 05:30 KST) CloudWatch 확인 완료(2026-05-21).
+>   Errors 0 / 성공률 100%, `payment_events` 0건(예상대로).
+> - **B4-c / B5 정책**: Web 앱 로그인 필수, Trial 동안 Pro 사용 가능,
+>   결제수단 등록은 Trial 종료 후 Pro 지속 사용 조건. Stats dashboard에
+>   Pro gate 적용.
 
 ## Resume Work — cold-start checklist
 
@@ -653,9 +655,12 @@ Important current limitations:
   - Runbook: `docs/aws_eventbridge_billing_cron.md`.
   - User created Lambda `justdo-prod-billing-cron` and EventBridge schedule
     `justdo-prod-billing-charge-daily` in AWS console.
-  - Manual Lambda test succeeded. Remaining B3 task is first real scheduled
-    invocation confirmation in CloudWatch/Lambda logs and, if a due test
-    subscription exists, `/api/billing/charge` response/payment event check.
+  - First automated firings confirmed in CloudWatch on 2026-05-21:
+    2026-05-20 05:30 KST and 2026-05-21 05:30 KST both completed with no
+    error/throw, Lambda metrics show Errors 0 / Success rate 100%, and
+    Supabase `payment_events` remains empty as expected pre-merchant-approval.
+  - Only remaining B3 follow-up is adding a DLQ before Toss live billing
+    is enabled.
 - B4-c/B5 are implemented for the current Web surface. Do not force billing
   setup immediately after login. Signed-in users can use the app, Trial users
   can use Pro features, and billing setup is required only to keep Pro access
@@ -737,11 +742,12 @@ Recommended immediate next steps:
    - 코드 트랙(아래 2·3·4)은 Toss 테스트 키로 병렬 가능.
 
 2. **Phase 7 Pro Checkout 남은 코드 작업** (Toss 테스트 키로 검증 가능)
-   - **B3 정기결제 cron** — AWS EventBridge Scheduler -> Lambda ->
-     `/api/billing/charge`, 매일 05:30 KST로 결정. Lambda wrapper:
-     `infra/aws/billing-cron-lambda.mjs`. 운영 설정:
-     `docs/aws_eventbridge_billing_cron.md`. Lambda 수동 테스트와 schedule
-     생성은 완료되었고, 남은 것은 첫 자동 실행 CloudWatch 확인.
+   - **B3 정기결제 cron** — 완료. AWS EventBridge Scheduler -> Lambda ->
+     `/api/billing/charge`, 매일 05:30 KST. Lambda + schedule + 수동 테스트 +
+     첫 자동 실행 두 번(2026-05-20 / 2026-05-21 05:30 KST) CloudWatch 확인
+     완료(2026-05-21). Lambda Errors 0 / Success 100%, `payment_events` 0건.
+     남은 follow-up은 Toss live 직전 DLQ 추가. 자세한 운영 설정:
+     `docs/aws_eventbridge_billing_cron.md`.
    - **B4-c Pro entitlement / upgrade gate** — 완료. `trial` / `active`는 Pro
      기능 사용 가능, `past_due` / `paused` / `cancelled` / `expired` / `free`는
      Pro 기능 gate에서 구독/결제 CTA로 유도. 현재 Pro 대상인 Stats dashboard에

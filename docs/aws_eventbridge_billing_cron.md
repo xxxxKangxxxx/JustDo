@@ -100,10 +100,9 @@ key.
 - [x] Set Lambda env vars listed above.
 - [x] Invoke Lambda manually and confirm HTTP 200.
 - [x] Review EventBridge Scheduler creation settings for 05:30 KST.
-- [ ] Create EventBridge Scheduler schedule for 05:30 KST if not already
-  created from the final review screen.
-- [ ] Confirm first scheduled invocation in CloudWatch logs.
-- [ ] Confirm `/api/billing/charge` returns 200 and records `payment_events`.
+- [x] Create EventBridge Scheduler schedule for 05:30 KST.
+- [x] Confirm first scheduled invocation in CloudWatch logs.
+- [x] Confirm `/api/billing/charge` returns 200 and records `payment_events`.
 - [ ] Add DLQ before live billing is enabled.
 
 ## Smoke Test Log
@@ -115,6 +114,17 @@ key.
   `cron(30 5 * * ? *)`, timezone `Asia/Seoul`, target Lambda
   `justdo-prod-billing-cron`, payload
   `{ "source": "aws.eventbridge.scheduler" }`, enabled, retry off, no DLQ.
+- 2026-05-21: First scheduled invocations confirmed in CloudWatch.
+  Log group `/aws/lambda/justdo-prod-billing-cron` shows two automated
+  firings: 2026-05-19 20:30:07 UTC (= 2026-05-20 05:30 KST) and
+  2026-05-20 20:30:08 UTC (= 2026-05-21 05:30 KST). Both completed with
+  INIT_START / START / END / REPORT and no error or throw. Lambda
+  CloudWatch metrics (1 week window) show Invocations total 3
+  (manual + 2 scheduled), Errors max 0, Success rate min 100%, Throttles
+  max 0, async delivery failures 0, Duration min 3,281ms / avg 4,055ms /
+  max 4,453ms (consistent with the manual smoke test). Supabase
+  `payment_events` table remained at 0 rows, expected because no
+  subscriptions are due before Toss merchant approval.
 
 ## Operational Notes
 

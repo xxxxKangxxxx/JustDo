@@ -2916,3 +2916,64 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `cd apps/web && npm run lint` — pass.
 - `cd apps/web && npm run build` — first run failed due sandbox/Turbopack process
   permission; elevated rerun passed.
+
+## 2026-05-21 Pro Checkout B3 first scheduled invocation confirmation
+
+### User + Claude Code
+
+- Verified that the AWS EventBridge Scheduler is firing the billing cron Lambda
+  on its daily 05:30 KST schedule.
+- AWS account confirmed via the `justdo-admin` console (account `058264290801`,
+  region `ap-northeast-2`).
+- CloudWatch log group `/aws/lambda/justdo-prod-billing-cron` contained three
+  log streams:
+  - `2026/05/19/[$LATEST]9bcd24...` — 2026-05-19 06:47:35 UTC, the manual
+    smoke test recorded in `docs/aws_eventbridge_billing_cron.md`.
+  - `2026/05/19/[$LATEST]c0a0b0...` — 2026-05-19 20:30:07 UTC, i.e.
+    2026-05-20 05:30 KST. First automated firing.
+  - `2026/05/20/[$LATEST]0dc9e5...` — 2026-05-20 20:30:08 UTC, i.e.
+    2026-05-21 05:30 KST. Second automated firing.
+- Latest invocation log showed `INIT_START` → `START` → `END` → `REPORT` with
+  Duration 4452.71 ms, Billed 4561 ms, Memory 128 MB / Max used 85 MB, Init
+  107.89 ms. No error, throw, or stack trace. The handler does not
+  `console.log` its return value, so the success body is not echoed in
+  CloudWatch; the absence of `Billing charge failed with ...` is the proxy
+  signal for HTTP 200.
+- Lambda Monitor metrics (1 week) confirmed health:
+  - Invocations total 3 (manual + 2 scheduled).
+  - Errors max 0; Success rate min 100%.
+  - Throttles max 0.
+  - Async events: received 2, deleted 0, delivery failures 0.
+  - Duration min 3,281 ms / avg 4,055 ms / max 4,453 ms (consistent with the
+    manual smoke test).
+- Supabase `public.payment_events` was confirmed empty (0 records). Expected
+  because no subscription has a Toss billing key yet and merchant approval is
+  the gating step for any due charges.
+- Decided not to add `console.log` to `billing-cron-lambda.mjs` for now; error
+  paths still throw, and real charge activity is observable through
+  `payment_events` and `user_subscriptions`.
+- Decided to defer DLQ creation until just before Toss live billing is enabled.
+
+### Documentation
+
+- `docs/aws_eventbridge_billing_cron.md`:
+  - Production Enablement Checklist: marked the EventBridge schedule, first
+    scheduled invocation, and `/api/billing/charge` 200 / `payment_events`
+    items as done. DLQ remains the only open box.
+  - Smoke Test Log: added a 2026-05-21 entry summarizing the two automated
+    firings and the metric snapshot above.
+- `docs/next_steps.md`:
+  - "Where We Are (2026-05-21)" updated to reflect Pro checkout being on
+    external dependencies only.
+  - Phase 7-3 Track B `B3 운영 리소스 확인` checkbox marked done with the
+    automated firing dates and metrics.
+  - "다음 우선순위" line removed the B3 first invocation item and now lists
+    Toss test-key E2E / webhook signature + iOS real-device verification as
+    the active code-track work; DLQ called out as a live-billing prerequisite.
+
+### Notes
+
+- KST conversion gotcha: CloudWatch log stream folder names are UTC, so the
+  KST 2026-05-21 05:30 firing sits under `2026/05/20/` rather than
+  `2026/05/21/`. This is normal; do not interpret the missing 5/21 folder as
+  a skipped firing.

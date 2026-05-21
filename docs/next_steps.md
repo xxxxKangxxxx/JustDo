@@ -17,12 +17,13 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - **운영 LIVE**: `https://www.justdo.co.kr` (apex → www redirect). AWS Amplify
   Hosting Compute (`dcsdzu0ew3l2m`, ap-northeast-2) + Route 53 + ACM TLS +
   hosted Supabase backend. Production smoke test 통과.
-- Phase 7 Web Desktop Redesign은 **Pro checkout 운영/외부 의존 확인** 위주로
-  남음. B3 cron은 AWS EventBridge Scheduler + Lambda 운영 리소스 생성 및
-  수동 테스트까지 완료했고, 첫 자동 실행 확인만 남음. B6 회귀 테스트는 route
-  단위, Toss SDK client mock, cancel edge cases, webhook fixture/idempotency까지
-  보강 완료. 남은 것은 Toss 테스트 키 E2E smoke와 공식 dashboard secret/header
-  확인 후 webhook signature 검증.
+- Phase 7 Web Desktop Redesign은 **Pro checkout 외부 의존 확인** 위주로
+  남음. B3 cron은 AWS EventBridge Scheduler + Lambda 운영 리소스 생성, 수동
+  테스트, 첫 자동 실행 CloudWatch 확인까지 완료(2026-05-21). 남은 것은 live
+  billing 시작 전 DLQ 추가뿐. B6 회귀 테스트는 route 단위, Toss SDK client
+  mock, cancel edge cases, webhook fixture/idempotency까지 보강 완료. 남은
+  것은 Toss 테스트 키 E2E smoke와 공식 dashboard secret/header 확인 후
+  webhook signature 검증.
 - 태블릿 viewport 정책: 모바일 안내 vs 데스크탑 shell 분기 breakpoint를
   Tailwind `md` (768px)로 낮춤. iPad Pro/Air portrait도 데스크탑 shell,
   iPad mini와 phone만 모바일 안내.
@@ -33,9 +34,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   구현/검증 완료. 남은 검증은 Expo Go가 아니라 Xcode 직접 설치 또는 추후
   TestFlight로 진행.
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
-  **B3 cron 첫 자동 실행 확인 + Toss test-key E2E/webhook signature 확인** +
-  **iOS 실기기 시각 검증**.
-  Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행.
+  **Toss test-key E2E / webhook signature 확인** + **iOS 실기기 시각 검증**.
+  Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행. DLQ는 live billing
+  시작 직전 추가.
 - Toss 가맹점 심사 준비 체크리스트는 `docs/toss_merchant_review_plan.md`에
   별도로 정리.
 - Pro Checkout B3 cron 결정: AWS EventBridge Scheduler -> Lambda ->
@@ -425,9 +426,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
       `/api/billing/charge`, 매일 05:30 KST. Lambda wrapper:
       `infra/aws/billing-cron-lambda.mjs`, 운영 설정 문서:
       `docs/aws_eventbridge_billing_cron.md`.
-    - [ ] B3 운영 리소스 확인 — AWS Lambda 생성 및 수동 테스트는 완료. 남은
-      항목은 EventBridge Scheduler 생성 여부 최종 확인과 첫 scheduled
-      invocation CloudWatch 확인.
+    - [x] B3 운영 리소스 확인 — Lambda `justdo-prod-billing-cron` +
+      EventBridge schedule `justdo-prod-billing-charge-daily` 생성 완료,
+      수동 테스트 + 첫 자동 실행 두 번(2026-05-20 / 2026-05-21 05:30 KST)
+      CloudWatch 확인 완료. Lambda 메트릭 Errors 0 / 성공률 100%,
+      `payment_events` 0건 (예상대로). DLQ는 live billing 직전 추가.
     - [x] B4-a UI 연동 — `apps/web/src/features/just-do/app-shell.tsx`의
       `UpgradeModal` placeholder를 Toss JS SDK 호출로 교체.
       2026-05-14 현재 `https://js.tosspayments.com/v2/standard` 기반
