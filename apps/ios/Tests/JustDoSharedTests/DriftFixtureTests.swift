@@ -55,6 +55,28 @@ final class DriftFixtureTests: XCTestCase {
         XCTAssertEqual(mutation["value"] as? Int, 1)
     }
 
+    func testTaskCompletionMutationEncodesCompactShape() throws {
+        let queued = QueuedMutation(
+            id: uuid("99999999-9999-9999-9999-999999999998"),
+            updatedAt: "2026-05-21T00:00:00Z",
+            mutation: .taskCompletionSet(
+                id: uuid("11111111-1111-1111-1111-111111111111"),
+                isCompleted: true,
+                completedAt: "2026-05-21T00:00:00Z"
+            )
+        )
+
+        let data = try encoder.encode(queued)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let mutation = try XCTUnwrap(object["mutation"] as? [String: Any])
+
+        XCTAssertEqual(mutation["type"] as? String, "task_completion_set")
+        XCTAssertEqual(mutation["id"] as? String, "11111111-1111-1111-1111-111111111111")
+        XCTAssertEqual(mutation["isCompleted"] as? Bool, true)
+        XCTAssertEqual(mutation["completedAt"] as? String, "2026-05-21T00:00:00Z")
+        XCTAssertNil(mutation["task"])
+    }
+
     func testWidgetSnapshotFixtureDecodes() throws {
         let snapshot = try decodeFixture("widget_snapshot", as: WidgetSnapshot.self)
 

@@ -56,6 +56,28 @@ final class CoreDataAppSnapshotStoreTests: XCTestCase {
         XCTAssertEqual(habit?.title, "Walk")
     }
 
+    func testTaskCompletionMutationUpdatesOnlyCompletionLocally() throws {
+        let taskID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+        try store.replaceSnapshot(makeSnapshot(taskTitle: "First"))
+
+        try store.applyAndEnqueue(
+            QueuedMutation(
+                id: UUID(uuidString: "90000000-0000-0000-0000-000000000001")!,
+                updatedAt: "2026-05-21T00:00:00Z",
+                mutation: .taskCompletionSet(
+                    id: taskID,
+                    isCompleted: true,
+                    completedAt: "2026-05-21T00:00:00Z"
+                )
+            )
+        )
+
+        let task = try store.task(id: taskID)
+        XCTAssertEqual(task?.title, "First")
+        XCTAssertEqual(task?.isCompleted, true)
+        XCTAssertEqual(try store.queuedMutations().count, 1)
+    }
+
     private func makeSnapshot(taskTitle: String) -> AppSnapshot {
         let categoryID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
         return AppSnapshot(

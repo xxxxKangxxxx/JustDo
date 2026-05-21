@@ -165,6 +165,95 @@ final class SupabaseRestSyncTests: XCTestCase {
         )
     }
 
+    func testQueuedMutationFlusherPatchesOnlyTaskCompletion() async throws {
+        let userID = uuid("99999999-9999-9999-9999-999999999999")
+        let stack = CoreDataStack(inMemory: true)
+        let store = CoreDataAppSnapshotStore(context: stack.container.viewContext)
+        let taskID = uuid("11111111-1111-1111-1111-111111111111")
+        let mutation = QueuedMutation(
+            id: uuid("90000000-0000-0000-0000-000000000004"),
+            updatedAt: "2026-05-21T00:00:00Z",
+            mutation: .taskCompletionSet(
+                id: taskID,
+                isCompleted: true,
+                completedAt: "2026-05-21T00:00:00Z"
+            )
+        )
+        try store.applyAndEnqueue(
+            QueuedMutation(
+                id: uuid("90000000-0000-0000-0000-000000000005"),
+                updatedAt: "2026-05-20T00:00:00Z",
+                mutation: .taskUpsert(
+                    Task(
+                        id: taskID,
+                        title: "Proposal draft",
+                        categoryID: nil,
+                        startDate: "2026-04-30",
+                        endDate: "2026-04-30",
+                        priority: .high,
+                        isCompleted: false,
+                        scheduledTime: "09:30",
+                        tags: []
+                    )
+                )
+            )
+        )
+        try store.applyAndEnqueue(mutation)
+        let transport = FakeSupabaseRestTransport(responses: [:])
+
+        _ = try await SupabaseQueuedMutationFlusher(
+            mutationClient: SupabaseMutationClient(userID: userID, transport: transport),
+            snapshotStore: store
+        ).flush()
+
+        XCTAssertEqual(try store.queuedMutations(), [])
+        XCTAssertEqual(transport.upserts.map(\.path), ["tasks"])
+        XCTAssertEqual(transport.patches.map(\.path), ["tasks"])
+        XCTAssertEqual(
+            transport.patches.first?.queryItems.map { "\($0.name)=\($0.value ?? "")" },
+            [
+                "user_id=eq.\(userID.uuidString.lowercased())",
+                "id=eq.\(taskID.uuidString.lowercased())",
+            ]
+        )
+
+        let patchBody = try XCTUnwrap(transport.patches.first?.json)
+        XCTAssertEqual(patchBody["is_completed"] as? Bool, true)
+        XCTAssertEqual(patchBody["completed_at"] as? String, "2026-05-21T00:00:00Z")
+        XCTAssertNil(patchBody["title"])
+        XCTAssertNil(patchBody["category_id"])
+        XCTAssertNil(patchBody["start_date"])
+        XCTAssertNil(patchBody["end_date"])
+        XCTAssertNil(patchBody["scheduled_time"])
+    }
+
+    func testQueuedMutationFlusherClearsCompletedAtWhenTaskIsReopened() async throws {
+        let userID = uuid("99999999-9999-9999-9999-999999999999")
+        let stack = CoreDataStack(inMemory: true)
+        let store = CoreDataAppSnapshotStore(context: stack.container.viewContext)
+        let taskID = uuid("11111111-1111-1111-1111-111111111111")
+        let mutation = QueuedMutation(
+            id: uuid("90000000-0000-0000-0000-000000000006"),
+            updatedAt: "2026-05-21T00:00:00Z",
+            mutation: .taskCompletionSet(
+                id: taskID,
+                isCompleted: false,
+                completedAt: nil
+            )
+        )
+        try store.applyAndEnqueue(mutation)
+        let transport = FakeSupabaseRestTransport(responses: [:])
+
+        _ = try await SupabaseQueuedMutationFlusher(
+            mutationClient: SupabaseMutationClient(userID: userID, transport: transport),
+            snapshotStore: store
+        ).flush()
+
+        let patchBody = try XCTUnwrap(transport.patches.first?.json)
+        XCTAssertEqual(patchBody["is_completed"] as? Bool, false)
+        XCTAssertTrue(patchBody["completed_at"] is NSNull)
+    }
+
     private func uuid(_ raw: String) -> UUID {
         guard let value = UUID(uuidString: raw) else {
             fatalError("Invalid UUID fixture: \(raw)")

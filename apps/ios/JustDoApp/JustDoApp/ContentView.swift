@@ -720,13 +720,18 @@ private struct HomeRootView: View {
 
         var updated = task
         updated.isCompleted.toggle()
+        let updatedAt = JDDate.nowISODateTime
 
         do {
             try snapshotStore.applyAndEnqueue(
                 QueuedMutation(
                     id: UUID(),
-                    updatedAt: JDDate.nowISODateTime,
-                    mutation: .taskUpsert(updated)
+                    updatedAt: updatedAt,
+                    mutation: .taskCompletionSet(
+                        id: updated.id,
+                        isCompleted: updated.isCompleted,
+                        completedAt: updated.isCompleted ? updatedAt : nil
+                    )
                 )
             )
             loadSnapshot()

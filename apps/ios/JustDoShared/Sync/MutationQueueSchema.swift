@@ -5,6 +5,7 @@ public enum LocalMutation: Codable, Equatable, Sendable {
     case categoryDelete(id: UUID)
     case preferencesSet(key: PreferenceKey, value: Int)
     case taskUpsert(Task)
+    case taskCompletionSet(id: UUID, isCompleted: Bool, completedAt: String?)
     case taskDelete(id: UUID)
     case habitUpsert(Habit)
     case habitDelete(id: UUID)
@@ -17,6 +18,8 @@ public enum LocalMutation: Codable, Equatable, Sendable {
         case key
         case value
         case task
+        case isCompleted
+        case completedAt
         case habit
         case habitID = "habitId"
         case iso
@@ -38,6 +41,12 @@ public enum LocalMutation: Codable, Equatable, Sendable {
             )
         case "task_upsert":
             self = .taskUpsert(try container.decode(Task.self, forKey: .task))
+        case "task_completion_set":
+            self = .taskCompletionSet(
+                id: try container.decode(UUID.self, forKey: .id),
+                isCompleted: try container.decode(Bool.self, forKey: .isCompleted),
+                completedAt: try container.decodeIfPresent(String.self, forKey: .completedAt)
+            )
         case "task_delete":
             self = .taskDelete(id: try container.decode(UUID.self, forKey: .id))
         case "habit_upsert":
@@ -76,6 +85,11 @@ public enum LocalMutation: Codable, Equatable, Sendable {
         case .taskUpsert(let task):
             try container.encode("task_upsert", forKey: .type)
             try container.encode(task, forKey: .task)
+        case .taskCompletionSet(let id, let isCompleted, let completedAt):
+            try container.encode("task_completion_set", forKey: .type)
+            try container.encode(id, forKey: .id)
+            try container.encode(isCompleted, forKey: .isCompleted)
+            try container.encodeIfPresent(completedAt, forKey: .completedAt)
         case .taskDelete(let id):
             try container.encode("task_delete", forKey: .type)
             try container.encode(id, forKey: .id)

@@ -310,10 +310,15 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
     `JustDoDetailRoute`, and `ContentView` uses that route in its
     `NavigationStack`.
+- [x] Implement dedicated iOS task-completion patch mutations.
+  - App and widget task toggles now enqueue `task_completion_set` instead of a
+    full `task_upsert`.
+  - Supabase flush patches only `tasks.is_completed` and `tasks.completed_at`;
+    reopening a task clears `completed_at`.
+  - This prevents stale iOS/widget mirrors from overwriting task-owned fields
+    such as title, category, dates, priority, or tags during completion toggles.
 - [ ] Add full UI automation for widget deep-link opening once the app shell is
   stable enough for Xcode UI tests.
-- [ ] Consider a narrower iOS task-completion patch path if full task upsert
-  starts carrying fields that should remain remote-owned.
 
 ## Phase 7: Web Desktop Redesign
 

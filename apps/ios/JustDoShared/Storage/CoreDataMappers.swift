@@ -167,6 +167,8 @@ private extension LocalMutation {
             "preferences_set"
         case .taskUpsert:
             "task_upsert"
+        case .taskCompletionSet:
+            "task_completion_set"
         case .taskDelete:
             "task_delete"
         case .habitUpsert:

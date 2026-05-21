@@ -157,6 +157,12 @@ public final class SupabaseMutationClient {
             try await patchPreferences(key: key, value: value)
         case .taskUpsert(let task):
             try await upsert("tasks", body: SupabaseTaskMutationRow(task: task, userID: userID))
+        case .taskCompletionSet(let id, let isCompleted, let completedAt):
+            try await patchTaskCompletion(
+                id: id,
+                isCompleted: isCompleted,
+                completedAt: completedAt
+            )
         case .taskDelete(let id):
             try await delete("tasks", id: id)
         case .habitUpsert(let habit):
@@ -215,6 +221,26 @@ public final class SupabaseMutationClient {
             path: "users",
             queryItems: [URLQueryItem(name: "id", value: "eq.\(userID.uuidString.lowercased())")],
             body: encoder.encode(SupabaseUserPreferencesMutationRow(preferences: [key.rawValue: value]))
+        )
+    }
+
+    private func patchTaskCompletion(
+        id: UUID,
+        isCompleted: Bool,
+        completedAt: String?
+    ) async throws {
+        try await transport.patch(
+            path: "tasks",
+            queryItems: [
+                userFilter(),
+                URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
+            ],
+            body: encoder.encode(
+                SupabaseTaskCompletionMutationRow(
+                    isCompleted: isCompleted,
+                    completedAt: completedAt
+                )
+            )
         )
     }
 
@@ -528,6 +554,26 @@ private struct SupabaseTaskMutationRow: Encodable {
         case startDate = "start_date"
         case endDate = "end_date"
         case scheduledTime = "scheduled_time"
+        case isCompleted = "is_completed"
+        case completedAt = "completed_at"
+    }
+}
+
+private struct SupabaseTaskCompletionMutationRow: Encodable {
+    var isCompleted: Bool
+    var completedAt: String?
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(isCompleted, forKey: .isCompleted)
+        if let completedAt {
+            try container.encode(completedAt, forKey: .completedAt)
+        } else {
+            try container.encodeNil(forKey: .completedAt)
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
         case isCompleted = "is_completed"
         case completedAt = "completed_at"
     }

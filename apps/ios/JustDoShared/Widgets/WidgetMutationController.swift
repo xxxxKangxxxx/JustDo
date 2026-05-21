@@ -36,13 +36,18 @@ public final class WidgetMutationController {
 
         snapshot.tasks[index].isCompleted = isCompleted
         snapshot.generatedAt = timestamp()
+        let completedAt = isCompleted ? snapshot.generatedAt : nil
 
         try snapshotStore.write(snapshot)
         try queueStore.append(
             QueuedMutation(
                 id: UUID(),
                 updatedAt: snapshot.generatedAt,
-                mutation: .taskUpsert(snapshot.tasks[index])
+                mutation: .taskCompletionSet(
+                    id: taskID,
+                    isCompleted: isCompleted,
+                    completedAt: completedAt
+                )
             )
         )
     }

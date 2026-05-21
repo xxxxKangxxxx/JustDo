@@ -28,6 +28,10 @@ implementation gaps, and checks to run before testing or shipping.
   mutations, and request a timeline reload.
 - The app drains App Group widget mutations into Core Data and preserves them in
   `CDQueuedMutation`.
+- App and widget task completion toggles use a compact
+  `task_completion_set` mutation. Supabase flush patches only
+  `tasks.is_completed` and `tasks.completed_at`, clearing `completed_at` when a
+  task is reopened instead of sending a full task upsert.
 - When a valid Supabase session exists, the app flushes `CDQueuedMutation` to
   Supabase and removes rows only after successful remote writes.
 - Supabase read-sync refreshes the Core Data mirror from categories, tasks,
@@ -191,7 +195,5 @@ swift test
 - Verify signed-in iOS root home, add sheet, stats, and settings visually
   against `reference/proto/`.
 - Add UI tests for deep-link opening once the app shell is more complete.
-- Consider a narrower Supabase task completion patch endpoint in iOS if full
-  task upsert starts carrying fields that should remain remote-owned.
 - (Phase 7 완료 후) Run hosted OAuth/offline sync verification on the new web
   UI; iOS-specific Manual Test Checklist 는 위에서 그대로 적용.

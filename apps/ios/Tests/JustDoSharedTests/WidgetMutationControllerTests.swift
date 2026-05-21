@@ -33,9 +33,11 @@ final class WidgetMutationControllerTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    func testSetTaskCompletionUpdatesSnapshotAndEnqueuesTaskUpsert() throws {
+    func testSetTaskCompletionUpdatesSnapshotAndEnqueuesCompletionPatch() throws {
+        let taskID = uuid("11111111-1111-1111-1111-111111111111")
+
         try controller.setTaskCompletion(
-            taskID: uuid("11111111-1111-1111-1111-111111111111"),
+            taskID: taskID,
             isCompleted: true
         )
 
@@ -44,7 +46,14 @@ final class WidgetMutationControllerTests: XCTestCase {
 
         let queued = try queueStore.list()
         XCTAssertEqual(queued.count, 1)
-        XCTAssertEqual(queued.first?.mutation, .taskUpsert(updated.tasks[0]))
+        XCTAssertEqual(
+            queued.first?.mutation,
+            .taskCompletionSet(
+                id: taskID,
+                isCompleted: true,
+                completedAt: "2026-04-29T22:00:00.000Z"
+            )
+        )
     }
 
     func testSetHabitLogUpdatesSnapshotAndEnqueuesHabitLogSet() throws {

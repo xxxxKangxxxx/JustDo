@@ -2812,3 +2812,25 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - `cd apps/ios && swift test` — pass, 36 tests.
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-21 iOS task completion patch mutations
+
+### User + Codex
+
+- Reviewed the iOS task completion path and confirmed the app/widget were using
+  full `taskUpsert` mutations for simple complete/uncomplete actions.
+- Implemented a compact `task_completion_set` mutation for app Home task
+  toggles and widget task actions.
+- Updated Core Data local apply logic so completion toggles change only
+  `isCompleted` locally before enqueueing.
+- Updated Supabase queue flush to PATCH only `tasks.is_completed` and
+  `tasks.completed_at`, including explicit `completed_at: null` when reopening
+  a task.
+- Kept full `taskUpsert` for task create/edit flows.
+- Updated next-step and iOS status docs to mark the narrower completion patch
+  path as implemented.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 40 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.

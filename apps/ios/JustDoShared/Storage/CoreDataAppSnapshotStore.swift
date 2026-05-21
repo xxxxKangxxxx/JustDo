@@ -184,6 +184,8 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
             try upsertPreference(key: key, value: value)
         case .taskUpsert(let task):
             try upsertTask(task)
+        case .taskCompletionSet(let id, let isCompleted, _):
+            try setTaskCompletion(id: id, isCompleted: isCompleted)
         case .taskDelete(let id):
             try deleteObject("CDTask", id: id)
         case .habitUpsert(let habit):
@@ -209,6 +211,13 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
         } else {
             _ = try CoreDataMappers.insertTask(task, in: context)
         }
+    }
+
+    private func setTaskCompletion(id: UUID, isCompleted: Bool) throws {
+        guard let object = try fetchObject("CDTask", id: id) else {
+            return
+        }
+        object.setValue(isCompleted, forKey: "isCompleted")
     }
 
     private func upsertHabit(_ habit: Habit) throws {
