@@ -5,7 +5,7 @@ public enum AppGroupWidgetSnapshotStoreError: Error, Equatable {
 }
 
 public final class AppGroupWidgetSnapshotStore {
-    public static let defaultAppGroupIdentifier = "group.com.justdo.app"
+    public static let defaultAppGroupIdentifier = "group.kr.justdo.app"
     public static let snapshotFileName = "widget_snapshot.json"
 
     private let directoryURL: URL

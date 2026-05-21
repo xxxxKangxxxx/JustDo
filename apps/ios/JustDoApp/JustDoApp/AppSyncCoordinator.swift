@@ -179,7 +179,7 @@ enum KeychainSessionStoreError: Error {
 }
 
 struct KeychainSupabaseSessionStore: SupabaseSessionStoring {
-    private let service = "com.justdo.app.supabase-session"
+    private let service = "kr.justdo.app.supabase-session"
     private let account = "default"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()

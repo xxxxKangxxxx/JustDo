@@ -15,19 +15,19 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		77C200032FB0000000010003 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 77AFE6CD2FA3418F00759E87 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 77AFE6D42FA3418F00759E87;
-			remoteInfo = JustDoApp;
-		};
 		77AFE6FC2FA3443600759E87 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 77AFE6CD2FA3418F00759E87 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 77AFE6E92FA3443100759E87;
 			remoteInfo = JustDoWidgetExtension;
+		};
+		77C200032FB0000000010003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 77AFE6CD2FA3418F00759E87 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 77AFE6D42FA3418F00759E87;
+			remoteInfo = JustDoApp;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -497,7 +497,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.app;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.justdo.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -534,7 +534,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.app;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.justdo.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -566,7 +566,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.app.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.justdo.app.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -598,7 +598,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.app.widget;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.justdo.app.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -621,7 +621,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = JustDoAppUITests;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.appUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.justdo.app.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -643,7 +643,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = JustDoAppUITests;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.appUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = kr.justdo.app.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
