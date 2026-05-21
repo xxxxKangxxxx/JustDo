@@ -45,6 +45,8 @@ implementation gaps, and checks to run before testing or shipping.
   screens from the Core Data mirror.
 - Deep-linked task/habit screens are pushed with a SwiftUI `NavigationStack`
   route instead of being rendered inline on the root scaffold.
+- `JustDoAppUITests` covers task and habit deep-link detail opening with a
+  DEBUG-only local mirror seed path.
 - Pushed task/habit detail screens support local edit and delete actions. Saves
   apply to the Core Data mirror and enqueue `taskUpsert` / `habitUpsert`; deletes
   enqueue `taskDelete` / `habitDelete` and return to the previous screen.
@@ -194,6 +196,5 @@ swift test
 
 - Verify signed-in iOS root home, add sheet, stats, and settings visually
   against `reference/proto/`.
-- Add UI tests for deep-link opening once the app shell is more complete.
 - (Phase 7 완료 후) Run hosted OAuth/offline sync verification on the new web
   UI; iOS-specific Manual Test Checklist 는 위에서 그대로 적용.

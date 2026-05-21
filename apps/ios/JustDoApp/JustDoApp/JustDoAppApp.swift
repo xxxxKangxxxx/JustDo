@@ -13,23 +13,28 @@ import JustDoShared
 struct JustDoAppApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var syncStatus = AppSyncStatusStore()
-    private let coreDataStack = CoreDataStack()
+    private let coreDataStack = CoreDataStack(inMemory: JustDoUITestSupport.isEnabled)
 
     var body: some Scene {
         WindowGroup {
-            ContentView(
+            let snapshotStore = JustDoUITestSupport.prepare(
                 snapshotStore: CoreDataAppSnapshotStore(
                     context: coreDataStack.container.viewContext
-                ),
+                )
+            )
+            ContentView(
+                snapshotStore: snapshotStore,
                 syncStatus: syncStatus
             ) {
                 await refreshWidgetSnapshot()
             }
                 .task {
-                    await refreshWidgetSnapshot()
+                    if !JustDoUITestSupport.isEnabled {
+                        await refreshWidgetSnapshot()
+                    }
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active {
+                    if phase == .active && !JustDoUITestSupport.isEnabled {
                         refreshWidgetSnapshotFromSceneChange()
                     }
                 }

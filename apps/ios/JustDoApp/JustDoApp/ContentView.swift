@@ -15,6 +15,7 @@ struct ContentView: View {
     @StateObject private var auth = AuthViewModel()
     @ObservedObject private var syncStatus: AppSyncStatusStore
     @State private var navigationPath = NavigationPath()
+    @State private var didOpenInitialUITestURL = false
     var snapshotStore: CoreDataAppSnapshotStore?
     var onSessionChanged: () async -> Void = {}
 
@@ -43,6 +44,7 @@ struct ContentView: View {
         }
         .task {
             auth.reload()
+            openInitialUITestURLIfNeeded()
         }
         .onOpenURL { url in
             open(url)
@@ -96,6 +98,16 @@ struct ContentView: View {
             return
         }
         navigationPath.append(route)
+    }
+
+    private func openInitialUITestURLIfNeeded() {
+        #if DEBUG
+        guard !didOpenInitialUITestURL, let url = JustDoUITestSupport.initialURL else {
+            return
+        }
+        didOpenInitialUITestURL = true
+        open(url)
+        #endif
     }
 }
 
@@ -2887,6 +2899,7 @@ private struct TaskDetailContent: View {
                 .foregroundStyle(task.isCompleted ? .green : .secondary)
             Text(task.title)
                 .font(.title3.weight(.semibold))
+                .accessibilityIdentifier("task-detail-title")
             DetailGrid(rows: [
                 ("Status", task.isCompleted ? "Completed" : "Open"),
                 ("Date", dateRange),
@@ -2895,6 +2908,7 @@ private struct TaskDetailContent: View {
                 ("Tags", task.tags.isEmpty ? "-" : task.tags.joined(separator: ", ")),
             ])
         }
+        .accessibilityIdentifier("task-detail-content")
     }
 
     private var dateRange: String {
@@ -2912,6 +2926,7 @@ private struct HabitDetailContent: View {
                 .foregroundStyle(.green)
             Text("\(habit.emoji) \(habit.title)")
                 .font(.title3.weight(.semibold))
+                .accessibilityIdentifier("habit-detail-title")
             DetailGrid(rows: [
                 ("Started", habit.startedAt),
                 ("Repeat", repeatDescription),
@@ -2919,6 +2934,7 @@ private struct HabitDetailContent: View {
                 ("Logged days", "\(habit.log.filter { $0.value == 1 }.count)"),
             ])
         }
+        .accessibilityIdentifier("habit-detail-content")
     }
 
     private var repeatDescription: String {

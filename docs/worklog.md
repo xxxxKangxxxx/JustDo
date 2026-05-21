@@ -2834,3 +2834,43 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - `cd apps/ios && swift test` — pass, 40 tests.
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-21 iOS deep-link UI tests
+
+### User + Codex
+
+- Added a `JustDoAppUITests` UI test target to the Xcode project.
+- Added DEBUG-only UI test support in the app:
+  - in-memory Core Data stack for UI test launches
+  - deterministic task/habit/category seed data
+  - signed-in auth bypass only when `--justdo-ui-testing` is present
+  - initial deep-link URL launch argument for deterministic route testing
+- Added UI tests for task and habit deep-link detail opening:
+  - `justdo://task/11111111-1111-1111-1111-111111111111`
+  - `justdo://habit/22222222-2222-2222-2222-222222222222`
+- Tests assert that `Task Detail` / `Habit Detail` screens render the linked
+  local mirror row data.
+- Updated iOS status and next-step docs to mark deep-link UI automation as
+  implemented.
+
+### Errors / Failed Attempts
+
+- First `xcodebuild ... test` run failed after the new UI test target was
+  added:
+  - Build succeeded and both deep-link screens opened far enough for the
+    navigation title assertions to pass.
+  - The failures were on `app.staticTexts["task-detail-title"]` and
+    `app.staticTexts["habit-detail-title"]`.
+  - Root cause: SwiftUI `Text` accessibility identifiers on those detail title
+    labels did not resolve in the UI test query as expected.
+  - Fix: keep the detail identifiers harmlessly in the app, but assert visible
+    detail text directly (`"UI Test Task"` / `"🌱 UI Test Habit"`) in the UI
+    tests. The rerun passed.
+
+### Verification
+
+- First UI test run:
+  - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` — failed, 2 UI tests. Failure was limited to detail-title lookup assertions; navigation title assertions had already passed.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` — pass, 2 UI tests.
+- `cd apps/ios && swift test` — pass, 40 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.

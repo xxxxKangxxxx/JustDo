@@ -317,8 +317,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     reopening a task clears `completed_at`.
   - This prevents stale iOS/widget mirrors from overwriting task-owned fields
     such as title, category, dates, priority, or tags during completion toggles.
-- [ ] Add full UI automation for widget deep-link opening once the app shell is
-  stable enough for Xcode UI tests.
+- [x] Add UI automation for widget deep-link detail opening.
+  - Added `JustDoAppUITests` with task/habit deep-link launch coverage.
+  - Tests seed a DEBUG-only local mirror and verify `Task Detail` /
+    `Habit Detail` screens render the linked row data.
 
 ## Phase 7: Web Desktop Redesign
 

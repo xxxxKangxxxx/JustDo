@@ -46,6 +46,13 @@ final class AuthViewModel: ObservableObject {
     }
 
     func reload() {
+        #if DEBUG
+        if JustDoUITestSupport.isEnabled {
+            status = .signedIn
+            return
+        }
+        #endif
+
         do {
             guard configurationLoader.load() != nil else {
                 status = .missingConfiguration

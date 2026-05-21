@@ -15,6 +15,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		77C200032FB0000000010003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 77AFE6CD2FA3418F00759E87 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 77AFE6D42FA3418F00759E87;
+			remoteInfo = JustDoApp;
+		};
 		77AFE6FC2FA3443600759E87 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 77AFE6CD2FA3418F00759E87 /* Project object */;
@@ -39,30 +46,31 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		77B100012FA9000000010001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-		77B100022FA9000000010001 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
-		77B100032FA9000000010001 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.example; sourceTree = "<group>"; };
 		77AFE6D52FA3418F00759E87 /* JustDoApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JustDoApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		77AFE6EA2FA3443100759E87 /* JustDoWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JustDoWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		77AFE6EC2FA3443100759E87 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		77AFE6EE2FA3443100759E87 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		77AFE7072FA344F900759E87 /* JustDoWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = JustDoWidgetExtension.entitlements; sourceTree = "<group>"; };
+		77B100012FA9000000010001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		77B100022FA9000000010001 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		77B100032FA9000000010001 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.example; sourceTree = "<group>"; };
+		77C200012FB0000000010001 /* JustDoAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JustDoAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		77B100042FA9000000010001 /* Exceptions for "JustDoApp" folder in "JustDoApp" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 77AFE6D42FA3418F00759E87 /* JustDoApp */;
-		};
 		77AFE6FF2FA3443600759E87 /* Exceptions for "JustDoWidget" folder in "JustDoWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 77AFE6E92FA3443100759E87 /* JustDoWidgetExtension */;
+		};
+		77B100042FA9000000010001 /* Exceptions for "JustDoApp" folder in "JustDoApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 77AFE6D42FA3418F00759E87 /* JustDoApp */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -81,6 +89,11 @@
 				77AFE6FF2FA3443600759E87 /* Exceptions for "JustDoWidget" folder in "JustDoWidgetExtension" target */,
 			);
 			path = JustDoWidget;
+			sourceTree = "<group>";
+		};
+		77C200022FB0000000010002 /* JustDoAppUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JustDoAppUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -104,6 +117,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		77C200052FB0000000010005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -114,19 +134,10 @@
 				77AFE7072FA344F900759E87 /* JustDoWidgetExtension.entitlements */,
 				77AFE6D72FA3418F00759E87 /* JustDoApp */,
 				77AFE6F02FA3443100759E87 /* JustDoWidget */,
+				77C200022FB0000000010002 /* JustDoAppUITests */,
 				77AFE6EB2FA3443100759E87 /* Frameworks */,
 				77AFE6D62FA3418F00759E87 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		77B100002FA9000000010001 /* Config */ = {
-			isa = PBXGroup;
-			children = (
-				77B100012FA9000000010001 /* Debug.xcconfig */,
-				77B100022FA9000000010001 /* Release.xcconfig */,
-				77B100032FA9000000010001 /* Local.xcconfig.example */,
-			);
-			path = Config;
 			sourceTree = "<group>";
 		};
 		77AFE6D62FA3418F00759E87 /* Products */ = {
@@ -134,6 +145,7 @@
 			children = (
 				77AFE6D52FA3418F00759E87 /* JustDoApp.app */,
 				77AFE6EA2FA3443100759E87 /* JustDoWidgetExtension.appex */,
+				77C200012FB0000000010001 /* JustDoAppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -145,6 +157,16 @@
 				77AFE6EE2FA3443100759E87 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		77B100002FA9000000010001 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				77B100012FA9000000010001 /* Debug.xcconfig */,
+				77B100022FA9000000010001 /* Release.xcconfig */,
+				77B100032FA9000000010001 /* Local.xcconfig.example */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -198,6 +220,29 @@
 			productReference = 77AFE6EA2FA3443100759E87 /* JustDoWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		77C200082FB0000000010008 /* JustDoAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 77C2000B2FB000000001000B /* Build configuration list for PBXNativeTarget "JustDoAppUITests" */;
+			buildPhases = (
+				77C200072FB0000000010007 /* Sources */,
+				77C200052FB0000000010005 /* Frameworks */,
+				77C200062FB0000000010006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				77C200042FB0000000010004 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				77C200022FB0000000010002 /* JustDoAppUITests */,
+			);
+			name = JustDoAppUITests;
+			packageProductDependencies = (
+			);
+			productName = JustDoAppUITests;
+			productReference = 77C200012FB0000000010001 /* JustDoAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -213,6 +258,10 @@
 					};
 					77AFE6E92FA3443100759E87 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					77C200082FB0000000010008 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 77AFE6D42FA3418F00759E87;
 					};
 				};
 			};
@@ -235,6 +284,7 @@
 			targets = (
 				77AFE6D42FA3418F00759E87 /* JustDoApp */,
 				77AFE6E92FA3443100759E87 /* JustDoWidgetExtension */,
+				77C200082FB0000000010008 /* JustDoAppUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -248,6 +298,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		77AFE6E82FA3443100759E87 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		77C200062FB0000000010006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -271,6 +328,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		77C200072FB0000000010007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -278,6 +342,11 @@
 			isa = PBXTargetDependency;
 			target = 77AFE6E92FA3443100759E87 /* JustDoWidgetExtension */;
 			targetProxy = 77AFE6FC2FA3443600759E87 /* PBXContainerItemProxy */;
+		};
+		77C200042FB0000000010004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 77AFE6D42FA3418F00759E87 /* JustDoApp */;
+			targetProxy = 77C200032FB0000000010003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -541,6 +610,50 @@
 			};
 			name = Release;
 		};
+		77C200092FB0000000010009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y99467L298;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = JustDoAppUITests;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.appUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = JustDoApp;
+			};
+			name = Debug;
+		};
+		77C2000A2FB000000001000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y99467L298;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = JustDoAppUITests;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.justdo.appUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = JustDoApp;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -567,6 +680,15 @@
 			buildConfigurations = (
 				77AFE7012FA3443600759E87 /* Debug */,
 				77AFE7022FA3443600759E87 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		77C2000B2FB000000001000B /* Build configuration list for PBXNativeTarget "JustDoAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				77C200092FB0000000010009 /* Debug */,
+				77C2000A2FB000000001000A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
