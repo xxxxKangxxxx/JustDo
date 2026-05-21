@@ -288,11 +288,27 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Add Settings entry points for habit/category management.
 - [x] Move dark-mode ownership to Settings and remove the home-header theme button.
 - [x] Fix launch-time Core Data crash from overlapping sync writes.
-- [ ] Manual offline sync verification on hosted Supabase (`docs/local_dev.md`).
-- [ ] Signed-in iOS root visual verification against `reference/proto/`.
-- [ ] Implement edit/delete actions from pushed task/habit detail screens.
-- [ ] Add app-facing sync status/error UI for failed queue flushes.
-- [ ] Prepare production domain/AWS deployment work (`docs/deployment_domain_aws_plan.md`).
+- [x] Manual offline sync verification on hosted Supabase (`docs/local_dev.md`).
+  - Passed on 2026-05-20: offline task/habit mutations queued, online restore
+    flushed to Supabase, and Settings sync status returned to synced.
+- [x] Implement edit/delete actions from pushed task/habit detail screens.
+- [x] Add app-facing sync status/error UI for failed queue flushes.
+- [x] Prepare production domain/AWS deployment work (`docs/deployment_domain_aws_plan.md`).
+  - `www.justdo.co.kr` hosted on AWS Amplify, Route 53 delegation complete,
+    Supabase production OAuth URLs configured, and production smoke test passed.
+- [x] Add iOS widget Task/Habit display mode.
+  - Small, medium, and large widgets default to Task mode.
+  - Task/Habit toggle state is stored in App Group `UserDefaults`.
+  - Progress label uses today's overall task+habit `completed/total`.
+  - Completed rows are displayed below incomplete rows.
+- [ ] Real-device iOS visual verification against `reference/proto/`.
+  - Home calendar/panel simulator pass completed; final spacing/tap ergonomics
+    should be verified on an actual iPhone.
+  - Add Sheet, Stats, Settings, and latest widget UI are deferred to one
+    real-device verification pass.
+- [ ] Add UI tests for widget deep-link opening once the app shell is stable.
+- [ ] Consider a narrower iOS task-completion patch path if full task upsert
+  starts carrying fields that should remain remote-owned.
 
 ## Phase 7: Web Desktop Redesign
 

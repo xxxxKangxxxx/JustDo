@@ -2781,3 +2781,17 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - `cd apps/ios && swift test` — pass, 33 tests.
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-21 next steps cleanup
+
+### User + Codex
+
+- Updated `docs/next_steps.md` Phase 6 checklist to match current iOS state.
+- Marked hosted offline sync verification, pushed detail edit/delete, sync
+  status/error UI, and production domain/AWS deployment preparation complete.
+- Added the completed iOS widget Task/Habit display-mode work to the Phase 6
+  checklist.
+- Reframed remaining iOS visual work as one real-device verification pass for
+  Add Sheet, Stats, Settings, and widget UI.
+- Kept remaining development candidates explicit: widget deep-link UI tests and
+  optional narrower task-completion patch path.
