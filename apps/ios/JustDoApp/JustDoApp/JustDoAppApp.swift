@@ -52,7 +52,7 @@ struct JustDoAppApp: App {
             try await AppSyncCoordinator(
                 snapshotStore: snapshotStore,
                 widgetWriter: try WidgetSnapshotWriter()
-            ).refreshWidgetSnapshot(selectedDate: "2026-04-30")
+            ).refreshWidgetSnapshot()
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
         } catch {
             let snapshotStore = CoreDataAppSnapshotStore(

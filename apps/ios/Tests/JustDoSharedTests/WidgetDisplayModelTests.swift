@@ -9,9 +9,11 @@ final class WidgetDisplayModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.items.count, 3)
+        XCTAssertEqual(model.displayMode, .task)
         XCTAssertEqual(model.totalCount, 4)
-        XCTAssertEqual(model.remainingCount, 3)
-        XCTAssertEqual(model.items.map(\.title), ["삼성전자 지원", "업체 미팅", "팀 보고서 제출"])
+        XCTAssertEqual(model.completedCount, 2)
+        XCTAssertEqual(model.remainingCount, 2)
+        XCTAssertEqual(model.items.map(\.title), ["삼성전자 지원", "팀 보고서 제출", "업체 미팅"])
     }
 
     func testMediumModelIncludesWeekDays() {
@@ -20,7 +22,7 @@ final class WidgetDisplayModelTests: XCTestCase {
             size: .medium
         )
 
-        XCTAssertEqual(model.items.count, 4)
+        XCTAssertEqual(model.items.count, 3)
         XCTAssertEqual(model.weekDays.count, 7)
         XCTAssertEqual(model.weekDays.first?.iso, "2026-04-26")
         XCTAssertEqual(model.weekDays.last?.iso, "2026-05-02")
@@ -37,6 +39,21 @@ final class WidgetDisplayModelTests: XCTestCase {
         XCTAssertEqual(model.monthDays.first?.day, 1)
         XCTAssertEqual(model.monthDays.last?.day, 30)
         XCTAssertEqual(model.monthDays.last?.dotColors.isEmpty, false)
+    }
+
+    func testHabitModeShowsOnlyHabitsWithCompletedCount() {
+        let model = JustDoWidgetDisplayModelFactory.make(
+            from: snapshot(),
+            size: .large,
+            displayMode: .habit
+        )
+
+        XCTAssertEqual(model.displayMode, .habit)
+        XCTAssertEqual(model.totalCount, 4)
+        XCTAssertEqual(model.completedCount, 2)
+        XCTAssertEqual(model.remainingCount, 2)
+        XCTAssertEqual(model.items.map(\.title), ["🏃 운동 30분"])
+        XCTAssertTrue(model.items.allSatisfy { $0.kind == .habit })
     }
 
     private func snapshot() -> WidgetSnapshot {
@@ -78,7 +95,7 @@ final class WidgetDisplayModelTests: XCTestCase {
                     startDate: "2026-04-30",
                     endDate: "2026-04-30",
                     priority: .medium,
-                    isCompleted: false,
+                    isCompleted: true,
                     scheduledTime: "14:00",
                     tags: []
                 ),

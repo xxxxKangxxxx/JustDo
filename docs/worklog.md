@@ -2734,3 +2734,50 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - `cd apps/ios && swift test` — pass, 30 tests.
 - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-20 iOS widget today snapshot fix
+
+### User + Codex
+
+- User verified small / medium / large widgets render on the simulator home
+  screen, but only habits appeared in the widget item list.
+- Root cause: app launch / foreground widget refresh still called
+  `refreshWidgetSnapshot(selectedDate: "2026-04-30")`, so the widget snapshot
+  was built against a fixed prototype date instead of the real current day.
+- Updated `JustDoAppApp` to refresh the widget snapshot with the default
+  current-day view state.
+- Changed `AppSyncCoordinator.refreshWidgetSnapshot` to accept an optional
+  selected date, preserving explicit-date calls while allowing app lifecycle
+  refreshes to use today.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 30 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.
+
+## 2026-05-21 iOS widget task/habit display mode
+
+### User + Codex
+
+- User decided widgets should default to Task mode on every widget size.
+- Added a widget-level Task/Habit toggle using WidgetKit App Intents. The
+  selected display mode is stored in App Group `UserDefaults` so small, medium,
+  and large widgets share the same mode.
+- Updated the widget display model to filter rows by the selected mode, keep
+  incomplete items above completed items, and expose today's overall task+habit
+  `completed/total` progress for compact display.
+- Updated small, medium, and large widget layouts to show the Task/Habit control
+  and a concise progress label like `3/8`.
+- Refined widget layout after simulator review:
+  - large widget content stays top-aligned when switching Task/Habit
+  - small widget uses compact color-dot controls instead of clipped text labels
+  - small and medium widget bodies now follow the same top-aligned behavior as
+    large
+- Remaining widget UI spacing and tap ergonomics are deferred to real-device
+  testing.
+- Added shared tests for display-mode persistence and display-model filtering.
+
+### Verification
+
+- `cd apps/ios && swift test` — pass, 33 tests.
+- `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` — pass.

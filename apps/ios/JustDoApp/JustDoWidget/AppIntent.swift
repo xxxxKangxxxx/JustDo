@@ -72,3 +72,23 @@ struct SetHabitLogIntent: AppIntent {
         return .result()
     }
 }
+
+struct SetWidgetDisplayModeIntent: AppIntent {
+    static var title: LocalizedStringResource = "Set Widget Display Mode"
+
+    @Parameter(title: "Mode")
+    var mode: String
+
+    init() {}
+
+    init(mode: WidgetDisplayMode) {
+        self.mode = mode.rawValue
+    }
+
+    func perform() async throws -> some IntentResult {
+        let displayMode = WidgetDisplayMode(rawValue: mode) ?? .task
+        try AppGroupWidgetDisplayModeStore().write(displayMode)
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
+}

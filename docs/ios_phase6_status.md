@@ -15,6 +15,15 @@ implementation gaps, and checks to run before testing or shipping.
 - Widget task/habit actions are interactive:
   - task complete/uncomplete
   - habit check/uncheck for the selected date
+- Widgets default to Task mode across small, medium, and large sizes. The
+  widget header exposes a Task/Habit toggle and shows completion progress as
+  today's overall `completed/total` across tasks and habits (for example,
+  `3/8`). Completed items are pushed below incomplete items within the
+  displayed list. Small / medium / large widget bodies are top-aligned so mode
+  changes affect the remaining lower space instead of shifting the header area.
+- App lifecycle widget refresh uses the current local date for the widget
+  snapshot. The previous prototype date fallback (`2026-04-30`) has been
+  removed from launch / foreground refresh.
 - Widget actions optimistically update `widget_snapshot.json`, append App Group
   mutations, and request a timeline reload.
 - The app drains App Group widget mutations into Core Data and preserves them in
@@ -74,6 +83,9 @@ implementation gaps, and checks to run before testing or shipping.
 
 - Native UI still needs another visual pass against `reference/proto/` after
   task/habit CRUD coverage settles.
+- Widget UI polish has moved to real-device testing. Simulator validation has
+  covered rendering/build behavior, but spacing, legibility, and tap ergonomics
+  should be finalized on an actual iPhone.
 
 ## Before Manual Testing
 
@@ -124,6 +136,17 @@ swift test
 - Launch app on simulator.
 - Confirm the app writes a Keychain session and refreshes the widget snapshot.
 - Add the widget to the simulator home screen.
+- Confirm widget header date matches the current local date.
+- Confirm widgets open in Task mode by default and show current-day tasks first.
+- Confirm the Task/Habit toggle switches the visible list without changing
+  widget size.
+- Confirm small widget uses compact color-dot mode controls instead of clipped
+  text labels.
+- Confirm small, medium, and large widgets keep header/calendar/control content
+  top-aligned when switching between Task and Habit.
+- Confirm the progress label uses today's overall task+habit `completed/total`
+  formatting.
+- Confirm completed task/habit rows move below incomplete rows.
 - Tap a task check dot in the widget.
   - Expected: widget updates optimistically.
   - Expected: app foreground drains App Group queue.

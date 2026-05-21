@@ -6,6 +6,11 @@ public enum JustDoWidgetSize: String, Codable, Equatable, Sendable {
     case large
 }
 
+public enum WidgetDisplayMode: String, Codable, Equatable, Sendable {
+    case task
+    case habit
+}
+
 public struct JustDoWidgetItem: Identifiable, Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
         case task
@@ -33,6 +38,15 @@ public struct JustDoWidgetItem: Identifiable, Equatable, Sendable {
         self.isDone = isDone
         self.colorHex = colorHex
         self.kind = kind
+    }
+
+    public var displayMode: WidgetDisplayMode {
+        switch kind {
+        case .task:
+            return .task
+        case .habit:
+            return .habit
+        }
     }
 }
 
@@ -62,6 +76,8 @@ public struct JustDoWidgetDay: Identifiable, Equatable, Sendable {
 public struct JustDoWidgetDisplayModel: Equatable, Sendable {
     public var generatedAt: String
     public var selectedDate: String
+    public var displayMode: WidgetDisplayMode
+    public var completedCount: Int
     public var remainingCount: Int
     public var totalCount: Int
     public var items: [JustDoWidgetItem]
@@ -71,6 +87,8 @@ public struct JustDoWidgetDisplayModel: Equatable, Sendable {
     public init(
         generatedAt: String,
         selectedDate: String,
+        displayMode: WidgetDisplayMode,
+        completedCount: Int,
         remainingCount: Int,
         totalCount: Int,
         items: [JustDoWidgetItem],
@@ -79,6 +97,8 @@ public struct JustDoWidgetDisplayModel: Equatable, Sendable {
     ) {
         self.generatedAt = generatedAt
         self.selectedDate = selectedDate
+        self.displayMode = displayMode
+        self.completedCount = completedCount
         self.remainingCount = remainingCount
         self.totalCount = totalCount
         self.items = items
@@ -92,9 +112,13 @@ public enum JustDoWidgetDisplayModelFactory {
 
     public static func make(
         from snapshot: WidgetSnapshot,
-        size: JustDoWidgetSize
+        size: JustDoWidgetSize,
+        displayMode: WidgetDisplayMode = .task
     ) -> JustDoWidgetDisplayModel {
-        let items = allItems(from: snapshot)
+        let allItems = allItems(from: snapshot)
+        let items = prioritizedItems(
+            allItems.filter { $0.displayMode == displayMode }
+        )
         let limit: Int
         switch size {
         case .small:
@@ -108,11 +132,13 @@ public enum JustDoWidgetDisplayModelFactory {
         return JustDoWidgetDisplayModel(
             generatedAt: snapshot.generatedAt,
             selectedDate: snapshot.selectedDate,
-            remainingCount: items.filter { !$0.isDone }.count,
-            totalCount: items.count,
+            displayMode: displayMode,
+            completedCount: allItems.filter(\.isDone).count,
+            remainingCount: allItems.filter { !$0.isDone }.count,
+            totalCount: allItems.count,
             items: Array(items.prefix(limit)),
-            weekDays: weekDays(selectedDate: snapshot.selectedDate, items: items),
-            monthDays: monthDays(selectedDate: snapshot.selectedDate, items: items)
+            weekDays: weekDays(selectedDate: snapshot.selectedDate, items: allItems),
+            monthDays: monthDays(selectedDate: snapshot.selectedDate, items: allItems)
         )
     }
 
@@ -142,6 +168,10 @@ public enum JustDoWidgetDisplayModelFactory {
         }
 
         return taskItems + habitItems
+    }
+
+    private static func prioritizedItems(_ items: [JustDoWidgetItem]) -> [JustDoWidgetItem] {
+        items.filter { !$0.isDone } + items.filter(\.isDone)
     }
 
     private static func weekDays(

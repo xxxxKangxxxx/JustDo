@@ -28,7 +28,12 @@ struct Provider: TimelineProvider {
     private func loadEntry(for family: WidgetFamily) -> JustDoEntry {
         let size = JustDoWidgetSize(family: family)
         let snapshot = (try? AppGroupWidgetSnapshotStore().read()) ?? WidgetSnapshot.placeholder()
-        let model = JustDoWidgetDisplayModelFactory.make(from: snapshot, size: size)
+        let displayMode = (try? AppGroupWidgetDisplayModeStore().read()) ?? .task
+        let model = JustDoWidgetDisplayModelFactory.make(
+            from: snapshot,
+            size: size,
+            displayMode: displayMode
+        )
         return JustDoEntry(date: Date(), model: model, size: size)
     }
 }
@@ -42,7 +47,8 @@ struct JustDoEntry: TimelineEntry {
         let size = JustDoWidgetSize(family: family)
         let model = JustDoWidgetDisplayModelFactory.make(
             from: WidgetSnapshot.placeholder(),
-            size: size
+            size: size,
+            displayMode: .task
         )
         return JustDoEntry(date: Date(), model: model, size: size)
     }
@@ -125,16 +131,12 @@ private struct SmallInteractiveWidgetBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(model.remainingCount)")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                Text("/ \(model.totalCount) 남음")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
+            WidgetModeControl(model: model, style: .compact)
             Divider()
             InteractiveWidgetItemList(model: model)
+            Spacer(minLength: 0)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -146,8 +148,14 @@ private struct MediumInteractiveWidgetBody: View {
             WeekStrip(days: model.weekDays)
                 .frame(width: 122)
             Divider()
-            InteractiveWidgetItemList(model: model)
+            VStack(alignment: .leading, spacing: 6) {
+                WidgetModeControl(model: model)
+                InteractiveWidgetItemList(model: model)
+                Spacer(minLength: 0)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -158,11 +166,59 @@ private struct LargeInteractiveWidgetBody: View {
         VStack(alignment: .leading, spacing: 8) {
             MonthGrid(days: model.monthDays)
             Divider()
-            Text("오늘 · \(model.items.count)개")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
+            WidgetModeControl(model: model)
             InteractiveWidgetItemList(model: model)
+            Spacer(minLength: 0)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+}
+
+private struct WidgetModeControl: View {
+    enum Style {
+        case labeled
+        case compact
+    }
+
+    let model: JustDoWidgetDisplayModel
+    var style: Style = .labeled
+
+    var body: some View {
+        HStack(spacing: 6) {
+            modeButton(.task, title: "Task", color: .accentColor)
+            modeButton(.habit, title: "Habit", color: Color(hex: JustDoWidgetDisplayModelFactory.habitColor))
+            Spacer(minLength: 4)
+            Text("\(model.completedCount)/\(model.totalCount)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func modeButton(_ mode: WidgetDisplayMode, title: String, color: Color) -> some View {
+        Button(intent: SetWidgetDisplayModeIntent(mode: mode)) {
+            if style == .compact {
+                Circle()
+                    .fill(model.displayMode == mode ? color : color.opacity(0.22))
+                    .overlay(
+                        Circle()
+                            .stroke(color, lineWidth: model.displayMode == mode ? 0 : 1)
+                    )
+                    .frame(width: 14, height: 14)
+                    .padding(4)
+                    .contentShape(Circle())
+            } else {
+                Text(title)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(model.displayMode == mode ? .white : .secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(model.displayMode == mode ? color : Color.primary.opacity(0.08))
+                    .clipShape(Capsule())
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 }
 

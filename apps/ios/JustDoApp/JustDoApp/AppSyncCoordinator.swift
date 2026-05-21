@@ -289,7 +289,7 @@ struct AppSyncCoordinator {
         )
     }
 
-    func refreshWidgetSnapshot(selectedDate: String) async throws {
+    func refreshWidgetSnapshot(selectedDate: String? = nil) async throws {
         try WidgetSnapshotBootstrap.seedIfNeeded(into: snapshotStore)
 
         let view = AppSnapshotDefaults.viewState(selectedDate: selectedDate)
