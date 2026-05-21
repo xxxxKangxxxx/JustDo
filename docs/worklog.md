@@ -2977,3 +2977,231 @@ This document records coordination notes for work done with Codex and Claude Cod
   KST 2026-05-21 05:30 firing sits under `2026/05/20/` rather than
   `2026/05/21/`. This is normal; do not interpret the missing 5/21 folder as
   a skipped firing.
+
+## 2026-05-22 iOS real-device setup (signing + bundle id)
+
+### User + Claude Code
+
+- Started the iOS Phase 6 real-device verification track. Used the
+  user's iPhone 14 Pro on iOS 26.5 against the Xcode 26.3 / macOS Tahoe
+  26.3.1 host (MacBook Air M3).
+- Walked through Xcode `Window > Devices and Simulators` to register
+  the iPhone. Developer Mode was hidden on the device until the USB
+  connection caused Xcode to provision the device. Enabling Developer
+  Mode from `Settings > Privacy & Security` then required an iPhone
+  reboot.
+- Initial Signing & Capabilities run failed with `Failed Registering
+  Bundle Identifier` for `com.justdo.app`. Root cause: that identifier
+  was already registered in Apple's global App ID namespace under some
+  other team, so neither the Personal Team nor the Developer Team could
+  claim it.
+- Additional confusion: Xcode's signing dropdown initially showed
+  `yeongmo kang (Personal Team)` only, even though the Apple Developer
+  Program team was active. Xcode 26 lists every team for the signed-in
+  Apple ID under the same name; the Personal Team label is the only
+  hint. A simple `Sign Out` / `Sign In` in `Settings > Accounts`
+  restored the Developer Team to the dropdown.
+- Decided to renamespace JustDo identifiers under the production
+  reverse-DNS root `justdo.co.kr`:
+  - App: `com.justdo.app` -> `kr.justdo.app`
+  - Widget: `com.justdo.app.widget` -> `kr.justdo.app.widget`
+  - UI Tests: `com.justdo.appUITests` -> `kr.justdo.app.uitests`
+  - App Group: `group.com.justdo.app` -> `group.kr.justdo.app`
+  - Keychain service: `com.justdo.app.supabase-session` ->
+    `kr.justdo.app.supabase-session`
+  - Info.plist `CFBundleURLName` -> `kr.justdo.app`
+- After the rename, automatic signing succeeded for all three targets
+  and the device build installed cleanly to the iPhone.
+- Xcode 26 turned out to handle wireless development automatically.
+  The `Connect via network` checkbox is no longer present in the
+  Devices window; instead, unplugging USB while the device is paired
+  causes Xcode to attach a globe icon (`🌐`) and keep the device under
+  `Connected`. From then on Run/Stop/Logs work over Wi-Fi.
+
+### Verification
+
+- Build succeeded against `강영모의 iPhone` (iOS 26.5).
+- App launched on the device with `kr.justdo.app` as the installed
+  identifier.
+- Apple Account in Xcode shows `yeongmo kang` as a Developer Team with
+  Admin role and `Certificates, Identifiers, & Profiles` enabled.
+
+### Notes
+
+- The previous `com.justdo.app` registration could not be reclaimed by
+  this team. Treat `kr.justdo.app` as the final production identifier
+  for v1 unless we move to a higher-tier organization account that owns
+  the original namespace.
+- Personal Team would still let the app run on the device for seven
+  days at a time, but Developer Team is now configured, so no weekly
+  re-signing is needed.
+
+## 2026-05-22 iOS auth landing dark mode fix
+
+### User + Claude Code
+
+- After the first device install the auth landing showed a broken
+  appearance in dark mode: the cream radial gradient stayed bright on
+  the top half while the bottom half rendered against a dark surface,
+  with the `Just Do` wordmark fading out against the gradient.
+- The product decision is that the auth screen should ship as
+  brand-consistent light styling regardless of system appearance, with
+  dark mode only kicking in after sign-in. This matches common Korean
+  productivity / banking apps that lock the login surface to a single
+  look.
+- Added `.preferredColorScheme(.light)` to `AuthLandingView` in
+  `apps/ios/JustDoApp/JustDoApp/ContentView.swift`. The signed-in
+  `HomeRootView` keeps its own `.preferredColorScheme(isDarkMode ? .dark : .light)`
+  binding so dark mode remains user-controlled inside the app.
+- `LoadingRootView` was left untouched because it is on screen too
+  briefly to matter; revisit if a future hosted-sync hiccup makes it
+  visible for longer.
+
+### Verification
+
+- Device check: toggling iOS-wide dark mode and relaunching JustDo
+  leaves the auth screen rendered as light, while the signed-in shell
+  honors the Settings dark mode toggle.
+
+## 2026-05-22 iOS home calendar redesign (bottom sheet + swipe nav)
+
+### User + Claude Code
+
+- First device run of the home screen exposed two layout problems:
+  - Calendar week rows were taller than expected because
+    `CalendarWeekRow.rowHeight` always reserved space for two lanes
+    (`max(2, laneCount)`), so a month with no tasks still pushed the
+    selected-day panel off the visible area.
+  - The day-cell tap target was clamped to the 32pt date header, so
+    taps that landed on the empty area below the date number did not
+    advance `selectedDate`.
+- I first tried softening the row height to `max(1, laneCount)` and
+  bumping the inline panel default. Both changes did not stick:
+  reference `reference/proto/home.jsx` actually uses `max(2, maxLane)`
+  intentionally for row-height consistency, and SwiftUI VStack's
+  layoutPriority failed to override the LazyVGrid's intrinsic size, so
+  the panel still got squeezed.
+- After re-reading `reference/proto/home.jsx` and `sheet-detail.jsx`,
+  decided to switch the selected-day panel from an inline drag-resizable
+  section to a real bottom sheet modal. Reference proto uses a
+  fixed-height `maxHeight: 360 + overflow: auto` panel inside a phone
+  frame; iOS native expresses this best as a `.sheet` with detents.
+- Implementation in `ContentView.swift`:
+  - Removed `selectedDayPanelHeight` / `selectedDayPanelDragOffset`
+    state, the `selectedDayPanelCollapsedHeight` /
+    `selectedDayPanelExpandedHeight` constants, the
+    `currentSelectedDayPanelHeight` / `finishSelectedDayPanelResize` /
+    `clampedSelectedDayPanelHeight` helpers, and the drag callbacks
+    inside `SelectedDayPanel`.
+  - Restored `rowHeight = 32 + max(2, laneCount) * 16 + 4` to match
+    the proto layout.
+  - Expanded `CalendarDayCell` to fill the row height with a VStack +
+    Spacer + `.contentShape(Rectangle())` so the entire cell is
+    tappable. Date pill and dots keep their 6pt top padding from the
+    proto.
+  - Wrapped `CalendarTaskBar` with `.allowsHitTesting(false)` so taps
+    that visually land on a task bar still pass through to the day
+    cell beneath.
+  - Added `isShowingDayPanel` state, set it true from
+    `onSelectDate`, and pushed `SelectedDayPanel` into a new
+    `.sheet(isPresented:)` with
+    `.presentationDetents([.height(420)])`,
+    `.presentationDragIndicator(.visible)`,
+    `.presentationCornerRadius(22)`,
+    `.presentationBackground(JDTheme.surface)`. The user explicitly
+    asked for a single non-expanding detent, so no `.large` is
+    included. Background taps and drag-down still dismiss because
+    that is the iOS default.
+  - Sheet content gets a `simultaneousGesture(DragGesture(...))` that
+    advances `selectedDate` by one day on horizontal swipes
+    (`JDDate.addDays`). It only fires when `|dx| > |dy|` and
+    `|dx| > 50` so it does not conflict with the panel's internal
+    `ScrollView`.
+  - Added a separate `simultaneousGesture` on `MonthCalendarView`
+    that moves the month (`moveMonth(-1)` / `moveMonth(1)`) on the
+    same kind of horizontal threshold, animated with
+    `withAnimation(.easeInOut(duration: 0.2))`.
+  - Tidied `SelectedDayPanel` for use inside a sheet: the outer
+    `.background(JDTheme.surface) / .clipShape(...) /
+    .padding(.horizontal, 14) / .padding(.top, 8)` chain was removed
+    (the sheet's presentation modifiers handle surface + corner
+    radius), and the Capsule drag handle inside `dragHeader` was
+    deleted in favour of the sheet's own
+    `.presentationDragIndicator(.visible)`.
+- Header polish after the panel left the inline VStack:
+  - `JustDoWordmark` enlarged from `size: 17, dotSize: 4` to
+    `size: 24, dotSize: 6`.
+  - Header VStack spacing 12 -> 16, top padding 10 -> 16.
+  - Outer home VStack spacing 14 -> 20, pushing the calendar a bit
+    further below the wordmark.
+
+### Verification
+
+- Device run on iPhone 14 Pro / iOS 26.5:
+  - Default home renders calendar full-bleed with no panel on screen.
+  - Tapping any in-month date opens the day sheet at the 420pt
+    detent.
+  - Horizontal swipes inside the sheet move `selectedDate` ±1 day
+    without scrolling the inner list.
+  - Calendar swipes move the month, with the cell tap still selecting
+    a date when distance < 30pt.
+  - Pulling the sheet up does not expand it; pulling it down or
+    tapping outside dismisses it (iOS default behavior).
+  - Console output showed only the usual iOS `quic_crypto_queue_append`
+    and `nw_connection_*` noise from the Network framework; no app
+    errors or Core Data warnings.
+
+### Notes
+
+- This change drops the previous "drag handle resizes the panel"
+  interaction. `docs/ios_phase6_status.md` was updated separately to
+  reflect the new model.
+- Sheet detent height 420 was picked to mirror the proto's
+  `maxHeight: 360` plus the iOS sheet's safe-area / drag-indicator
+  overhead. Revisit if Add Sheet or Stats screens need a different
+  baseline.
+
+## 2026-05-22 App icon and web favicon
+
+### User + Claude Code
+
+- The user produced new branding assets:
+  - iOS: `icon-1024.png` (single 1024x1024 light variant).
+  - Web: `favicon.svg`, `favicon-16.png`, `favicon-32.png`,
+    `favicon-48.png`, `apple-touch-icon-180.png`.
+- iOS placement:
+  - `apps/ios/JustDoApp/JustDoApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png`.
+  - Replaced the multi-variant Contents.json with a single
+    `1024x1024` entry tied to `icon-1024.png`. Dark and tinted
+    variants are intentionally omitted; Xcode 16+ auto-generates the
+    home-screen sizes and falls back to a dimmed / monochrome
+    version for dark / tinted system modes until dedicated artwork
+    exists.
+- Web placement:
+  - New `apps/web/public/` directory now ships the five favicon
+    files using the user's filenames.
+  - `apps/web/src/app/layout.tsx` declares
+    `metadata.icons.icon` with the SVG primary plus 32/16/48 PNG
+    fallbacks, and `metadata.icons.apple` with the
+    `apple-touch-icon-180.png`. Next.js App Router emits the
+    expected `<link rel="icon">` and
+    `<link rel="apple-touch-icon">` tags from this metadata.
+- Visual check on device showed the new app icon installed correctly.
+  Slight softness on the icon glyphs is expected because Xcode is
+  downscaling a single 1024 source; rejecting that for sharper
+  artwork is deferred until we have additional explicit sizes or a
+  cleaner 2048+ master.
+
+### Verification
+
+- `git status` clean after the three commits below.
+- iPhone home screen displays the new JustDo icon.
+- Local dev (no formal smoke run this entry) wired the favicon
+  metadata; production verification waits for the next Amplify
+  deploy.
+
+### Commit history
+
+- `551f302 chore(ios): rename bundle id to kr.justdo.app`
+- `3081ae4 feat(ios): redesign home calendar and fix auth dark mode`
+- `e65a405 feat: add app icon and web favicon`

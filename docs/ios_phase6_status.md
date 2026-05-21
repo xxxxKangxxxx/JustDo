@@ -54,12 +54,24 @@ implementation gaps, and checks to run before testing or shipping.
   pending mutation count, and failed states; failed syncs expose a retry action.
 - The signed-in root shell now renders native Home / Stats / Settings tabs
   based on `reference/proto/`.
-- The Home tab includes the month calendar, selected-day panel, task/habit
-  rows, add button, and bottom tab bar.
+- The Home tab includes the month calendar, the home header (Just Do
+  wordmark + year/month navigation + add button), and the bottom tab bar.
 - The Home calendar keeps date cells free of dot indicators; tasks are shown by
-  horizontal bars with title text. The calendar area remains fixed while the
-  selected-day task/habit panel starts at its default height and expands when
-  its top handle/date header is dragged upward.
+  horizontal bars with title text. Day cells fill the full row height so the
+  tap target is the entire cell, not just the date pill; task bars sit above
+  the cell with `.allowsHitTesting(false)` so taps still reach the cell button.
+- Selected-day data is shown in a bottom sheet modal triggered by tapping a
+  date. The sheet uses a single `.height(420)` detent (no large expansion);
+  the panel content scrolls internally when it overflows. Drag-down and
+  background tap dismiss the sheet via the iOS sheet defaults.
+- Horizontal swipes inside the sheet move `selectedDate` by ±1 day
+  (`JDDate.addDays`). Horizontal swipes on the calendar move the displayed
+  month by ±1 (`moveMonth`). Both use `simultaneousGesture` so cell taps
+  and the sheet's inner `ScrollView` keep working.
+- Auth landing is locked to light mode via `.preferredColorScheme(.light)`
+  so the cream radial gradient and brand styling stay consistent even under
+  iOS-wide dark mode. The signed-in shell still respects the Settings
+  dark-mode toggle.
 - The add flow uses a partial-height bottom sheet with Task/Habit modes,
   task date/time/category/priority fields, and habit emoji entry.
 - Settings owns dark-mode control. The home header no longer has a separate
@@ -87,11 +99,22 @@ implementation gaps, and checks to run before testing or shipping.
 
 ## Remaining App Gaps
 
-- Native UI still needs another visual pass against `reference/proto/` after
-  task/habit CRUD coverage settles.
-- Widget UI polish has moved to real-device testing. Simulator validation has
-  covered rendering/build behavior, but spacing, legibility, and tap ergonomics
-  should be finalized on an actual iPhone.
+- Real-device visual verification (2026-05-22 in progress on iPhone 14 Pro
+  iOS 26.5):
+  - [x] Auth landing — passed after `.preferredColorScheme(.light)` fix.
+  - [x] Home calendar / panel — passed after the bottom-sheet redesign,
+    cell-tap expansion, and the calendar/sheet swipe gestures.
+  - [ ] Add Sheet (Task / Habit) — compare against
+    `reference/proto/sheet-detail.jsx`.
+  - [ ] Stats — compare against
+    `reference/proto/stats-settings.jsx`.
+  - [ ] Settings — compare against
+    `reference/proto/stats-settings.jsx`.
+  - [ ] Widget (small / medium / large + Task/Habit toggle + deep link)
+    on the actual home screen.
+- App icon: only the light (default) 1024x1024 variant is shipped. Dark
+  and tinted home-screen variants are deferred until dedicated artwork
+  is produced.
 
 ## Before Manual Testing
 
@@ -100,10 +123,30 @@ implementation gaps, and checks to run before testing or shipping.
   - `JUSTDO_SUPABASE_ANON_KEY`
 - Confirm Supabase Auth URL Configuration includes:
   - `justdo://auth-callback`
+- Confirm the signing setup in Xcode:
+  - Apple Account in `Xcode > Settings > Accounts` shows the Developer Team
+    (the Personal Team label disappears once the Developer Team is active;
+    Sign Out / Sign In if the dropdown only shows Personal Team).
+  - All three targets (`JustDoApp`, `JustDoWidgetExtension`,
+    `JustDoAppUITests`) are bound to that Developer Team with automatic
+    signing.
+  - Bundle identifiers must remain on the `kr.justdo.app` namespace
+    (`kr.justdo.app`, `kr.justdo.app.widget`, `kr.justdo.app.uitests`).
+    Do not revert to `com.justdo.app` — that identifier is taken in
+    Apple's global App ID registry.
+  - App Group entitlement on both app and widget points at
+    `group.kr.justdo.app`.
 - Build the app target:
 
 ```bash
 xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build
+```
+
+- Build for a paired physical device (replace the destination name with the
+  actual device name from Xcode):
+
+```bash
+xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS,name=<device-name>' build
 ```
 
 - Run shared tests:
@@ -189,12 +232,48 @@ swift test
 
 ## Next Work
 
-> 2026-05-10 Platform Strategy 결정으로 web 측은 Phase 7 (Web Desktop Redesign)이
-> v1 출시 차단 항목이지만, iOS 잔여 작업은 Phase 7과 독립적으로 병렬 진행 가능.
-> Hosted offline sync verification 은 Phase 7 완료 후 새 web UI 위에서 한 번에
-> 회귀 검증하는 게 효율적이라 지금은 우선순위가 낮음.
+> 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing은
+> 통과했고, 다음 차례는 Add Sheet → Stats → Settings → Widget.
 
-- Verify signed-in iOS root home, add sheet, stats, and settings visually
-  against `reference/proto/`.
-- (Phase 7 완료 후) Run hosted OAuth/offline sync verification on the new web
-  UI; iOS-specific Manual Test Checklist 는 위에서 그대로 적용.
+- [ ] **Add Sheet 시각 검증**.
+  - Reference: `reference/proto/sheet-detail.jsx` (PAddSheet).
+  - 검증 포인트:
+    - Task / Habit 토글 (segmented pill, edit mode 아닐 때만)
+    - Title input (20pt bold display, "무엇을 할까요?" / "어떤 습관을?",
+      underline border)
+    - FieldRow 패턴: 72pt label column + 13px vertical padding +
+      0.5px divider (마지막은 noBorder)
+    - Task fields: 시작 / 종료 / 시간 / 카테고리 chip / 우선순위 chip
+    - Habit fields: 이모지 picker (preset 6개: 🌱💧🏃📖🧘✏️)
+    - Footer: edit mode 시 삭제(왼쪽), spacer, 취소 / 추가·저장(accent pill,
+      title empty 시 비활성)
+    - iOS 현재 빌드는 custom categories 지원이라 카테고리 chip이 reference의
+      두 칸짜리(나/외부)와 다른 동적 chip이 될 수 있음. 색상은
+      `categoryStyle(category, mode)` 헬퍼 기반.
+- [ ] **Stats 시각 검증**.
+  - Reference: `reference/proto/stats-settings.jsx`.
+  - 검증 포인트: habit streak summary, task 완료 통계, 월 단위 카드 등
+    (proto 파일 참조).
+- [ ] **Settings 시각 검증**.
+  - Reference: `reference/proto/stats-settings.jsx`.
+  - 검증 포인트: 다크모드 토글, 동기화 상태 row(synced/syncing/pending/failed),
+    카테고리 관리 / 습관 관리 entry point, 로그아웃, weekStart 토글, 알림 등.
+- [ ] **Widget 실기기 검증**.
+  - Small / medium / large 3 사이즈 모두 홈 스크린에 추가.
+  - Task / Habit mode 토글 동작.
+  - 위젯 row 텍스트 탭 시 `justdo://task/<id>` / `justdo://habit/<id>`로
+    앱이 열리고 push detail이 정상 표시되는지.
+  - Widget tap으로 task complete / habit check 시
+    `task_completion_set` mutation이 Supabase에 patch되는지(App
+    foreground 시 flush).
+
+### 미루는 항목 (별도 트랙)
+
+- **Dark / Tinted app icon variants**. 현재 단일 light 1024 PNG만 있어서
+  iOS 18+ 다크 / 단색 모드에서는 light icon이 자동 dim / monochrome 처리됨.
+  Polished 디자인이 도착하면 `Contents.json`에 dark/tinted entry 추가.
+- **앱 아이콘 화질 polish**. 단일 1024 PNG에서 모든 home-screen 사이즈를
+  자동 생성하다 보니 약간 soft하게 보임. 2048+ master에서 redraw 또는
+  explicit multi-size 제공 시점은 v1 App Store 심사 직전.
+- **Phase 7 완료 후 hosted offline sync verification 회귀**. 이미 2026-05-20
+  통과했지만 새 UI(이번 home redesign 등) 위에서 한 번 더 검증 권장.

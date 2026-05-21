@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-21
+Date: 2026-05-22
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -24,25 +24,45 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 항목은 **Toss webhook URL 등록 (`https://www.justdo.co.kr/api/webhook/toss`)
 > — Toss 가맹점 심사 후**.
 
-> **다음 작업자가 픽업할 우선순위 (2026-05-21 갱신)**:
-> 1. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
->    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
->    코드 트랙은 이와 병렬로 진행 가능. 체크리스트:
+> **다음 작업자가 픽업할 우선순위 (2026-05-22 갱신)**:
+> 1. **iOS Add Sheet 시각 검증**. 사용자가 iPhone 14 Pro iOS 26.5에서 직접
+>    검증 중. Reference: `reference/proto/sheet-detail.jsx`. 빠뜨리지 않을
+>    포인트는 `docs/ios_phase6_status.md` "Next Work" 섹션의 Add Sheet
+>    체크리스트 참고.
+> 2. **iOS Stats / Settings / Widget 시각 검증**. Add Sheet 이후 순서대로.
+>    Reference: `reference/proto/stats-settings.jsx`,
+>    `reference/proto/tabbar.jsx`. Widget은 deep link / mode toggle / Supabase
+>    flush까지 같이 검증.
+> 3. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
+>    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서. 코드
+>    트랙은 이와 병렬로 진행 가능. 체크리스트:
 >    `docs/toss_merchant_review_plan.md`.
-> 2. **Pro Checkout B6 외부 의존 검증만 남음** — route 단위 테스트,
->    Toss SDK client mock, cancel edge cases, webhook fixture/idempotency는 보강
->    완료. 남은 항목은 운영/테스트 Toss 키를 이용한 E2E smoke와 Toss 공식
->    dashboard secret/header 확인 후 webhook signature 검증.
-> 3. **iOS 실기기 시각 검증** — detail edit/delete, Settings sync status,
->    hosted Supabase offline sync, Home calendar/task bar, widget/deep link,
->    compact task-completion mutation은 구현 및 시뮬레이터 검증 완료. 남은 것은
->    Xcode 직접 설치 또는 TestFlight 기반 실기기 시각 검증. Expo Go는 사용하지
->    않음.
-> 4. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
+> 4. **Pro Checkout B6 외부 의존 검증** — route 단위 테스트, Toss SDK
+>    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
+>    남은 항목은 운영/테스트 Toss 키를 이용한 E2E smoke와 Toss 공식 dashboard
+>    secret/header 확인 후 webhook signature 검증.
+> 5. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
 >    invocation에 SQS DLQ 연결. Toss 가맹점 심사 통과 + live billing 활성화
 >    직전에 진행.
 >
 > **유지 상태 (참고)**:
+> - **iOS Bundle ID 확정**: `kr.justdo.app` (앱) / `kr.justdo.app.widget`
+>   (위젯) / `kr.justdo.app.uitests` (UI 테스트). App Group `group.kr.justdo.app`,
+>   Keychain service `kr.justdo.app.supabase-session`. 운영 도메인 `justdo.co.kr`
+>   기반 reverse-DNS. `com.justdo.app`은 Apple 글로벌 namespace에서 다른 팀
+>   선점 중이라 회수 불가.
+> - **iOS 실기기 검증 환경**: iPhone 14 Pro iOS 26.5, Xcode 26.3, macOS
+>   Tahoe 26.3.1. Developer Team 활성. Wireless debugging 자동 (USB 분리 시
+>   🌐 아이콘으로 전환).
+> - **iOS 홈 화면 디자인 변경 (2026-05-22)**: Bottom sheet 모달 패턴
+>   (`.height(420)` 단일 detent). Inline drag-resize 패턴 폐기. Sheet 안
+>   좌우 swipe로 ±1 day, calendar 좌우 swipe로 ±1 month. Cell tap area는
+>   row 전체. Task bar는 `.allowsHitTesting(false)`로 tap pass-through.
+> - **iOS 다크모드 처리**: Auth landing은 항상 light 고정
+>   (`.preferredColorScheme(.light)`). Home/Stats/Settings는 Settings의
+>   다크모드 토글 사용.
+> - **App icon / Web favicon**: iOS는 single 1024 PNG (dark/tinted 추후).
+>   Web은 `apps/web/public/`에 SVG primary + PNG fallback + apple-touch-icon.
 > - **B3 cron**: AWS EventBridge Scheduler -> Lambda -> `/api/billing/charge`,
 >   매일 05:30 KST. Lambda + schedule 생성, 수동 테스트, 첫 자동 실행 두 번
 >   (2026-05-20 / 2026-05-21 05:30 KST) CloudWatch 확인 완료(2026-05-21).
@@ -132,8 +152,32 @@ For iOS shared-code verification:
 
 ```bash
 cd apps/ios
-swift test                         # expect: 30 tests pass
+swift test                         # expect: 40 tests pass
 ```
+
+For iOS simulator build smoke:
+
+```bash
+cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj \
+  -scheme JustDoApp \
+  -destination 'generic/platform=iOS Simulator' build
+```
+
+For real-device verification (iPhone 14 Pro / iOS 26.5 is the configured
+target as of 2026-05-22):
+
+1. Pair the iPhone over USB once. Xcode 26 enables wireless debugging
+   automatically; the device gains a 🌐 icon under `Window > Devices and
+   Simulators` and remains under `Connected` after the cable is unplugged.
+2. `Settings > Privacy & Security > Developer Mode` must be on (this
+   menu only appears on the iPhone after the first Xcode pairing).
+3. Confirm `Xcode > Settings > Accounts` shows the Developer Team
+   (not the Personal Team) for `dudah0719@naver.com`. If only the
+   Personal Team variant is offered, Sign Out / Sign In once.
+4. All three targets (`JustDoApp`, `JustDoWidgetExtension`,
+   `JustDoAppUITests`) must stay on the `kr.justdo.app` namespace with
+   automatic signing.
+5. Press ⌘R in Xcode with the device selected as the destination.
 
 If any step fails, stop and investigate before starting new work. The latest
 pushed iOS infrastructure commits were green before this handoff.
@@ -262,14 +306,18 @@ cdd5b1f docs(ios): start phase 6 planning
   - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
-- Phase 6 iOS / Widget — current state (2026-05-21):
+- Phase 6 iOS / Widget — current state (2026-05-22):
   - `JustDoShared` includes Swift domain models, mutation queue schema, drift
     fixtures, Core Data model/mappers, App Group snapshot/mutation stores,
     Supabase REST read/flush sync, and WidgetKit display models.
-  - Xcode project targets:
-    - `JustDoApp` (`com.justdo.app`)
-    - `JustDoWidgetExtension` (`com.justdo.app.widget`)
-    - `JustDoAppUITests`
+  - Real-device verification track is active on iPhone 14 Pro / iOS 26.5
+    against Xcode 26.3 / macOS Tahoe 26.3.1.
+  - Xcode project targets (Bundle ID 2026-05-22 갱신):
+    - `JustDoApp` (`kr.justdo.app`)
+    - `JustDoWidgetExtension` (`kr.justdo.app.widget`)
+    - `JustDoAppUITests` (`kr.justdo.app.uitests`)
+    - App Group: `group.kr.justdo.app`
+    - Keychain service: `kr.justdo.app.supabase-session`
   - Native signed-in shell includes Home / Stats / Settings based on
     `reference/proto/`.
   - Settings includes sync status/error UI.
@@ -330,13 +378,16 @@ See `docs/worklog.md` 2026-04-29 entries for full rationale.
 ## Latest Implementation Commit Trail
 
 ```text
-090815a feat(ios): scaffold xcode app and widget targets
-f3e1b05 feat(ios): add widget layouts
-e5f0144 feat(ios): add widget snapshot store
-da793b2 feat(ios): add core data mappers
-21a093c test(ios): add drift fixtures
-cdd5b1f docs(ios): start phase 6 planning
-18af974 feat(web): finalize category and habit workflows
+e65a405 feat: add app icon and web favicon
+3081ae4 feat(ios): redesign home calendar and fix auth dark mode
+551f302 chore(ios): rename bundle id to kr.justdo.app
+32d619a docs: confirm B3 first scheduled invocation
+c04371e test(web): expand pro checkout regression coverage
+5f23eed test(ios): add deep link UI coverage
+d7fa498 feat(ios): patch task completion mutations
+177e07c test(ios): cover widget deep link routes
+e44b925 docs: refresh ios next steps
+2d8530e feat(ios): add widget task habit modes
 ```
 
 ## App Shape Now
@@ -346,11 +397,22 @@ cdd5b1f docs(ios): start phase 6 planning
 ### App Shape — iOS (current native root, proto-aligned)
 
 - Bottom tabs are `홈 / 통계 / 설정` (proto = `reference/proto/tabbar.jsx` 기준).
-- Home/calendar shows both Task and Habit (proto `home.jsx`의 `[Habit]` 섹션 포함).
+- Home (2026-05-22 갱신):
+  - Header에 `Just Do` wordmark (24pt) + 년/월 + nav 화살표 + 우상단 add (+) 버튼.
+  - Calendar (월간 6 weeks) full-bleed, task bar overlay 유지. 빈 날짜
+    셀도 row height 일관성 위해 lane 2개 강제.
+  - 날짜 셀의 tap area는 row 전체 (date pill + 아래 빈 영역 포함).
+  - Calendar 좌우 swipe → 이전/다음 달, cell tap → 해당 날짜 sheet 자동
+    open.
+  - Selected-day 정보는 inline panel이 아니라 **bottom sheet modal**
+    (`.height(420)` 단일 detent). Sheet 안 좌우 swipe → ±1 day.
+    background tap / drag-down → dismiss.
 - Stats has its own tab.
 - Settings owns dark mode and habit/category management entry points.
-- Add 플로우는 partial-height bottom sheet.
-- Auth 랜딩은 Apple/Google/Kakao/Email 4 버튼 + "Just Do" 워드마크 (`reference/proto/auth.jsx`, `auth-button.jsx`).
+- Add 플로우는 partial-height bottom sheet (`.height(500)` detent).
+- Auth 랜딩은 Apple/Google/Kakao/Email 4 버튼 + "Just Do" 워드마크
+  (`reference/proto/auth.jsx`, `auth-button.jsx`). 시스템 다크모드와
+  무관하게 항상 light로 고정.
 
 ### App Shape — Web (Phase 7 desktop shell + Pro checkout wiring)
 
@@ -574,7 +636,7 @@ Latest web checks:
 
 ```bash
 npm --prefix apps/web run lint     # pass
-npm --prefix apps/web test         # 86 tests pass
+npm --prefix apps/web test         # 100 tests pass
 npm --prefix apps/web run build    # pass
 git diff --check                   # pass
 ```
@@ -583,8 +645,15 @@ Latest iOS shared-code checks:
 
 ```bash
 cd apps/ios
-swift test                         # 30 tests pass
+swift test                         # 40 tests pass
 ```
+
+Latest iOS device install (2026-05-22):
+
+- Real iPhone 14 Pro on iOS 26.5 with `kr.justdo.app` build (post bundle-id
+  rename + home redesign + app icon). App launches into the auth landing
+  in light mode regardless of system theme; signed-in shell honors the
+  Settings dark mode toggle.
 
 Cloud manual checks already performed by the user/Codex:
 
@@ -760,11 +829,20 @@ Recommended immediate next steps:
      후).
 
 3. **iOS Phase 6 잔여 작업** (Phase 7과 독립 트랙, 병렬 가능)
-   - 실기기 시각 검증: Add Sheet, Stats, Settings, 최신 Widget UI.
-   - Home calendar/panel은 simulator pass 완료. 최종 spacing/tap ergonomics는
-     실제 iPhone에서 확인.
-   - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 또는 추후 TestFlight.
-   - 나머지: `ios_phase6_status.md` "Next Work" 참고.
+   - 2026-05-22 갱신:
+     - 실기기 검증 환경 셋업 완료. iPhone 14 Pro iOS 26.5에 `kr.justdo.app`
+       설치 동작 확인. Developer Team 활성, wireless debug 자동.
+     - Auth landing 검증 통과 (다크모드 fix 후).
+     - Home calendar/panel 검증 통과 (bottom sheet 모달 재디자인 + swipe
+       gesture + cell tap area 확장 후).
+   - 남은 시각 검증 순서: **Add Sheet → Stats → Settings → Widget**.
+     각 단계의 reference 파일과 체크리스트는
+     `docs/ios_phase6_status.md` "Next Work" 섹션 참고.
+   - Widget 검증은 실기기에 위젯을 직접 추가 후 small/medium/large 3가지,
+     Task/Habit toggle, deep link (`justdo://task/<id>` /
+     `justdo://habit/<id>`), foreground flush까지 검증.
+   - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 (wireless 활성 시 USB
+     불필요). TestFlight 트랙은 추후.
 
 4. **Xcode polish (defer until needed)**
    - Trim `JustDoApp` Supported Destinations to iPhone-only for v1.

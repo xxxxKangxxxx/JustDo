@@ -12,6 +12,35 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
+## Where We Are (2026-05-22)
+
+- **iOS 실기기 검증 트랙 시작**. iPhone 14 Pro (iOS 26.5)에 JustDo 정식
+  설치 완료. 신청 가맹점/심사 외에 v1 ship 차단 항목 대부분 완료 상태.
+- Bundle ID는 운영 도메인(`justdo.co.kr`)에 맞춰 `kr.justdo.app`으로
+  최종 확정. App Group은 `group.kr.justdo.app`, Keychain service는
+  `kr.justdo.app.supabase-session`. 이전 `com.justdo.app` namespace는
+  Apple 글로벌 App ID registry에서 다른 팀이 선점 중이라 회수 불가.
+- Auth landing은 항상 light 모드로 고정 (`.preferredColorScheme(.light)`)
+  되어 다크/라이트 시스템 무관하게 brand-consistent. Home/Stats/Settings
+  는 기존대로 Settings 다크모드 토글 사용.
+- Home 화면 캘린더/패널 재디자인 완료:
+  - Selected-day panel을 inline drag-resize 패턴에서 bottom sheet
+    modal (`.height(420)` 단일 detent)로 전환.
+  - Sheet 안에서 좌우 swipe → 이전/다음 날짜 이동.
+  - Calendar 영역 좌우 swipe → 이전/다음 월 이동.
+  - Calendar day cell tap area를 row 전체로 확장(기존 32pt 한정 →
+    rowHeight 전체). Task bar는 `.allowsHitTesting(false)`로 tap pass-through.
+  - JustDoWordmark size 17 → 24 (40% 키움), header/calendar 사이 여백
+    14 → 20.
+- App icon + Web favicon 적용 완료:
+  - iOS: `apps/ios/JustDoApp/JustDoApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png`
+    (single light variant, dark/tinted 추후).
+  - Web: `apps/web/public/`에 SVG primary + 16/32/48 PNG fallback +
+    apple-touch-icon. `layout.tsx`의 `metadata.icons`에 등록.
+- 다음 우선순위: **iOS Add Sheet 시각 검증 → Stats → Settings →
+  Widget 순서**로 reference proto와 비교. Toss 가맹점 심사는 외부 트랙
+  유지.
+
 ## Where We Are (2026-05-21)
 
 - **운영 LIVE**: `https://www.justdo.co.kr` (apex → www redirect). AWS Amplify
@@ -308,10 +337,17 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Progress label uses today's overall task+habit `completed/total`.
   - Completed rows are displayed below incomplete rows.
 - [ ] Real-device iOS visual verification against `reference/proto/`.
-  - Home calendar/panel simulator pass completed; final spacing/tap ergonomics
-    should be verified on an actual iPhone.
-  - Add Sheet, Stats, Settings, and latest widget UI are deferred to one
-    real-device verification pass.
+  - Setup (2026-05-22): iPhone 14 Pro iOS 26.5 paired with Xcode 26.3,
+    Developer Team signing active, Bundle ID 운영용 `kr.justdo.app`로 확정,
+    wireless debugging 자동 활성.
+  - Home (2026-05-22): 실기기 검증 통과. 재디자인 후 — bottom sheet 모달,
+    sheet 안 좌우 swipe로 날짜 이동, calendar 좌우 swipe로 월 이동, cell
+    tap area row 전체로 확장 완료.
+  - Auth landing (2026-05-22): 다크모드 깨짐 fix (`.preferredColorScheme(.light)`),
+    light/dark 시스템 모드 무관하게 brand light 고정.
+  - 남은 항목: Add Sheet, Stats, Settings, 최신 Widget UI. Reference
+    `reference/proto/sheet-detail.jsx`, `stats-settings.jsx`, `tabbar.jsx`
+    기준 비교.
 - [x] Add route tests for widget deep-link opening.
   - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
     `JustDoDetailRoute`, and `ContentView` uses that route in its
