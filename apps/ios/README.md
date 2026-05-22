@@ -1,8 +1,8 @@
 # Just Do iOS
 
-This directory starts the native iOS implementation track.
+This directory contains the native iOS implementation track.
 
-The current contents are intentionally project-light:
+Current contents:
 
 - `JustDoShared/Domain/JustDoModels.swift` mirrors the web domain model.
 - `JustDoShared/Sync/MutationQueueSchema.swift` defines the local mutation
@@ -13,19 +13,33 @@ The current contents are intentionally project-light:
   SwiftUI layouts plus display models.
 - `Tests/JustDoSharedTests` verifies the Swift mirror against JSON fixtures
   shaped like the web persisted snapshot and mutation queue.
-
-Do not treat this as an Xcode project yet. The next implementation step is to
-create the app, widget, and shared framework targets around these contracts.
+- `JustDoApp/JustDoApp.xcodeproj` hosts the SwiftUI app, WidgetKit extension,
+  and UI test targets.
+- `JustDoApp/JustDoApp` implements the native app shell, auth flow,
+  Core Data mirror sync, Home/Stats/Settings tabs, add/detail flows, and
+  widget snapshot writer.
+- `JustDoApp/JustDoWidget` hosts the WidgetKit extension that reads the
+  App Group snapshot and queues widget mutations.
 
 ## Target Layout
 
-Planned Xcode target structure:
+Xcode target structure:
 
 ```text
-JustDoApp        SwiftUI app target
-JustDoWidget     WidgetKit extension
-JustDoShared     Shared domain, storage, sync, and App Group cache code
-JustDoTests      Domain/storage drift tests
+JustDoApp                 SwiftUI app target
+JustDoWidgetExtension     WidgetKit extension
+JustDoShared              Shared domain, storage, sync, and widget code
+JustDoSharedTests         Domain/storage/widget drift tests
+JustDoAppUITests          Deep-link UI tests
+```
+
+Production identifiers:
+
+```text
+JustDoApp              kr.justdo.app
+JustDoWidgetExtension  kr.justdo.app.widget
+JustDoAppUITests       kr.justdo.app.uitests
+Keychain service       kr.justdo.app.supabase-session
 ```
 
 ## App Group
@@ -33,7 +47,7 @@ JustDoTests      Domain/storage drift tests
 Use one shared App Group for the app and widgets:
 
 ```text
-group.com.justdo.app
+group.kr.justdo.app
 ```
 
 The group container should hold:
@@ -52,3 +66,8 @@ state directly.
 cd apps/ios
 swift test
 ```
+
+The latest full simulator checks are tracked in `docs/claude_handoff.md`.
+Real-device visual verification is currently in progress on iPhone 14 Pro /
+iOS 26.5. Auth landing, Home, Add Sheet, and Stats have passed; the next
+screens are Settings and Widget.

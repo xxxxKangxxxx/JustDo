@@ -25,23 +25,20 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > — Toss 가맹점 심사 후**.
 
 > **다음 작업자가 픽업할 우선순위 (2026-05-22 갱신)**:
-> 1. **iOS Add Sheet 시각 검증**. 사용자가 iPhone 14 Pro iOS 26.5에서 직접
->    검증 중. Reference: `reference/proto/sheet-detail.jsx`. 빠뜨리지 않을
->    포인트는 `docs/ios_phase6_status.md` "Next Work" 섹션의 Add Sheet
->    체크리스트 참고.
-> 2. **iOS Stats / Settings / Widget 시각 검증**. Add Sheet 이후 순서대로.
+> 1. **iOS Settings / Widget 시각 검증**. Auth landing, Home, Add Sheet,
+>    Task Detail edit, Stats는 iPhone 14 Pro iOS 26.5 실기기 검증을 통과함.
 >    Reference: `reference/proto/stats-settings.jsx`,
 >    `reference/proto/tabbar.jsx`. Widget은 deep link / mode toggle / Supabase
 >    flush까지 같이 검증.
-> 3. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
+> 2. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서. 코드
 >    트랙은 이와 병렬로 진행 가능. 체크리스트:
 >    `docs/toss_merchant_review_plan.md`.
-> 4. **Pro Checkout B6 외부 의존 검증** — route 단위 테스트, Toss SDK
+> 3. **Pro Checkout B6 외부 의존 검증** — route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 운영/테스트 Toss 키를 이용한 E2E smoke와 Toss 공식 dashboard
 >    secret/header 확인 후 webhook signature 검증.
-> 5. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
+> 4. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
 >    invocation에 SQS DLQ 연결. Toss 가맹점 심사 통과 + live billing 활성화
 >    직전에 진행.
 >
@@ -58,6 +55,14 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 >   (`.height(420)` 단일 detent). Inline drag-resize 패턴 폐기. Sheet 안
 >   좌우 swipe로 ±1 day, calendar 좌우 swipe로 ±1 month. Cell tap area는
 >   row 전체. Task bar는 `.allowsHitTesting(false)`로 tap pass-through.
+>   실기기 피드백 후 home header와 calendar를 함께 아래로 내려 중앙감 보정.
+> - **iOS Add Sheet 검증 완료 (2026-05-22)**: 입력 영역 상단 고정,
+>   시작/종료 날짜 wheel `DatePicker` sheet, `시간 포함` 소형 토글,
+>   날짜-only 저장 지원, selected-day sheet에서 Detail 진입 시 dismiss 처리.
+> - **iOS Detail / Stats 검증 완료 (2026-05-22)**: Task Detail 편집 UI를
+>   Add Sheet 스타일로 정렬하고 완료 토글 제거. Home selected-day sheet에서
+>   다른 날짜 항목을 체크해도 날짜 유지. Stats 연월 포맷, 카테고리 0-count,
+>   최근 7일 Habit 셀 요일 표시 수정.
 > - **iOS 다크모드 처리**: Auth landing은 항상 light 고정
 >   (`.preferredColorScheme(.light)`). Home/Stats/Settings는 Settings의
 >   다크모드 토글 사용.
@@ -338,7 +343,7 @@ cdd5b1f docs(ios): start phase 6 planning
   - Remaining iOS work is mostly real-device visual verification. Because this
     is a native SwiftUI/Xcode app, do **not** use Expo Go; install directly from
     Xcode to a real iPhone or use TestFlight later.
-  - Both targets share App Group `group.com.justdo.app`.
+  - Both targets share App Group `group.kr.justdo.app`.
   - Auto-generated `JustDoWidgetControl` (iOS 18-only) removed.
   - `JustDoWidget.swift` now reads `widget_snapshot.json` from the App Group,
     converts it with `JustDoWidgetDisplayModelFactory`, and renders
@@ -835,7 +840,11 @@ Recommended immediate next steps:
      - Auth landing 검증 통과 (다크모드 fix 후).
      - Home calendar/panel 검증 통과 (bottom sheet 모달 재디자인 + swipe
        gesture + cell tap area 확장 후).
-   - 남은 시각 검증 순서: **Add Sheet → Stats → Settings → Widget**.
+     - Add Sheet 검증 통과 (wheel DatePicker, optional time toggle,
+       top-aligned input layout, selected-day sheet dismiss fix 후).
+     - Task Detail edit / Stats 검증 통과 (Add Sheet-style editor,
+       selected-date preserve, Stats formatting/count fixes 후).
+   - 남은 시각 검증 순서: **Settings → Widget**.
      각 단계의 reference 파일과 체크리스트는
      `docs/ios_phase6_status.md` "Next Work" 섹션 참고.
    - Widget 검증은 실기기에 위젯을 직접 추가 후 small/medium/large 3가지,
@@ -887,9 +896,9 @@ Recommended immediate next steps:
   Toss Pro checkout B1·B2·B4-a·B4-b·B4-c·B5, B6 route/UI mock regression
   tests, 운영 배포 + smoke test.
 - **남은 v1 ship 차단 항목은 Toss 가맹점 심사와 Pro checkout 외부 의존 확인**.
-  B3은 첫 자동 실행 확인만 남았고, B6은 Toss test-key E2E smoke와 webhook
-  signature 검증만 남음. 자세한 단계 / Track A·B 분리는 `next_steps.md`
-  Phase 7-3.
+  B3 cron은 첫 자동 실행 두 번 확인까지 완료됐고, live billing 직전 DLQ만
+  남음. B6은 Toss test-key E2E smoke와 webhook signature 검증만 남음.
+  자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
 - iOS는 Phase 7과 독립 트랙. 현재 남은 것은 Xcode 직접 설치 또는 TestFlight
   기반 실기기 시각 검증이며, Expo Go로 검증하지 않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에

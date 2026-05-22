@@ -475,8 +475,14 @@ private struct HomeRootView: View {
                 categories: snapshot?.categories ?? [],
                 onToggleTask: toggleTask(_:),
                 onToggleHabit: toggleHabit(_:on:),
-                onOpenTask: onOpenTask,
-                onOpenHabit: onOpenHabit
+                onOpenTask: { id in
+                    isShowingDayPanel = false
+                    onOpenTask(id)
+                },
+                onOpenHabit: { id in
+                    isShowingDayPanel = false
+                    onOpenHabit(id)
+                }
             )
             .presentationDetents([.height(420)])
             .presentationDragIndicator(.visible)
@@ -503,8 +509,12 @@ private struct HomeRootView: View {
     private var activeRootTab: some View {
         switch selectedTab {
         case .home:
-            VStack(spacing: 20) {
+            VStack(spacing: 0) {
+                Spacer()
+                    .frame(height: 36)
                 homeHeader
+                Spacer()
+                    .frame(height: 36)
                 MonthCalendarView(
                     year: displayYear,
                     month: displayMonth,
@@ -609,19 +619,28 @@ private struct HomeRootView: View {
         displayMonth = moved.month
     }
 
-    private func loadSnapshot() {
+    private func loadSnapshot(preserveViewSelection: Bool = false) {
         guard let snapshotStore else {
             loadError = "Local mirror is unavailable."
             return
         }
 
         do {
+            let currentSelectedDate = selectedDate
+            let currentDisplayYear = displayYear
+            let currentDisplayMonth = displayMonth
             try WidgetSnapshotBootstrap.seedIfNeeded(into: snapshotStore)
             let loaded = try snapshotStore.loadSnapshot()
             snapshot = loaded
-            selectedDate = loaded.view.selectedDate
-            displayYear = loaded.view.year
-            displayMonth = loaded.view.month
+            if preserveViewSelection {
+                selectedDate = currentSelectedDate
+                displayYear = currentDisplayYear
+                displayMonth = currentDisplayMonth
+            } else {
+                selectedDate = loaded.view.selectedDate
+                displayYear = loaded.view.year
+                displayMonth = loaded.view.month
+            }
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             loadError = nil
         } catch {
@@ -663,7 +682,7 @@ private struct HomeRootView: View {
                     mutation: .taskUpsert(task)
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Task added."
         } catch {
@@ -702,7 +721,7 @@ private struct HomeRootView: View {
                     mutation: .habitUpsert(habit)
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Habit added."
         } catch {
@@ -725,7 +744,7 @@ private struct HomeRootView: View {
                     mutation: .habitLogSet(habitID: habit.id, iso: iso, value: nextValue)
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Habit updated."
         } catch {
@@ -755,7 +774,7 @@ private struct HomeRootView: View {
                     )
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Task updated."
         } catch {
@@ -778,7 +797,7 @@ private struct HomeRootView: View {
                     mutation: .preferencesSet(key: .weekStart, value: current == 0 ? 1 : 0)
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Settings updated."
         } catch {
@@ -814,7 +833,7 @@ private struct HomeRootView: View {
                     mutation: .categoryUpsert(category)
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Category added."
         } catch {
@@ -836,7 +855,7 @@ private struct HomeRootView: View {
                     mutation: .categoryDelete(id: category.id)
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Category deleted."
         } catch {
@@ -858,7 +877,7 @@ private struct HomeRootView: View {
                     mutation: .habitDelete(id: habit.id)
                 )
             )
-            loadSnapshot()
+            loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Habit deleted."
         } catch {
@@ -878,7 +897,7 @@ private struct HomeRootView: View {
                     snapshotStore: snapshotStore,
                     widgetWriter: try WidgetSnapshotWriter()
                 ).refreshWidgetSnapshot(selectedDate: selectedDate)
-                loadSnapshot()
+                loadSnapshot(preserveViewSelection: true)
                 syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             } catch {
                 syncStatus.markFailed(error, snapshotStore: snapshotStore)
@@ -1454,6 +1473,25 @@ private struct AddTaskSheet: View {
         var id: String { rawValue }
     }
 
+    private enum ScheduleField: Identifiable {
+        case start
+        case end
+
+        var id: String {
+            switch self {
+            case .start: "start"
+            case .end: "end"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .start: "시작"
+            case .end: "종료"
+            }
+        }
+    }
+
     let selectedDate: String
     let categories: [JDCategory]
     let onSaveTask: (TaskDraft) -> Void
@@ -1463,9 +1501,10 @@ private struct AddTaskSheet: View {
     @State private var mode: Mode = .task
     @State private var title = ""
     @State private var selectedCategoryID: UUID?
-    @State private var startDate = ""
-    @State private var endDate = ""
-    @State private var scheduledTime = ""
+    @State private var startDateValue = Date()
+    @State private var endDateValue = Date()
+    @State private var includesTime = false
+    @State private var editingScheduleField: ScheduleField?
     @State private var selectedPriority: Priority = .medium
     @State private var selectedEmoji = "🌱"
 
@@ -1490,8 +1529,8 @@ private struct AddTaskSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .padding(.bottom, 18)
 
-            TextField(mode == .task ? "무엇을 할까요?" : "어떤 습관을 만들까요?", text: $title)
-                .font(.system(size: 22, weight: .bold))
+            TextField(mode == .task ? "무엇을 할까요?" : "어떤 습관을?", text: $title)
+                .font(.system(size: 20, weight: .bold))
                 .textInputAutocapitalization(.never)
                 .padding(.bottom, 12)
                 .overlay(alignment: .bottom) {
@@ -1502,27 +1541,13 @@ private struct AddTaskSheet: View {
 
             if mode == .task {
                 AddSheetFieldRow(label: "시작") {
-                    TextField("YYYY-MM-DD", text: $startDate)
-                        .font(.system(size: 13, weight: .medium))
-                        .textInputAutocapitalization(.never)
+                    ScheduleValueButton(date: startDateValue, includesTime: includesTime) {
+                        editingScheduleField = .start
+                    }
                 }
                 AddSheetFieldRow(label: "종료") {
-                    TextField("YYYY-MM-DD", text: $endDate)
-                        .font(.system(size: 13, weight: .medium))
-                        .textInputAutocapitalization(.never)
-                }
-                AddSheetFieldRow(label: "시간") {
-                    HStack {
-                        TextField("HH:MM", text: $scheduledTime)
-                            .font(.system(size: 13, weight: .medium))
-                            .textInputAutocapitalization(.never)
-                        if !scheduledTime.isEmpty {
-                            Button("지우기") {
-                                scheduledTime = ""
-                            }
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(JDTheme.tertiaryText)
-                        }
+                    ScheduleValueButton(date: endDateValue, includesTime: includesTime) {
+                        editingScheduleField = .end
                     }
                 }
                 if !categories.isEmpty {
@@ -1625,11 +1650,31 @@ private struct AddTaskSheet: View {
         .padding(.horizontal, 20)
         .padding(.top, 10)
         .padding(.bottom, 30)
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(JDTheme.surface)
         .onAppear {
             selectedCategoryID = selectedCategoryID ?? categories.first?.id
-            startDate = startDate.isEmpty ? selectedDate : startDate
-            endDate = endDate.isEmpty ? selectedDate : endDate
+            let initialDate = Self.date(from: selectedDate)
+            startDateValue = initialDate
+            endDateValue = initialDate
+        }
+        .sheet(item: $editingScheduleField) { field in
+            DateTimeWheelSheet(
+                title: field.title,
+                date: field == .start ? $startDateValue : $endDateValue,
+                includesTime: $includesTime,
+                minimumDate: field == .end ? startDateValue : nil,
+                onDone: {
+                    if startDateValue > endDateValue {
+                        endDateValue = startDateValue
+                    }
+                    editingScheduleField = nil
+                }
+            )
+            .presentationDetents([.height(330)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
         }
     }
 
@@ -1651,16 +1696,158 @@ private struct AddTaskSheet: View {
                 TaskDraft(
                     title: title,
                     categoryID: selectedCategoryID ?? categories.first?.id,
-                    startDate: startDate,
-                    endDate: endDate,
+                    startDate: Self.isoDate(from: startDateValue),
+                    endDate: Self.isoDate(from: endDateValue),
                     priority: selectedPriority,
-                    scheduledTime: scheduledTime
+                    scheduledTime: includesTime ? Self.timeString(from: startDateValue) : nil
                 )
             )
         case .habit:
             onSaveHabit(title, selectedEmoji)
         }
         dismiss()
+    }
+
+    private static func date(from iso: String) -> Date {
+        let parts = JDDate.parts(iso)
+        let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        var components = DateComponents()
+        components.year = parts.year
+        components.month = parts.month
+        components.day = parts.day
+        components.hour = now.hour
+        components.minute = now.minute
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
+    private static func isoDate(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            parts.year ?? 2026,
+            parts.month ?? 1,
+            parts.day ?? 1
+        )
+    }
+
+    private static func timeString(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    }
+}
+
+private struct ScheduleValueButton: View {
+    let date: Date
+    let includesTime: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(Self.dateFormatter.string(from: date))
+                if includesTime {
+                    Text(Self.timeFormatter.string(from: date))
+                        .foregroundStyle(JDTheme.accent)
+                }
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(JDTheme.primaryText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(JDTheme.surfaceAlt)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy. M. d."
+        return formatter
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+}
+
+private struct DateTimeWheelSheet: View {
+    let title: String
+    @Binding var date: Date
+    @Binding var includesTime: Bool
+    var minimumDate: Date?
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(JDTheme.primaryText)
+                Spacer()
+                SmallTimeToggle(isOn: $includesTime)
+                Button("완료", action: onDone)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(JDTheme.accent)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            Divider()
+
+            DatePicker(
+                "",
+                selection: $date,
+                in: (minimumDate ?? Date.distantPast)...,
+                displayedComponents: includesTime ? [.date, .hourAndMinute] : [.date]
+            )
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .tint(JDTheme.accent)
+            .scaleEffect(0.9)
+            .frame(maxWidth: .infinity)
+            .frame(height: 220)
+            .clipped()
+        }
+        .background(JDTheme.surface)
+    }
+}
+
+private struct SmallTimeToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Text("시간 포함")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isOn ? JDTheme.primaryText : JDTheme.secondaryText)
+                ZStack(alignment: isOn ? .trailing : .leading) {
+                    Capsule()
+                        .fill(isOn ? JDTheme.accent : JDTheme.dividerStrong)
+                        .frame(width: 30, height: 18)
+                    Circle()
+                        .fill(JDTheme.surface)
+                        .frame(width: 14, height: 14)
+                        .padding(.horizontal, 2)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(JDTheme.surfaceAlt)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("시간 포함")
+        .accessibilityValue(isOn ? "켬" : "끔")
     }
 }
 
@@ -1678,7 +1865,7 @@ private struct AddSheetFieldRow<Content: View>: View {
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 11)
+        .padding(.vertical, 13)
         .overlay(alignment: .bottom) {
             if !noBorder {
                 Rectangle()
@@ -1716,7 +1903,7 @@ private struct StatsRootTabView: View {
                     .font(.system(size: 28, weight: .bold))
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("\(year)년 \(month)월")
+                    Text(verbatim: "\(year)년 \(month)월")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(JDTheme.me)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -1761,7 +1948,7 @@ private struct StatsRootTabView: View {
                         Text("최근 7일 습관")
                             .font(.system(size: 13, weight: .semibold))
                         Spacer()
-                        Text("\(JDDate.weekdayName(days7.first ?? JDDate.todayISO))~\(JDDate.weekdayName(days7.last ?? JDDate.todayISO))")
+                        Text("최근 7일")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(JDTheme.tertiaryText)
                     }
@@ -1780,7 +1967,7 @@ private struct StatsRootTabView: View {
     }
 
     private var categoryStats: [CategoryProgressStat] {
-        let fallback = CategoryProgressStat(id: UUID(), title: "Task", color: JDTheme.me, done: monthTasks.filter(\.isCompleted).count, total: max(monthTasks.count, 1))
+        let fallback = CategoryProgressStat(id: UUID(), title: "Task", color: JDTheme.me, done: monthTasks.filter(\.isCompleted).count, total: monthTasks.count)
         guard !categories.isEmpty else {
             return [fallback]
         }
@@ -1791,7 +1978,7 @@ private struct StatsRootTabView: View {
                 title: category.name,
                 color: category.displayColor,
                 done: items.filter(\.isCompleted).count,
-                total: max(items.count, 1)
+                total: items.count
             )
         }
     }
@@ -2118,9 +2305,14 @@ private struct HabitSevenDayRow: View {
                     Button {
                         onToggle(habit, day)
                     } label: {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(habit.log[day] == 1 ? JDTheme.habit : JDTheme.surfaceAlt)
-                            .frame(height: 20)
+                        Text(JDDate.weekdayName(day))
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(habit.log[day] == 1 ? .white : JDTheme.tertiaryText)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 26)
+                        .frame(maxWidth: .infinity)
+                        .background(habit.log[day] == 1 ? JDTheme.habit : JDTheme.surfaceAlt)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
                     }
                     .buttonStyle(.plain)
                 }
@@ -2659,6 +2851,7 @@ private struct TaskDetailScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var detail: DeepLinkDetail?
+    @State private var categories: [JDCategory] = []
     @State private var isEditing = false
     @State private var message: DetailActionMessage?
     @State private var showingDeleteConfirmation = false
@@ -2670,6 +2863,7 @@ private struct TaskDetailScreen: View {
                 if isEditing {
                     TaskDetailEditor(
                         task: task,
+                        categories: categories,
                         onCancel: { isEditing = false },
                         onSave: saveTask
                     )
@@ -2712,6 +2906,7 @@ private struct TaskDetailScreen: View {
 
     private func refresh() {
         detail = loadDetail()
+        categories = (try? snapshotStore?.loadSnapshot().categories) ?? []
     }
 
     private func saveTask(_ task: Task) {
@@ -2941,37 +3136,59 @@ private struct HabitDetailContent: View {
 }
 
 private struct TaskDetailEditor: View {
+    private enum ScheduleField: Identifiable {
+        case start
+        case end
+
+        var id: String {
+            switch self {
+            case .start: "start"
+            case .end: "end"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .start: "시작"
+            case .end: "종료"
+            }
+        }
+    }
+
     let task: Task
+    let categories: [JDCategory]
     let onCancel: () -> Void
     let onSave: (Task) -> Void
 
     @State private var title: String
-    @State private var startDate: String
-    @State private var endDate: String
-    @State private var scheduledTime: String
+    @State private var startDateValue: Date
+    @State private var endDateValue: Date
+    @State private var includesTime: Bool
+    @State private var editingScheduleField: ScheduleField?
+    @State private var selectedCategoryID: UUID?
     @State private var selectedPriority: Priority
-    @State private var isCompleted: Bool
     @State private var tagsText: String
 
     private let priorities: [(Priority, String)] = [(.high, "높음"), (.medium, "중간"), (.low, "낮음")]
 
-    init(task: Task, onCancel: @escaping () -> Void, onSave: @escaping (Task) -> Void) {
+    init(task: Task, categories: [JDCategory], onCancel: @escaping () -> Void, onSave: @escaping (Task) -> Void) {
         self.task = task
+        self.categories = categories
         self.onCancel = onCancel
         self.onSave = onSave
         _title = State(initialValue: task.title)
-        _startDate = State(initialValue: task.startDate)
-        _endDate = State(initialValue: task.endDate)
-        _scheduledTime = State(initialValue: task.scheduledTime ?? "")
+        _startDateValue = State(initialValue: Self.date(from: task.startDate, time: task.scheduledTime))
+        _endDateValue = State(initialValue: Self.date(from: task.endDate, time: task.scheduledTime))
+        _includesTime = State(initialValue: task.scheduledTime != nil)
+        _selectedCategoryID = State(initialValue: task.categoryID)
         _selectedPriority = State(initialValue: task.priority ?? .medium)
-        _isCompleted = State(initialValue: task.isCompleted)
         _tagsText = State(initialValue: task.tags.joined(separator: ", "))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             TextField("무엇을 할까요?", text: $title)
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 20, weight: .bold))
                 .textInputAutocapitalization(.never)
                 .padding(.bottom, 12)
                 .overlay(alignment: .bottom) {
@@ -2981,26 +3198,38 @@ private struct TaskDetailEditor: View {
                 }
 
             AddSheetFieldRow(label: "시작") {
-                TextField("YYYY-MM-DD", text: $startDate)
-                    .font(.system(size: 13, weight: .medium))
-                    .textInputAutocapitalization(.never)
+                ScheduleValueButton(date: startDateValue, includesTime: includesTime) {
+                    editingScheduleField = .start
+                }
             }
             AddSheetFieldRow(label: "종료") {
-                TextField("YYYY-MM-DD", text: $endDate)
-                    .font(.system(size: 13, weight: .medium))
-                    .textInputAutocapitalization(.never)
+                ScheduleValueButton(date: endDateValue, includesTime: includesTime) {
+                    editingScheduleField = .end
+                }
             }
-            AddSheetFieldRow(label: "시간") {
-                HStack {
-                    TextField("HH:MM", text: $scheduledTime)
-                        .font(.system(size: 13, weight: .medium))
-                        .textInputAutocapitalization(.never)
-                    if !scheduledTime.isEmpty {
-                        Button("지우기") {
-                            scheduledTime = ""
+            if !categories.isEmpty {
+                AddSheetFieldRow(label: "카테고리") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(categories) { category in
+                                Button {
+                                    selectedCategoryID = category.id
+                                } label: {
+                                    Text(category.name)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(selectedCategoryID == category.id ? category.displayColor : JDTheme.secondaryText)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(selectedCategoryID == category.id ? category.displayColor.opacity(0.14) : .clear)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(selectedCategoryID == category.id ? .clear : JDTheme.divider, lineWidth: 0.5)
+                                        )
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(JDTheme.tertiaryText)
                     }
                 }
             }
@@ -3011,12 +3240,16 @@ private struct TaskDetailEditor: View {
                             selectedPriority = priority
                         } label: {
                             Text(label)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(selectedPriority == priority ? .white : JDTheme.secondaryText)
-                                .padding(.horizontal, 10)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(selectedPriority == priority ? selectedCategoryColor : JDTheme.secondaryText)
+                                .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(selectedPriority == priority ? JDTheme.primaryText : JDTheme.surfaceAlt)
-                                .clipShape(Capsule())
+                                .background(selectedPriority == priority ? selectedCategoryColor.opacity(0.14) : .clear)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .stroke(selectedPriority == priority ? .clear : JDTheme.divider, lineWidth: 0.5)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 7))
                         }
                         .buttonStyle(.plain)
                     }
@@ -3027,28 +3260,55 @@ private struct TaskDetailEditor: View {
                     .font(.system(size: 13, weight: .medium))
                     .textInputAutocapitalization(.never)
             }
-            Toggle("완료", isOn: $isCompleted)
-                .font(.system(size: 13, weight: .semibold))
-                .padding(.vertical, 11)
 
-            DetailEditorActions(onCancel: onCancel) {
-                let normalizedStart = JDDate.normalizedISODate(startDate, fallback: task.startDate)
-                let normalizedEnd = JDDate.normalizedISODate(endDate, fallback: normalizedStart)
-                onSave(
-                    Task(
-                        id: task.id,
-                        title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? task.title : title,
-                        categoryID: task.categoryID,
-                        startDate: normalizedStart,
-                        endDate: normalizedEnd,
-                        priority: selectedPriority,
-                        isCompleted: isCompleted,
-                        scheduledTime: scheduledTime.nilIfBlank,
-                        tags: parsedTags
-                    )
-                )
+            HStack(spacing: 10) {
+                Spacer()
+                Button("취소", action: onCancel)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(JDTheme.secondaryText)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+
+                Button(action: save) {
+                    Text("저장")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 11)
+                        .background(canSave ? JDTheme.accent : JDTheme.dividerStrong)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSave)
             }
+            .padding(.top, 18)
         }
+        .sheet(item: $editingScheduleField) { field in
+            DateTimeWheelSheet(
+                title: field.title,
+                date: field == .start ? $startDateValue : $endDateValue,
+                includesTime: $includesTime,
+                minimumDate: field == .end ? startDateValue : nil,
+                onDone: {
+                    if startDateValue > endDateValue {
+                        endDateValue = startDateValue
+                    }
+                    editingScheduleField = nil
+                }
+            )
+            .presentationDetents([.height(330)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var selectedCategoryColor: Color {
+        categories.first { $0.id == selectedCategoryID }?.displayColor ?? JDTheme.me
     }
 
     private var parsedTags: [String] {
@@ -3056,6 +3316,53 @@ private struct TaskDetailEditor: View {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private func save() {
+        guard canSave else {
+            return
+        }
+        onSave(
+            Task(
+                id: task.id,
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                categoryID: selectedCategoryID,
+                startDate: Self.isoDate(from: startDateValue),
+                endDate: Self.isoDate(from: endDateValue),
+                priority: selectedPriority,
+                isCompleted: task.isCompleted,
+                scheduledTime: includesTime ? Self.timeString(from: startDateValue) : nil,
+                tags: parsedTags
+            )
+        )
+    }
+
+    private static func date(from iso: String, time: String?) -> Date {
+        let parts = JDDate.parts(iso)
+        let timeParts = time?.split(separator: ":").compactMap { Int($0) } ?? []
+        let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        var components = DateComponents()
+        components.year = parts.year
+        components.month = parts.month
+        components.day = parts.day
+        components.hour = timeParts.first ?? now.hour
+        components.minute = timeParts.dropFirst().first ?? now.minute
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
+    private static func isoDate(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            parts.year ?? 2026,
+            parts.month ?? 1,
+            parts.day ?? 1
+        )
+    }
+
+    private static func timeString(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 }
 

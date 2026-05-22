@@ -2791,8 +2791,7 @@ This document records coordination notes for work done with Codex and Claude Cod
   status/error UI, and production domain/AWS deployment preparation complete.
 - Added the completed iOS widget Task/Habit display-mode work to the Phase 6
   checklist.
-- Reframed remaining iOS visual work as one real-device verification pass for
-  Add Sheet, Stats, Settings, and widget UI.
+- Reframed remaining iOS visual work as one real-device verification pass.
 - Kept remaining development candidates explicit: widget deep-link UI tests and
   optional narrower task-completion patch path.
 
@@ -3205,3 +3204,85 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `551f302 chore(ios): rename bundle id to kr.justdo.app`
 - `3081ae4 feat(ios): redesign home calendar and fix auth dark mode`
 - `e65a405 feat: add app icon and web favicon`
+
+## 2026-05-22 Documentation refresh before iOS visual verification
+
+### Codex
+
+- Updated stale current-state docs before continuing real-device verification:
+  - `README.md`
+  - `apps/ios/README.md`
+  - `docs/next_steps.md`
+  - `docs/claude_handoff.md`
+  - `docs/ios_phase6_plan.md`
+  - `docs/ios_phase6_status.md`
+- Replaced old iOS bootstrap language with the current Xcode target layout.
+- Updated production identifiers to the final namespace:
+  - App: `kr.justdo.app`
+  - Widget: `kr.justdo.app.widget`
+  - UI tests: `kr.justdo.app.uitests`
+  - App Group: `group.kr.justdo.app`
+  - Keychain service: `kr.justdo.app.supabase-session`
+- Refreshed current focus:
+  - Web Pro checkout code track is implemented through schema/API/UI,
+    subscription panel, entitlement gate, cron, and route/UI mock tests.
+  - Remaining web billing work is Toss test-key E2E, dashboard-confirmed
+    webhook signature verification, and live-billing DLQ.
+  - iOS work is now real-device visual verification in the order:
+    Add Sheet -> Stats -> Settings -> Widget.
+
+## 2026-05-22 iOS Add Sheet real-device verification
+
+### User + Codex
+
+- Continued iOS Phase 6 real-device verification on iPhone 14 Pro / iOS 26.5.
+- Add Sheet fixes from device feedback:
+  - Replaced text-based date/time entry with a wheel `DatePicker` bottom sheet.
+  - Added a small custom `시간 포함` toggle in the Date Picker header so task
+    dates can be saved without a time, or with the selected start time.
+  - Kept the Task/Habit entry area top-aligned in the Add Sheet.
+  - Reduced Date Picker visual scale/font weight so it fits the app sheet style.
+  - Calendar selected-day sheet now dismisses before opening Task/Habit Detail.
+- Home layout follow-up:
+  - Moved the home header and calendar down together by adding a 36pt top
+    spacer before the header and a 36pt spacer between header and calendar.
+- Updated current-state docs so the next iOS visual verification sequence is
+  Stats -> Settings -> Widget.
+
+### Verification
+
+- `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -destination 'generic/platform=iOS Simulator' build` passed after the Add
+  Sheet and Home layout changes.
+- `swift test` passed with 40 tests.
+
+## 2026-05-22 iOS Detail and Stats real-device verification
+
+### User + Codex
+
+- Continued real-device verification after the Add Sheet pass.
+- Task Detail edit fixes:
+  - Replaced the old editor-specific date/time text fields with the same wheel
+    DatePicker schedule sheet used by Add Sheet.
+  - Reused Add Sheet-style category chips, priority chips, and footer actions.
+  - Removed the edit-screen completion toggle; saving now preserves the task's
+    existing completion state.
+- Home selected-day fix:
+  - `loadSnapshot` now supports preserving the current selected date and
+    displayed month. Mutations and retry refresh use that mode, so checking a
+    task/habit on a non-today sheet no longer jumps back to today.
+- Stats fixes:
+  - The year/month label uses verbatim text so `2026` does not render as
+    `2,026`.
+  - Category task totals no longer coerce empty categories to one item.
+  - The recent 7-day Habit grid now shows weekday labels inside each day cell
+    and no longer shows an extra range label or inner bar decoration.
+- Updated current-state docs so the next iOS visual verification sequence is
+  Settings -> Widget.
+
+### Verification
+
+- `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -destination 'generic/platform=iOS Simulator' build` passed after the Detail,
+  Home, and Stats changes.
+- `swift test` passed with 40 tests.

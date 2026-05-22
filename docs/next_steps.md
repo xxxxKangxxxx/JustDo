@@ -30,16 +30,32 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Calendar 영역 좌우 swipe → 이전/다음 월 이동.
   - Calendar day cell tap area를 row 전체로 확장(기존 32pt 한정 →
     rowHeight 전체). Task bar는 `.allowsHitTesting(false)`로 tap pass-through.
-  - JustDoWordmark size 17 → 24 (40% 키움), header/calendar 사이 여백
-    14 → 20.
+  - JustDoWordmark size 17 → 24 (40% 키움). 실기기 피드백 후
+    home header와 calendar를 함께 36pt 내리고, header/calendar 사이
+    간격도 36pt로 조정.
+- Add Sheet 실기기 검증 및 보정 완료:
+  - Task/Habit 입력 영역을 sheet 상단 고정 레이아웃으로 유지.
+  - 시작/종료 날짜는 텍스트 입력 대신 wheel `DatePicker` sheet로 선택.
+  - `시간 포함` 커스텀 소형 토글을 Date Picker 우측 상단에 배치해
+    날짜만 저장하거나 시작 시간을 함께 저장할 수 있음.
+  - Calendar selected-day sheet에서 Task/Habit detail로 진입할 때 기존
+    bottom sheet가 닫히도록 수정.
+- Detail / Stats 실기기 검증 보정 완료:
+  - Task Detail 편집 화면을 Add Sheet와 같은 날짜 picker / chip / footer
+    스타일로 정렬하고, 편집 화면의 완료 토글 제거.
+  - Calendar selected-day sheet에서 다른 날짜의 Task/Habit을 체크해도
+    선택 날짜와 표시 월이 오늘로 되돌아가지 않도록 snapshot reload 보정.
+  - Stats 상단 연월은 `Text(verbatim:)`로 표시해 `2026`이 `2,026`처럼
+    포맷되는 문제 제거.
+  - Task 카테고리 통계는 빈 카테고리를 1개로 보정하지 않고 실제 0개로 표시.
+  - Habit 최근 7일 영역은 각 셀 안에 요일만 표시.
 - App icon + Web favicon 적용 완료:
   - iOS: `apps/ios/JustDoApp/JustDoApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png`
     (single light variant, dark/tinted 추후).
   - Web: `apps/web/public/`에 SVG primary + 16/32/48 PNG fallback +
     apple-touch-icon. `layout.tsx`의 `metadata.icons`에 등록.
-- 다음 우선순위: **iOS Add Sheet 시각 검증 → Stats → Settings →
-  Widget 순서**로 reference proto와 비교. Toss 가맹점 심사는 외부 트랙
-  유지.
+- 다음 우선순위: **iOS Settings → Widget 시각 검증** 순서로 reference
+  proto와 비교. Toss 가맹점 심사는 외부 트랙 유지.
 
 ## Where We Are (2026-05-21)
 
@@ -58,9 +74,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   iPad mini와 phone만 모바일 안내.
 - iOS Phase 6 잔여 작업은 실기기 시각 검증 중심. Detail edit/delete,
   Settings sync status UI, hosted Supabase offline sync, Home row check,
-  calendar task bar/no-dot rendering, fixed-calendar/resizable-panel, widget
-  task/habit toggle, widget deep link, compact task-completion mutation은
-  구현/검증 완료. 남은 검증은 Expo Go가 아니라 Xcode 직접 설치 또는 추후
+  calendar task bar/no-dot rendering, fixed-calendar/bottom-sheet panel,
+  Add Sheet, Stats, widget task/habit toggle, widget deep link,
+  compact task-completion mutation은 구현/검증 완료. Home/Auth landing,
+  Add Sheet, Stats는 iPhone 14 Pro iOS 26.5에서 통과. 남은 검증은
+  Settings → Widget 순서이며, Expo Go가 아니라 Xcode 직접 설치 또는 추후
   TestFlight로 진행.
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
   **Toss test-key E2E / webhook signature 확인** + **iOS 실기기 시각 검증**.
@@ -107,7 +125,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Phase 6 Xcode track started: `apps/ios/JustDoApp/JustDoApp.xcodeproj`
   hosts `JustDoApp` and `JustDoWidgetExtension` targets; both depend on
   the SwiftPM `JustDoShared` library and share App Group
-  `group.com.justdo.app`. The WidgetKit extension now reads the App Group
+  `group.kr.justdo.app` after the 2026-05-22 bundle-id migration. The
+  WidgetKit extension now reads the App Group
   snapshot, builds shared display models, and renders the shared small /
   medium / large layouts. The main app now seeds the Core Data mirror once,
   writes `widget_snapshot.json` from that native mirror on launch/foreground,
@@ -345,9 +364,15 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     tap area row 전체로 확장 완료.
   - Auth landing (2026-05-22): 다크모드 깨짐 fix (`.preferredColorScheme(.light)`),
     light/dark 시스템 모드 무관하게 brand light 고정.
-  - 남은 항목: Add Sheet, Stats, Settings, 최신 Widget UI. Reference
-    `reference/proto/sheet-detail.jsx`, `stats-settings.jsx`, `tabbar.jsx`
-    기준 비교.
+  - Add Sheet (2026-05-22): 실기기 검증 통과. 텍스트 날짜/시간 입력을
+    wheel Date Picker sheet로 교체, `시간 포함` 소형 토글 추가,
+    Task/Habit 입력 영역 상단 고정, selected-day sheet -> Detail 진입 시
+    sheet dismiss 처리.
+  - Detail / Stats (2026-05-22): 실기기 검증 통과. Task Detail 편집 UI를
+    Add Sheet 스타일로 정렬하고 완료 토글 제거. Stats 연월 포맷, 카테고리
+    0-count 통계, 최근 7일 Habit 셀 요일 표시, Home selected-date 보존 수정.
+  - 남은 항목: Settings, 최신 Widget UI. Reference
+    `reference/proto/stats-settings.jsx`, `tabbar.jsx` 기준 비교.
 - [x] Add route tests for widget deep-link opening.
   - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
     `JustDoDetailRoute`, and `ContentView` uses that route in its
@@ -406,7 +431,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Category reorder 지원 복원 — Settings 카테고리 관리에서 위/아래 이동.
 - [x] Habit edit 지원 보강 — Settings 습관 관리에서 제목 / 이모지 / 반복 /
   요일 / 알림 수정.
-- [ ] Pro checkout API / webhook / `user_subscriptions` 갱신 구현.
+- [x] Pro checkout API / webhook / `user_subscriptions` 갱신 구현.
   - 2026-05-11 결정: 결제 provider = **Toss Payments 빌링** (월 ₩1,900 / 연 ₩9,900).
     iOS 결제는 별도 트랙(Apple IAP, Phase 6 v1 ship 후).
   - 2026-05-19 Trial / entitlement 정책 재정의:

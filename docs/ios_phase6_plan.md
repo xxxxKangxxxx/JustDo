@@ -75,7 +75,7 @@ objects may be added later if SwiftUI fetch ergonomics require them.
 Use App Group:
 
 ```text
-group.com.justdo.app
+group.kr.justdo.app
 ```
 
 Files:

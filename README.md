@@ -14,11 +14,14 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
 - **Phase 7 Web Desktop Redesign** is complete except the Pro checkout track.
   데스크탑 reference는 `reference/web_proto/`와
   `reference/Just Do - Web Prototype.html`. 현재 Pro checkout은 Toss
-  Payments 빌링 기준으로 schema/API/UI wiring까지 진행됐고, cron /
-  subscription 상태 표시 / onboarding / webhook signature 보강이 남아 있음.
-  자세한 punch list: `docs/next_steps.md` Phase 7.
-- iOS Phase 6 잔여 작업 (detail edit/delete, sync status UI) 은 Phase 7과
-  독립적으로 병렬 진행.
+  Payments 빌링 기준으로 schema/API/UI wiring, subscription 상태 표시,
+  entitlement gate, 정기결제 cron, route/UI mock 회귀 테스트까지 완료됨.
+  남은 항목은 Toss 테스트 키 E2E, 운영 dashboard webhook signature 확인,
+  live billing 직전 DLQ 추가. 자세한 punch list:
+  `docs/next_steps.md` Phase 7.
+- iOS Phase 6 잔여 작업은 실기기 시각 검증 중심. Home/Auth landing,
+  Add Sheet, Stats는 iPhone 14 Pro iOS 26.5에서 통과했고, 다음 순서는
+  Settings → Widget.
 - 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
   기존 구현을 유지함. 결제 모달은 v1에서 Toss만 활성화하고 네이버페이 /
   카카오페이 / PortOne 경유 다중 PG는 추후 확장 트랙으로 남겨둠.
@@ -92,6 +95,10 @@ Current status:
 - SwiftUI small/medium/large widget layouts are implemented in shared code.
 - Xcode app and WidgetKit extension targets exist under
   `apps/ios/JustDoApp/`.
+- Production bundle identifiers are `kr.justdo.app`,
+  `kr.justdo.app.widget`, and `kr.justdo.app.uitests`; the shared App Group is
+  `group.kr.justdo.app`; Keychain service is
+  `kr.justdo.app.supabase-session`.
 - The WidgetKit extension hosts the shared widget layouts and reads
   `widget_snapshot.json` from the App Group, with a fallback placeholder until
   the main app writes real snapshots.
@@ -130,13 +137,14 @@ Local iOS Supabase client config belongs in the gitignored file:
 apps/ios/JustDoApp/Config/Local.xcconfig
 ```
 
-Widget App Intents now support task complete/uncomplete and habit
-check/uncheck through an App Group mutation queue, and the app drains that
-queue into Core Data on refresh. Queued Core Data mutations now flush to
-Supabase when a valid session is available. Widget rows deep-link back into the
-iOS app through the `justdo` URL scheme and render native task/habit detail
-screens from the Core Data mirror. The next iOS work is detail edit/delete and
-app-facing sync status/error UI; visual polish against `reference/proto/` and
-hosted OAuth/offline sync verification 은 Phase 7 (`docs/next_steps.md`)
-일정과 함께 정리됨. 자세한 내용: `docs/ios_phase6_plan.md`,
-`docs/ios_phase6_status.md`, `docs/claude_handoff.md`.
+Widget App Intents support task complete/uncomplete and habit check/uncheck
+through an App Group mutation queue, and the app drains that queue into Core
+Data on refresh. Queued Core Data mutations flush to Supabase when a valid
+session is available. Widget rows deep-link back into the iOS app through the
+`justdo` URL scheme and render native task/habit detail screens from the Core
+Data mirror. Detail edit/delete, app-facing sync status UI, hosted
+OAuth/offline sync, Home visual checks, and deep-link UI tests are complete.
+The active iOS work is real-device visual verification against
+`reference/proto/`: Settings → Widget. 자세한 내용:
+`docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`,
+`docs/claude_handoff.md`.

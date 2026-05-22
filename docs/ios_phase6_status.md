@@ -104,10 +104,12 @@ implementation gaps, and checks to run before testing or shipping.
   - [x] Auth landing — passed after `.preferredColorScheme(.light)` fix.
   - [x] Home calendar / panel — passed after the bottom-sheet redesign,
     cell-tap expansion, and the calendar/sheet swipe gestures.
-  - [ ] Add Sheet (Task / Habit) — compare against
-    `reference/proto/sheet-detail.jsx`.
-  - [ ] Stats — compare against
-    `reference/proto/stats-settings.jsx`.
+  - [x] Add Sheet (Task / Habit) — passed after top-aligned entry layout,
+    wheel DatePicker schedule sheet, optional `시간 포함` toggle, and
+    selected-day sheet dismissal before Detail navigation.
+  - [x] Task Detail edit / Stats — passed after aligning task edit UI with
+    Add Sheet, preserving selected Home date after toggles, fixing Stats year
+    formatting, category zero counts, and 7-day Habit cell labels.
   - [ ] Settings — compare against
     `reference/proto/stats-settings.jsx`.
   - [ ] Widget (small / medium / large + Task/Habit toggle + deep link)
@@ -223,7 +225,7 @@ swift test
 - Confirm Associated Domains are not needed for the current custom-scheme
   deep-link approach. If universal links are added later, add associated domains
   and hosted apple-app-site-association configuration.
-- Confirm App Group entitlement `group.com.justdo.app` exists for both app and
+- Confirm App Group entitlement `group.kr.justdo.app` exists for both app and
   widget extension in the Apple Developer portal for the release bundle IDs.
 - For web deployment and custom domain work, follow
   `docs/deployment_domain_aws_plan.md`.
@@ -232,28 +234,33 @@ swift test
 
 ## Next Work
 
-> 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing은
-> 통과했고, 다음 차례는 Add Sheet → Stats → Settings → Widget.
+> 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing +
+> Add Sheet + Task Detail edit + Stats는 통과했고, 다음 차례는
+> Settings → Widget.
 
-- [ ] **Add Sheet 시각 검증**.
+- [x] **Add Sheet 시각 검증**.
   - Reference: `reference/proto/sheet-detail.jsx` (PAddSheet).
-  - 검증 포인트:
-    - Task / Habit 토글 (segmented pill, edit mode 아닐 때만)
-    - Title input (20pt bold display, "무엇을 할까요?" / "어떤 습관을?",
-      underline border)
-    - FieldRow 패턴: 72pt label column + 13px vertical padding +
-      0.5px divider (마지막은 noBorder)
-    - Task fields: 시작 / 종료 / 시간 / 카테고리 chip / 우선순위 chip
-    - Habit fields: 이모지 picker (preset 6개: 🌱💧🏃📖🧘✏️)
-    - Footer: edit mode 시 삭제(왼쪽), spacer, 취소 / 추가·저장(accent pill,
-      title empty 시 비활성)
-    - iOS 현재 빌드는 custom categories 지원이라 카테고리 chip이 reference의
-      두 칸짜리(나/외부)와 다른 동적 chip이 될 수 있음. 색상은
-      `categoryStyle(category, mode)` 헬퍼 기반.
-- [ ] **Stats 시각 검증**.
+  - 반영/검증 완료:
+    - Task / Habit 입력 영역은 Add Sheet 상단에 고정.
+    - 시작/종료 날짜 선택은 텍스트 입력 대신 wheel `DatePicker` sheet 사용.
+    - `시간 포함` 소형 커스텀 토글로 날짜만 저장하거나 시작 시간을 함께 저장.
+    - Date Picker font/scale을 축소해 앱 sheet 디자인에 맞춤.
+    - Calendar selected-day sheet에서 Detail 진입 시 기존 sheet dismiss.
+    - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+      -destination 'generic/platform=iOS Simulator' build` passed.
+- [x] **Task Detail edit / Stats 시각 검증**.
   - Reference: `reference/proto/stats-settings.jsx`.
-  - 검증 포인트: habit streak summary, task 완료 통계, 월 단위 카드 등
-    (proto 파일 참조).
+  - 반영/검증 완료:
+    - Task Detail 편집 UI를 Add Sheet와 같은 wheel DatePicker / chip /
+      footer 스타일로 정렬.
+    - Task Detail 편집 화면의 완료 토글 제거. 완료 상태는 기존 값 보존.
+    - Calendar selected-day sheet에서 다른 날짜 항목을 체크해도 해당 날짜 유지.
+    - Stats 연월 `2026`이 `2,026`처럼 보이는 포맷 문제 수정.
+    - Task 카테고리 통계에서 0개 카테고리를 1개로 보정하지 않도록 수정.
+    - Habit 최근 7일 영역은 각 셀 안에 요일만 표시.
+    - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+      -destination 'generic/platform=iOS Simulator' build` passed.
+    - `swift test` passed with 40 tests.
 - [ ] **Settings 시각 검증**.
   - Reference: `reference/proto/stats-settings.jsx`.
   - 검증 포인트: 다크모드 토글, 동기화 상태 row(synced/syncing/pending/failed),
