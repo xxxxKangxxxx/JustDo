@@ -122,20 +122,20 @@ public enum JustDoWidgetDisplayModelFactory {
         let limit: Int
         switch size {
         case .small:
-            limit = 3
-        case .medium:
             limit = 4
+        case .medium:
+            limit = 6
         case .large:
-            limit = 5
+            limit = 8
         }
 
         return JustDoWidgetDisplayModel(
             generatedAt: snapshot.generatedAt,
             selectedDate: snapshot.selectedDate,
             displayMode: displayMode,
-            completedCount: allItems.filter(\.isDone).count,
-            remainingCount: allItems.filter { !$0.isDone }.count,
-            totalCount: allItems.count,
+            completedCount: items.filter(\.isDone).count,
+            remainingCount: items.filter { !$0.isDone }.count,
+            totalCount: items.count,
             items: Array(items.prefix(limit)),
             weekDays: weekDays(selectedDate: snapshot.selectedDate, items: allItems),
             monthDays: monthDays(selectedDate: snapshot.selectedDate, items: allItems)

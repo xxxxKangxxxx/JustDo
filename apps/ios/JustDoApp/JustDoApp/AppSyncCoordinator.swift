@@ -145,6 +145,9 @@ struct SupabaseStoredSession: Codable, Equatable {
     var refreshToken: String?
     var userID: UUID
     var expiresAt: Date?
+    var email: String?
+    var displayName: String?
+    var avatarURL: String?
 
     func isExpired(referenceDate: Date = Date()) -> Bool {
         guard let expiresAt else {
@@ -163,6 +166,125 @@ struct SupabaseStoredSession: Codable, Equatable {
             accessToken: accessToken,
             userID: userID
         )
+    }
+
+    var profile: AuthProfile {
+        AuthProfile(
+            email: email,
+            displayName: displayName,
+            avatarURL: avatarURL
+        ).mergingFallback(AuthProfile.fromAccessToken(accessToken))
+    }
+}
+
+struct AuthProfile: Equatable {
+    var email: String?
+    var displayName: String?
+    var avatarURL: String?
+
+    var title: String {
+        let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedName, !trimmedName.isEmpty {
+            return trimmedName
+        }
+        let trimmedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedEmail, !trimmedEmail.isEmpty {
+            return trimmedEmail
+        }
+        return "로그인됨"
+    }
+
+    var detail: String {
+        let trimmedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedEmail, !trimmedEmail.isEmpty, trimmedEmail != title {
+            return trimmedEmail
+        }
+        return "Google 로그인"
+    }
+
+    var initials: String {
+        let source = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(source.prefix(1)).uppercased()
+    }
+
+    func mergingFallback(_ fallback: AuthProfile?) -> AuthProfile {
+        guard let fallback else {
+            return self
+        }
+        return AuthProfile(
+            email: email ?? fallback.email,
+            displayName: displayName ?? fallback.displayName,
+            avatarURL: avatarURL ?? fallback.avatarURL
+        )
+    }
+
+    static func fromAccessToken(_ accessToken: String) -> AuthProfile? {
+        let parts = accessToken.split(separator: ".")
+        guard parts.count >= 2,
+              let payloadData = Data(base64URLEncoded: String(parts[1])),
+              let payload = try? JSONDecoder().decode(AuthTokenPayload.self, from: payloadData)
+        else {
+            return nil
+        }
+
+        return AuthProfile(
+            email: payload.email,
+            displayName: payload.userMetadata.displayName,
+            avatarURL: payload.userMetadata.resolvedAvatarURL
+        )
+    }
+}
+
+private struct AuthTokenPayload: Decodable {
+    var email: String?
+    var userMetadata: AuthTokenUserMetadata
+
+    private enum CodingKeys: String, CodingKey {
+        case email
+        case userMetadata = "user_metadata"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        userMetadata = try container.decodeIfPresent(AuthTokenUserMetadata.self, forKey: .userMetadata) ?? AuthTokenUserMetadata()
+    }
+}
+
+private struct AuthTokenUserMetadata: Decodable {
+    var fullName: String?
+    var name: String?
+    var preferredUsername: String?
+    var userName: String?
+    var avatarURL: String?
+    var picture: String?
+
+    var displayName: String? {
+        fullName ?? name ?? preferredUsername ?? userName
+    }
+
+    var resolvedAvatarURL: String? {
+        avatarURL ?? picture
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case fullName = "full_name"
+        case name
+        case preferredUsername = "preferred_username"
+        case userName = "user_name"
+        case avatarURL = "avatar_url"
+        case picture
+    }
+}
+
+private extension Data {
+    init?(base64URLEncoded value: String) {
+        var base64 = value
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let paddingLength = (4 - base64.count % 4) % 4
+        base64 += String(repeating: "=", count: paddingLength)
+        self.init(base64Encoded: base64)
     }
 }
 

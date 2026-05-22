@@ -268,7 +268,10 @@ private struct TokenResponse: Decodable {
             accessToken: accessToken,
             refreshToken: refreshToken,
             userID: userID,
-            expiresAt: resolvedExpiresAt
+            expiresAt: resolvedExpiresAt,
+            email: user?.email,
+            displayName: user?.metadata.displayName,
+            avatarURL: user?.metadata.resolvedAvatarURL
         )
     }
 
@@ -283,6 +286,47 @@ private struct TokenResponse: Decodable {
 
 private struct AuthUser: Decodable {
     var id: UUID
+    var email: String?
+    var metadata: AuthUserMetadata
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case metadata = "user_metadata"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        metadata = try container.decodeIfPresent(AuthUserMetadata.self, forKey: .metadata) ?? AuthUserMetadata()
+    }
+}
+
+private struct AuthUserMetadata: Decodable {
+    var fullName: String?
+    var name: String?
+    var preferredUsername: String?
+    var userName: String?
+    var avatarURL: String?
+    var picture: String?
+
+    var displayName: String? {
+        fullName ?? name ?? preferredUsername ?? userName
+    }
+
+    var resolvedAvatarURL: String? {
+        avatarURL ?? picture
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case fullName = "full_name"
+        case name
+        case preferredUsername = "preferred_username"
+        case userName = "user_name"
+        case avatarURL = "avatar_url"
+        case picture
+    }
 }
 
 private extension Data {

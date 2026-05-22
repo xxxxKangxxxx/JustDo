@@ -11,16 +11,24 @@ implementation gaps, and checks to run before testing or shipping.
 - App Group storage is implemented for:
   - `widget_snapshot.json`
   - `mutation_queue.jsonl`
-- WidgetKit small, medium, and large layouts are implemented.
+- WidgetKit home-screen small, medium, and large layouts are implemented.
+  A separate lock-screen widget configuration supports inline, circular, and
+  rectangular accessory families.
 - Widget task/habit actions are interactive:
   - task complete/uncomplete
   - habit check/uncheck for the selected date
-- Widgets default to Task mode across small, medium, and large sizes. The
-  widget header exposes a Task/Habit toggle and shows completion progress as
-  today's overall `completed/total` across tasks and habits (for example,
-  `3/8`). Completed items are pushed below incomplete items within the
-  displayed list. Small / medium / large widget bodies are top-aligned so mode
-  changes affect the remaining lower space instead of shifting the header area.
+- Home-screen widgets default to Task mode across small, medium, and large
+  sizes. The widget header exposes a Task/Habit toggle and shows completion
+  progress scoped to the active mode: Task mode counts only tasks and Habit mode
+  counts only habits. Completed items are pushed below incomplete items within
+  the displayed list. Small / medium / large widget bodies are top-aligned so
+  mode changes affect the remaining lower space instead of shifting the header
+  area.
+- Home-screen widget rows toggle completion from the whole row. Row text no
+  longer deep-links into detail from the widget.
+- Lock-screen rectangular widgets are Task-only, show task `completed/total`,
+  and display up to two task rows. Lock-screen inline/circular widgets also use
+  Task-mode data.
 - App lifecycle widget refresh uses the current local date for the widget
   snapshot. The previous prototype date fallback (`2026-04-30`) has been
   removed from launch / foreground refresh.
@@ -38,7 +46,7 @@ implementation gaps, and checks to run before testing or shipping.
   tags/task_tags, habits, and habit logs.
 - Native Supabase PKCE OAuth is implemented with Keychain-backed session
   storage and refresh-token handling.
-- Widget row text deep-links to:
+- App deep links still route pushed detail screens for:
   - `justdo://task/<task-id>`
   - `justdo://habit/<habit-id>`
 - The app registers the `justdo` URL scheme and renders native task/habit detail
@@ -55,7 +63,7 @@ implementation gaps, and checks to run before testing or shipping.
 - The signed-in root shell now renders native Home / Stats / Settings tabs
   based on `reference/proto/`.
 - The Home tab includes the month calendar, the home header (Just Do
-  wordmark + year/month navigation + add button), and the bottom tab bar.
+  wordmark + year/month navigation + today/add buttons), and the bottom tab bar.
 - The Home calendar keeps date cells free of dot indicators; tasks are shown by
   horizontal bars with title text. Day cells fill the full row height so the
   tap target is the entire cell, not just the date pill; task bars sit above
@@ -77,6 +85,13 @@ implementation gaps, and checks to run before testing or shipping.
 - Settings owns dark-mode control. The home header no longer has a separate
   dark/light button.
 - Settings exposes habit and category management entry points.
+- Settings account rows use the signed-in Google profile name when available,
+  with account detail actions for profile review, account switch, sign-out, and
+  withdrawal entry points.
+- Settings notification/display rows persist notification enabled, notification
+  time, dark mode, and week-start preferences. Data export is Pro-gated CSV,
+  reset-all-data is wired to local delete mutations, and basic Terms / Privacy
+  sheets are available.
 - Core Data mirror operations are serialized on the context queue, and
   snapshot/upsert paths update existing rows in place where possible.
 
@@ -110,10 +125,10 @@ implementation gaps, and checks to run before testing or shipping.
   - [x] Task Detail edit / Stats — passed after aligning task edit UI with
     Add Sheet, preserving selected Home date after toggles, fixing Stats year
     formatting, category zero counts, and 7-day Habit cell labels.
-  - [ ] Settings — compare against
-    `reference/proto/stats-settings.jsx`.
-  - [ ] Widget (small / medium / large + Task/Habit toggle + deep link)
-    on the actual home screen.
+  - [x] Settings — passed after account/profile, notification/display picker,
+    data export/reset, and legal document fixes.
+  - [x] Widget — passed enough to keep current layout after home/lock screen
+    widget density, tap behavior, count, and lock-screen rectangular fixes.
 - App icon: only the light (default) 1024x1024 variant is shipped. Dark
   and tinted home-screen variants are deferred until dedicated artwork
   is produced.
@@ -195,8 +210,8 @@ swift test
   text labels.
 - Confirm small, medium, and large widgets keep header/calendar/control content
   top-aligned when switching between Task and Habit.
-- Confirm the progress label uses today's overall task+habit `completed/total`
-  formatting.
+- Confirm the progress label uses the active mode's `completed/total`
+  formatting: Task mode counts tasks only, Habit mode counts habits only.
 - Confirm completed task/habit rows move below incomplete rows.
 - Tap a task check dot in the widget.
   - Expected: widget updates optimistically.
@@ -206,12 +221,9 @@ swift test
   - Expected: widget updates optimistically.
   - Expected: Supabase `habit_logs` row is inserted for value `1`.
   - Expected: Supabase `habit_logs` row is deleted for value `0`.
-- Tap task/habit row text in the widget.
-  - Expected: app opens through `justdo://task/<id>` or `justdo://habit/<id>`.
-  - Expected: matching local detail data is displayed.
-  - Expected: detail edit saves update the local mirror and enqueue sync.
-  - Expected: detail delete removes the local row, enqueues sync, and returns to
-    the previous screen.
+- Tap any part of a task/habit row in the home-screen widget.
+  - Expected: the row toggles completion/check state optimistically.
+  - Expected: the app does not open detail from widget row text.
 - Relaunch app and widget.
   - Expected: remote read-sync preserves flushed changes.
 
@@ -235,8 +247,8 @@ swift test
 ## Next Work
 
 > 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing +
-> Add Sheet + Task Detail edit + Stats는 통과했고, 다음 차례는
-> Settings → Widget.
+> Add Sheet + Task Detail edit + Stats + Settings + Widget 보정까지 통과.
+> 다음 차례는 문서/커밋 정리 후 잔여 실기기 smoke와 Toss 외부 의존 트랙.
 
 - [x] **Add Sheet 시각 검증**.
   - Reference: `reference/proto/sheet-detail.jsx` (PAddSheet).
@@ -261,15 +273,19 @@ swift test
     - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
       -destination 'generic/platform=iOS Simulator' build` passed.
     - `swift test` passed with 40 tests.
-- [ ] **Settings 시각 검증**.
+- [x] **Settings 시각 검증**.
   - Reference: `reference/proto/stats-settings.jsx`.
-  - 검증 포인트: 다크모드 토글, 동기화 상태 row(synced/syncing/pending/failed),
-    카테고리 관리 / 습관 관리 entry point, 로그아웃, weekStart 토글, 알림 등.
-- [ ] **Widget 실기기 검증**.
+  - 반영/검증 완료:
+    - Google 로그인 프로필 이름 표시, 계정 상세 sheet, 로그아웃 위치 변경.
+    - 알림 토글/시간 picker, 다크모드, 캘린더 시작 요일 picker.
+    - 습관/카테고리 관리 tap area 및 font scale 보정.
+    - Pro-gated CSV export, 전체 데이터 초기화, 이용약관/개인정보처리방침.
+- [x] **Widget 실기기 검증**.
   - Small / medium / large 3 사이즈 모두 홈 스크린에 추가.
   - Task / Habit mode 토글 동작.
-  - 위젯 row 텍스트 탭 시 `justdo://task/<id>` / `justdo://habit/<id>`로
-    앱이 열리고 push detail이 정상 표시되는지.
+  - 홈 화면 widget row 전체 탭으로 task complete / habit check.
+  - Task/Habit mode별 `completed/total` 표시.
+  - 잠금 화면 accessory widget 분리 및 rectangular Task-only 표시.
   - Widget tap으로 task complete / habit check 시
     `task_completion_set` mutation이 Supabase에 patch되는지(App
     foreground 시 flush).

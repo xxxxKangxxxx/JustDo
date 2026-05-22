@@ -49,13 +49,25 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     포맷되는 문제 제거.
   - Task 카테고리 통계는 빈 카테고리를 1개로 보정하지 않고 실제 0개로 표시.
   - Habit 최근 7일 영역은 각 셀 안에 요일만 표시.
+- Settings / Widget 실기기 검증 보정 완료:
+  - 계정 섹션은 Google 로그인 프로필 이름을 표시하고, 계정 상세 sheet에서
+    로그아웃 / 계정 변경 / 회원 탈퇴 entry point를 제공.
+  - 알림 토글, 알림 시간 picker, 다크모드, 캘린더 시작 요일 picker,
+    CSV 내보내기(Pro-gated), 전체 데이터 초기화, 이용약관/개인정보처리방침
+    기본 문서가 구현됨.
+  - 홈 화면 위젯은 row 전체 탭으로 Task/Habit 완료 토글, 모드별
+    `completed/total`, 더 큰 font/check dot, compact spacing을 반영.
+  - 잠금 화면 위젯은 Task-only accessory로 분리. Rectangular는 상단 정렬,
+    `completed/total`, 최대 2개 Task 표시.
+  - 홈 화면 캘린더 헤더에 `오늘` 버튼 추가. 선택 날짜와 표시 연월을 오늘로
+    즉시 되돌림.
 - App icon + Web favicon 적용 완료:
   - iOS: `apps/ios/JustDoApp/JustDoApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png`
     (single light variant, dark/tinted 추후).
   - Web: `apps/web/public/`에 SVG primary + 16/32/48 PNG fallback +
     apple-touch-icon. `layout.tsx`의 `metadata.icons`에 등록.
-- 다음 우선순위: **iOS Settings → Widget 시각 검증** 순서로 reference
-  proto와 비교. Toss 가맹점 심사는 외부 트랙 유지.
+- 다음 우선순위: **문서/커밋 정리 후 iOS 잔여 실기기 smoke 및 Toss 외부
+  의존 트랙**. Toss 가맹점 심사는 외부 트랙 유지.
 
 ## Where We Are (2026-05-21)
 
@@ -75,11 +87,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - iOS Phase 6 잔여 작업은 실기기 시각 검증 중심. Detail edit/delete,
   Settings sync status UI, hosted Supabase offline sync, Home row check,
   calendar task bar/no-dot rendering, fixed-calendar/bottom-sheet panel,
-  Add Sheet, Stats, widget task/habit toggle, widget deep link,
+  Add Sheet, Stats, Settings, widget task/habit toggle, lock-screen widget,
   compact task-completion mutation은 구현/검증 완료. Home/Auth landing,
-  Add Sheet, Stats는 iPhone 14 Pro iOS 26.5에서 통과. 남은 검증은
-  Settings → Widget 순서이며, Expo Go가 아니라 Xcode 직접 설치 또는 추후
-  TestFlight로 진행.
+  Add Sheet, Stats, Settings/Widget 보정은 iPhone 14 Pro iOS 26.5 피드백
+  기반으로 반영됨. Expo Go가 아니라 Xcode 직접 설치 또는 추후 TestFlight로
+  진행.
 - 다음 우선순위: **Toss 가맹점 심사 시작 (외부 트랙, 가장 긴 차단)** +
   **Toss test-key E2E / webhook signature 확인** + **iOS 실기기 시각 검증**.
   Toss 운영 키 발급 전까지는 코드 트랙을 테스트 키로 진행. DLQ는 live billing
@@ -353,7 +365,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Add iOS widget Task/Habit display mode.
   - Small, medium, and large widgets default to Task mode.
   - Task/Habit toggle state is stored in App Group `UserDefaults`.
-  - Progress label uses today's overall task+habit `completed/total`.
+  - Progress label uses the active mode's task-only or habit-only
+    `completed/total`.
   - Completed rows are displayed below incomplete rows.
 - [ ] Real-device iOS visual verification against `reference/proto/`.
   - Setup (2026-05-22): iPhone 14 Pro iOS 26.5 paired with Xcode 26.3,
@@ -371,8 +384,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Detail / Stats (2026-05-22): 실기기 검증 통과. Task Detail 편집 UI를
     Add Sheet 스타일로 정렬하고 완료 토글 제거. Stats 연월 포맷, 카테고리
     0-count 통계, 최근 7일 Habit 셀 요일 표시, Home selected-date 보존 수정.
-  - 남은 항목: Settings, 최신 Widget UI. Reference
-    `reference/proto/stats-settings.jsx`, `tabbar.jsx` 기준 비교.
+  - Settings / Widget (2026-05-22): 실기기 피드백 기반 보정 완료. Settings
+    계정/profile, 알림/표시 picker, data/legal 섹션 보강. Home-screen widget은
+    row 전체 탭 완료 토글, mode별 count, font/check-dot/spacing 보정.
+    Lock-screen widget은 Task-only accessory로 분리.
 - [x] Add route tests for widget deep-link opening.
   - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
     `JustDoDetailRoute`, and `ContentView` uses that route in its

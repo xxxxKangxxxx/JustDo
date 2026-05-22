@@ -2,7 +2,7 @@ import XCTest
 @testable import JustDoShared
 
 final class WidgetDisplayModelTests: XCTestCase {
-    func testSmallModelLimitsItemsToThree() {
+    func testSmallModelShowsTaskCounts() {
         let model = JustDoWidgetDisplayModelFactory.make(
             from: snapshot(),
             size: .small
@@ -10,8 +10,8 @@ final class WidgetDisplayModelTests: XCTestCase {
 
         XCTAssertEqual(model.items.count, 3)
         XCTAssertEqual(model.displayMode, .task)
-        XCTAssertEqual(model.totalCount, 4)
-        XCTAssertEqual(model.completedCount, 2)
+        XCTAssertEqual(model.totalCount, 3)
+        XCTAssertEqual(model.completedCount, 1)
         XCTAssertEqual(model.remainingCount, 2)
         XCTAssertEqual(model.items.map(\.title), ["삼성전자 지원", "팀 보고서 제출", "업체 미팅"])
     }
@@ -49,9 +49,9 @@ final class WidgetDisplayModelTests: XCTestCase {
         )
 
         XCTAssertEqual(model.displayMode, .habit)
-        XCTAssertEqual(model.totalCount, 4)
-        XCTAssertEqual(model.completedCount, 2)
-        XCTAssertEqual(model.remainingCount, 2)
+        XCTAssertEqual(model.totalCount, 1)
+        XCTAssertEqual(model.completedCount, 1)
+        XCTAssertEqual(model.remainingCount, 0)
         XCTAssertEqual(model.items.map(\.title), ["🏃 운동 30분"])
         XCTAssertTrue(model.items.allSatisfy { $0.kind == .habit })
     }

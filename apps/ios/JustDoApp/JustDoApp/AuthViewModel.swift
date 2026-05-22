@@ -22,6 +22,7 @@ final class AuthViewModel: ObservableObject {
     }
 
     @Published private(set) var status: Status = .loading
+    @Published private(set) var profile: AuthProfile?
 
     private let configurationLoader: SupabaseAppConfigurationLoader
     private let sessionStore: SupabaseSessionStoring
@@ -48,6 +49,7 @@ final class AuthViewModel: ObservableObject {
     func reload() {
         #if DEBUG
         if JustDoUITestSupport.isEnabled {
+            profile = AuthProfile(email: "uitest@justdo.local", displayName: "UI Test", avatarURL: nil)
             status = .signedIn
             return
         }
@@ -55,11 +57,20 @@ final class AuthViewModel: ObservableObject {
 
         do {
             guard configurationLoader.load() != nil else {
+                profile = nil
                 status = .missingConfiguration
                 return
             }
-            status = try sessionStore.load()?.isExpired() == false ? .signedIn : .signedOut
+            let session = try sessionStore.load()
+            if let session, !session.isExpired() {
+                profile = session.profile
+                status = .signedIn
+            } else {
+                profile = nil
+                status = .signedOut
+            }
         } catch {
+            profile = nil
             status = .failed(error.localizedDescription)
         }
     }
@@ -82,6 +93,7 @@ final class AuthViewModel: ObservableObject {
                 presentationAnchor: anchor
             )
             try sessionStore.save(session)
+            profile = session.profile
             status = .signedIn
         } catch {
             status = .failed(error.localizedDescription)
@@ -91,6 +103,7 @@ final class AuthViewModel: ObservableObject {
     func signOut() {
         do {
             try sessionStore.clear()
+            profile = nil
             status = configurationLoader.load() == nil ? .missingConfiguration : .signedOut
         } catch {
             status = .failed(error.localizedDescription)

@@ -25,11 +25,10 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > — Toss 가맹점 심사 후**.
 
 > **다음 작업자가 픽업할 우선순위 (2026-05-22 갱신)**:
-> 1. **iOS Settings / Widget 시각 검증**. Auth landing, Home, Add Sheet,
->    Task Detail edit, Stats는 iPhone 14 Pro iOS 26.5 실기기 검증을 통과함.
->    Reference: `reference/proto/stats-settings.jsx`,
->    `reference/proto/tabbar.jsx`. Widget은 deep link / mode toggle / Supabase
->    flush까지 같이 검증.
+> 1. **iOS 잔여 실기기 smoke / TestFlight 준비**. Auth landing, Home,
+>    Add Sheet, Task Detail edit, Stats, Settings, Widget 보정은 iPhone 14 Pro
+>    iOS 26.5 실기기 피드백을 반영했고 simulator build/shared tests 통과.
+>    남은 것은 현재 UI를 한 번 더 실제 기기에서 훑는 smoke와 배포 준비.
 > 2. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서. 코드
 >    트랙은 이와 병렬로 진행 가능. 체크리스트:
@@ -63,6 +62,11 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 >   Add Sheet 스타일로 정렬하고 완료 토글 제거. Home selected-day sheet에서
 >   다른 날짜 항목을 체크해도 날짜 유지. Stats 연월 포맷, 카테고리 0-count,
 >   최근 7일 Habit 셀 요일 표시 수정.
+> - **iOS Settings / Widget 보정 완료 (2026-05-22)**: Settings 계정 프로필,
+>   계정 상세, 알림/표시 picker, Pro-gated CSV export, reset, legal sheets
+>   보정. Home-screen widget은 row 전체 탭으로 완료 토글, Task/Habit mode별
+>   progress count, compact layout/font/check-dot polish 적용. Lock-screen
+>   widget은 Task-only accessory로 분리하고 rectangular layout 보정.
 > - **iOS 다크모드 처리**: Auth landing은 항상 light 고정
 >   (`.preferredColorScheme(.light)`). Home/Stats/Settings는 Settings의
 >   다크모드 토글 사용.
@@ -210,28 +214,9 @@ they belong to other projects on this machine.
 
 ## Working Tree State
 
-At this handoff, Codex intentionally leaves local changes in the worktree for
-Claude to review/continue. They are not yet committed in this workspace. If
-`git status -sb` shows the files below, they are expected Pro checkout work:
-
-```text
-README.md
-apps/web/.env.local.example
-apps/web/src/app/api/billing/
-apps/web/src/app/api/webhook/
-apps/web/src/app/billing/
-apps/web/src/features/just-do/app-shell.tsx
-apps/web/src/lib/billing/
-apps/web/src/lib/supabase/database.types.ts
-docs/claude_handoff.md
-docs/just_do_db_schema.md
-docs/next_steps.md
-docs/worklog.md
-supabase/migrations/20260514061000_toss_billing.sql
-```
-
-Do not discard these changes. They include the Toss Payments schema/API/UI
-track and documentation updates.
+After the 2026-05-22 Settings/Widget pass, the expected state is to commit and
+push the iOS Settings/Widget documentation and code changes together. A fresh
+`git status -sb` after that push should be clean.
 
 Latest pushed commits in this session (Claude Code, 2026-04-30):
 
@@ -330,8 +315,9 @@ cdd5b1f docs(ios): start phase 6 planning
     were implemented.
   - Detail edit/delete from pushed task/habit detail screens is implemented.
   - Widget Task/Habit mode toggle is implemented for small/medium/large widgets.
-  - Widget row text deep-links through `justdo://task/<id>` and
-    `justdo://habit/<id>`.
+  - Home-screen widget row text no longer deep-links; tapping the row toggles
+    completion/check state. App deep links still support `justdo://task/<id>`
+    and `justdo://habit/<id>` for launched routes/tests.
   - UI automation covers app deep-link detail opening with DEBUG-only seeded
     Core Data data.
   - App and widget task completion toggles now use compact
@@ -844,12 +830,13 @@ Recommended immediate next steps:
        top-aligned input layout, selected-day sheet dismiss fix 후).
      - Task Detail edit / Stats 검증 통과 (Add Sheet-style editor,
        selected-date preserve, Stats formatting/count fixes 후).
-   - 남은 시각 검증 순서: **Settings → Widget**.
-     각 단계의 reference 파일과 체크리스트는
-     `docs/ios_phase6_status.md` "Next Work" 섹션 참고.
-   - Widget 검증은 실기기에 위젯을 직접 추가 후 small/medium/large 3가지,
-     Task/Habit toggle, deep link (`justdo://task/<id>` /
-     `justdo://habit/<id>`), foreground flush까지 검증.
+     - Settings / Widget 보정 통과 (계정/profile, 알림/표시 picker,
+       data/legal, home/lock widget layout, row tap completion, mode-scoped
+       counts 후).
+   - 남은 iOS 작업은 현재 UI의 잔여 실기기 smoke와 TestFlight/App Store
+     준비. 상세 체크리스트는 `docs/ios_phase6_status.md` 참고.
+   - Widget은 home-screen small/medium/large와 lock-screen accessory로 분리.
+     Home-screen row text deep link는 제거했고 row 전체 탭이 완료 토글이다.
    - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 (wireless 활성 시 USB
      불필요). TestFlight 트랙은 추후.
 

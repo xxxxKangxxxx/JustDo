@@ -18,7 +18,7 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
                 categories: try fetchCategories(),
                 tasks: try fetchTasks(),
                 habits: try fetchHabits(),
-                settings: settings
+                settings: try fetchSettings(defaults: settings)
             )
         }
     }
@@ -256,6 +256,36 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
         object.setValue(key.rawValue, forKey: "key")
         object.setValue(try JSONEncoder().encode(value), forKey: "valueJSON")
         object.setValue(Date(), forKey: "updatedAt")
+    }
+
+    private func fetchSettings(defaults: Settings) throws -> Settings {
+        var settings = defaults
+        let decoder = JSONDecoder()
+        for object: NSManagedObject in try fetchObjects("CDUserPreference") {
+            guard
+                let rawKey = object.value(forKey: "key") as? String,
+                let key = PreferenceKey(rawValue: rawKey),
+                let data = object.value(forKey: "valueJSON") as? Data,
+                let value = try? decoder.decode(Int.self, from: data)
+            else {
+                continue
+            }
+
+            switch key {
+            case .notify:
+                settings.notify = value == 1
+            case .notifyTime:
+                settings.notifyTime = Self.timeString(fromMinutes: value)
+            case .weekStart:
+                settings.weekStart = value == 1 ? 1 : 0
+            }
+        }
+        return settings
+    }
+
+    private static func timeString(fromMinutes minutes: Int) -> String {
+        let clamped = min(max(minutes, 0), 23 * 60 + 59)
+        return String(format: "%02d:%02d", clamped / 60, clamped % 60)
     }
 
     private func fetchObject(_ entityName: String, id: UUID) throws -> NSManagedObject? {

@@ -2765,7 +2765,8 @@ This document records coordination notes for work done with Codex and Claude Cod
   and large widgets share the same mode.
 - Updated the widget display model to filter rows by the selected mode, keep
   incomplete items above completed items, and expose today's overall task+habit
-  `completed/total` progress for compact display.
+  `completed/total` progress for compact display. This progress behavior was
+  later superseded on 2026-05-22 by active-mode-scoped counts.
 - Updated small, medium, and large widget layouts to show the Task/Habit control
   and a concise progress label like `3/8`.
 - Refined widget layout after simulator review:
@@ -3285,4 +3286,58 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
   -destination 'generic/platform=iOS Simulator' build` passed after the Detail,
   Home, and Stats changes.
+- `swift test` passed with 40 tests.
+
+## 2026-05-22 iOS Settings and Widget real-device verification
+
+### User + Codex
+
+- Continued iPhone 14 Pro / iOS 26.5 real-device verification through Settings
+  and Widget polish.
+- Settings fixes:
+  - Account state now uses the signed-in Google profile name instead of
+    hardcoded placeholder account text. Supabase session storage preserves
+    email, display name, and avatar URL when available, with JWT metadata
+    fallback decoding.
+  - Moved sign-out into the account detail flow and added an account detail
+    sheet with profile details, account switch, sign-out, and withdrawal entry
+    points.
+  - Notification toggle now persists through preferences, with a wheel time
+    picker for notification time.
+  - Display settings now persist dark mode and week-start preferences; week
+    start uses the same picker-sheet pattern as notification time.
+  - Settings data rows are full-width tappable. Habit/category management
+    sheets were scaled down to match the rest of the app.
+  - Data export is now Pro-gated CSV export, all-data reset enqueues local
+    delete mutations, and basic Terms / Privacy document sheets are filled.
+  - Fixed the Xcode main actor warning in CSV export by making the CSV helper
+    methods `nonisolated`.
+- Widget fixes:
+  - Split WidgetKit into home-screen and lock-screen widget configurations so
+    home widgets support `.systemSmall`, `.systemMedium`, `.systemLarge`, while
+    lock-screen widgets support `.accessoryInline`, `.accessoryCircular`, and
+    `.accessoryRectangular`.
+  - Lock-screen rectangular widget is Task-only, shows `completed/total`, and
+    displays up to two tasks. Its header, task rows, and check buttons were
+    enlarged and top-aligned after device feedback.
+  - Home-screen widgets were rebalanced to use more of the widget canvas:
+    reduced outer padding, stronger top alignment, larger header/count/item
+    fonts, larger check dots, and wider item spacing.
+  - Home-screen item rows now toggle completion when any part of the row is
+    tapped. Row text no longer deep-links into detail from the widget.
+  - Widget progress counts are now scoped to the selected mode: Task mode shows
+    task `completed/total`, Habit mode shows habit `completed/total`.
+  - Medium/large home-screen widgets include more spacing between the mode
+    toggle and item list, plus larger spacing between item rows.
+- Home follow-up:
+  - Added a `오늘` button to the calendar header so users can jump the selected
+    date and displayed month back to today.
+  - Raised only the `Just Do` wordmark in the home header to increase spacing
+    from the year/month control row.
+
+### Verification
+
+- `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -destination 'generic/platform=iOS Simulator' build` passed after the
+  Settings, Widget, and Home changes.
 - `swift test` passed with 40 tests.

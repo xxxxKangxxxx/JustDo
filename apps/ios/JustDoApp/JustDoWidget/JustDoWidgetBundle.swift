@@ -12,5 +12,6 @@ import SwiftUI
 struct JustDoWidgetBundle: WidgetBundle {
     var body: some Widget {
         JustDoWidget()
+        JustDoLockScreenWidget()
     }
 }

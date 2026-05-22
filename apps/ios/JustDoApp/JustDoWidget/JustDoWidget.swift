@@ -28,7 +28,7 @@ struct Provider: TimelineProvider {
     private func loadEntry(for family: WidgetFamily) -> JustDoEntry {
         let size = JustDoWidgetSize(family: family)
         let snapshot = (try? AppGroupWidgetSnapshotStore().read()) ?? WidgetSnapshot.placeholder()
-        let displayMode = (try? AppGroupWidgetDisplayModeStore().read()) ?? .task
+        let displayMode: WidgetDisplayMode = family.isLockScreenAccessory ? .task : ((try? AppGroupWidgetDisplayModeStore().read()) ?? .task)
         let model = JustDoWidgetDisplayModelFactory.make(
             from: snapshot,
             size: size,
@@ -62,6 +62,15 @@ struct JustDoWidgetEntryView: View {
     }
 }
 
+struct JustDoLockScreenWidgetEntryView: View {
+    let entry: Provider.Entry
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        LockScreenJustDoWidgetView(model: entry.model, family: family)
+    }
+}
+
 struct JustDoWidget: Widget {
     let kind: String = "JustDoWidget"
 
@@ -72,6 +81,19 @@ struct JustDoWidget: Widget {
         .configurationDisplayName("Just Do")
         .description("오늘의 할 일과 습관을 빠르게 확인합니다.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
+}
+
+struct JustDoLockScreenWidget: Widget {
+    let kind: String = "JustDoLockScreenWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: Provider()) { entry in
+            JustDoLockScreenWidgetEntryView(entry: entry)
+        }
+        .configurationDisplayName("Just Do")
+        .description("잠금 화면에서 오늘의 할 일과 습관을 확인합니다.")
+        .supportedFamilies([.accessoryInline, .accessoryCircular, .accessoryRectangular])
     }
 }
 
@@ -88,12 +110,23 @@ private extension JustDoWidgetSize {
     }
 }
 
+private extension WidgetFamily {
+    var isLockScreenAccessory: Bool {
+        switch self {
+        case .accessoryInline, .accessoryCircular, .accessoryRectangular:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 private struct InteractiveJustDoWidgetView: View {
     let model: JustDoWidgetDisplayModel
     let size: JustDoWidgetSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: contentSpacing) {
             WidgetHeader(model: model)
 
             switch size {
@@ -105,8 +138,150 @@ private struct InteractiveJustDoWidgetView: View {
                 LargeInteractiveWidgetBody(model: model)
             }
         }
-        .padding(14)
+        .padding(containerPadding)
         .containerBackground(.fill.tertiary, for: .widget)
+    }
+
+    private var containerPadding: CGFloat {
+        switch size {
+        case .small:
+            return 5
+        case .medium:
+            return 6
+        case .large:
+            return 6
+        }
+    }
+
+    private var contentSpacing: CGFloat {
+        switch size {
+        case .small:
+            return 5
+        case .medium:
+            return 6
+        case .large:
+            return 7
+        }
+    }
+}
+
+private struct LockScreenJustDoWidgetView: View {
+    let model: JustDoWidgetDisplayModel
+    let family: WidgetFamily
+
+    var body: some View {
+        switch family {
+        case .accessoryInline:
+            Label(inlineText, systemImage: "checkmark.circle")
+                .widgetAccentable()
+                .containerBackground(.clear, for: .widget)
+        case .accessoryCircular:
+            Gauge(value: gaugeValue) {
+                Image(systemName: "checkmark.circle")
+            } currentValueLabel: {
+                Text("\(model.remainingCount)")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+            }
+            .gaugeStyle(.accessoryCircularCapacity)
+            .widgetAccentable()
+            .containerBackground(.clear, for: .widget)
+        case .accessoryRectangular:
+            LockScreenRectangularBody(model: model, rectangularText: rectangularText)
+                .containerBackground(.clear, for: .widget)
+        default:
+            EmptyView()
+        }
+    }
+
+    private var inlineText: String {
+        "\(model.remainingCount)개 남음"
+    }
+
+    private var rectangularText: String {
+        "\(model.completedCount)/\(model.totalCount)"
+    }
+
+    private var gaugeValue: Double {
+        guard model.totalCount > 0 else {
+            return 0
+        }
+        return Double(model.completedCount) / Double(model.totalCount)
+    }
+}
+
+private struct LockScreenRectangularBody: View {
+    let model: JustDoWidgetDisplayModel
+    let rectangularText: String
+
+    private var taskItems: [JustDoWidgetItem] {
+        model.items.filter { $0.kind == .task }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text("Task")
+                    .font(.system(size: 11, weight: .bold))
+                Text(rectangularText)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+
+            if taskItems.isEmpty {
+                Text("오늘 할 일 없음")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(taskItems.prefix(2))) { item in
+                        HStack(spacing: 6) {
+                            itemButton(item)
+                            Text(item.title)
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .lineLimit(1)
+                                .strikethrough(item.isDone)
+                                .foregroundStyle(item.isDone ? .secondary : .primary)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .widgetAccentable()
+    }
+
+    @ViewBuilder
+    private func itemButton(_ item: JustDoWidgetItem) -> some View {
+        Button(
+            intent: ToggleTaskCompletionIntent(
+                taskID: item.id.uuidString,
+                isCompleted: !item.isDone
+            )
+        ) {
+            LockScreenCheckDot(item: item)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct LockScreenCheckDot: View {
+    let item: JustDoWidgetItem
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color(hex: item.colorHex), lineWidth: 1.6)
+                .background(Circle().fill(item.isDone ? Color(hex: item.colorHex) : .clear))
+            if item.isDone {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 14, height: 14)
     }
 }
 
@@ -116,11 +291,11 @@ private struct WidgetHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("JUST DO")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
             Spacer()
             Text(shortDate(model.selectedDate))
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
         }
     }
@@ -130,10 +305,10 @@ private struct SmallInteractiveWidgetBody: View {
     let model: JustDoWidgetDisplayModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             WidgetModeControl(model: model, style: .compact)
             Divider()
-            InteractiveWidgetItemList(model: model)
+            InteractiveWidgetItemList(model: model, size: .small)
             Spacer(minLength: 0)
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -144,13 +319,13 @@ private struct MediumInteractiveWidgetBody: View {
     let model: JustDoWidgetDisplayModel
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(alignment: .top, spacing: 7) {
             WeekStrip(days: model.weekDays)
-                .frame(width: 122)
+                .frame(width: 116)
             Divider()
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 WidgetModeControl(model: model)
-                InteractiveWidgetItemList(model: model)
+                InteractiveWidgetItemList(model: model, size: .medium)
                 Spacer(minLength: 0)
             }
             .frame(maxHeight: .infinity, alignment: .top)
@@ -163,11 +338,11 @@ private struct LargeInteractiveWidgetBody: View {
     let model: JustDoWidgetDisplayModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             MonthGrid(days: model.monthDays)
             Divider()
             WidgetModeControl(model: model)
-            InteractiveWidgetItemList(model: model)
+            InteractiveWidgetItemList(model: model, size: .large)
             Spacer(minLength: 0)
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -184,12 +359,12 @@ private struct WidgetModeControl: View {
     var style: Style = .labeled
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: style == .compact ? 5 : 6) {
             modeButton(.task, title: "Task", color: .accentColor)
             modeButton(.habit, title: "Habit", color: Color(hex: JustDoWidgetDisplayModelFactory.habitColor))
             Spacer(minLength: 4)
             Text("\(model.completedCount)/\(model.totalCount)")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(size: 12, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
@@ -205,14 +380,14 @@ private struct WidgetModeControl: View {
                             .stroke(color, lineWidth: model.displayMode == mode ? 0 : 1)
                     )
                     .frame(width: 14, height: 14)
-                    .padding(4)
+                    .padding(2)
                     .contentShape(Circle())
             } else {
                 Text(title)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(model.displayMode == mode ? .white : .secondary)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
                     .background(model.displayMode == mode ? color : Color.primary.opacity(0.08))
                     .clipShape(Capsule())
             }
@@ -224,40 +399,46 @@ private struct WidgetModeControl: View {
 
 private struct InteractiveWidgetItemList: View {
     let model: JustDoWidgetDisplayModel
+    let size: JustDoWidgetSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: rowSpacing) {
             ForEach(model.items) { item in
-                HStack(spacing: 7) {
-                    itemButton(item)
-                    Link(destination: deepLink(for: item).url) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(item.title)
-                                .font(.system(size: 11, weight: .medium))
-                                .lineLimit(1)
-                                .strikethrough(item.isDone)
-                                .foregroundStyle(item.isDone ? .secondary : .primary)
-                            if let subtitle = item.subtitle {
-                                Text(subtitle)
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
+                itemButton(item)
             }
+        }
+        .padding(.top, topPadding)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var topPadding: CGFloat {
+        switch size {
+        case .small:
+            return 2
+        case .medium:
+            return 5
+        case .large:
+            return 6
         }
     }
 
-    private func deepLink(for item: JustDoWidgetItem) -> JustDoDeepLink {
-        switch item.kind {
-        case .task:
-            .task(item.id)
-        case .habit:
-            .habit(item.id)
+    private var rowSpacing: CGFloat {
+        switch size {
+        case .small:
+            return 6
+        case .medium:
+            return 7
+        case .large:
+            return 8
         }
+    }
+
+    private var titleFontSize: CGFloat {
+        size == .small ? 11.5 : 12
+    }
+
+    private var showsSubtitle: Bool {
+        size != .small
     }
 
     @ViewBuilder
@@ -270,7 +451,7 @@ private struct InteractiveWidgetItemList: View {
                     isCompleted: !item.isDone
                 )
             ) {
-                CheckDot(item: item)
+                itemRow(item)
             }
             .buttonStyle(.plain)
         case .habit:
@@ -281,10 +462,32 @@ private struct InteractiveWidgetItemList: View {
                     value: item.isDone ? 0 : 1
                 )
             ) {
-                CheckDot(item: item)
+                itemRow(item)
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func itemRow(_ item: JustDoWidgetItem) -> some View {
+        HStack(spacing: 6) {
+            CheckDot(item: item)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.system(size: titleFontSize, weight: .medium))
+                    .lineLimit(1)
+                    .strikethrough(item.isDone)
+                    .foregroundStyle(item.isDone ? .secondary : .primary)
+                if showsSubtitle, let subtitle = item.subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -298,11 +501,11 @@ private struct CheckDot: View {
                 .background(Circle().fill(item.isDone ? Color(hex: item.colorHex) : .clear))
             if item.isDone {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 7, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.white)
             }
         }
-        .frame(width: 12, height: 12)
+        .frame(width: 14, height: 14)
     }
 }
 
@@ -310,16 +513,16 @@ private struct WeekStrip: View {
     let days: [JustDoWidgetDay]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 0) {
                 ForEach(days) { day in
-                    VStack(spacing: 3) {
+                    VStack(spacing: 2) {
                         Text(weekdayLabel(day.weekday))
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(.secondary)
                         Text("\(day.day)")
                             .font(.system(size: 11, weight: day.isToday ? .bold : .medium))
-                            .frame(width: 20, height: 20)
+                            .frame(width: 19, height: 19)
                             .foregroundStyle(day.isToday ? .white : .primary)
                             .background(day.isToday ? Color.accentColor : .clear)
                             .clipShape(Circle())
@@ -334,15 +537,15 @@ private struct WeekStrip: View {
 
 private struct MonthGrid: View {
     let days: [JustDoWidgetDay]
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
+        LazyVGrid(columns: columns, spacing: 1) {
             ForEach(days) { day in
                 VStack(spacing: 2) {
                     Text("\(day.day)")
                         .font(.system(size: 10, weight: day.isToday ? .bold : .medium))
-                        .frame(width: 18, height: 18)
+                        .frame(width: 17, height: 17)
                         .foregroundStyle(day.isToday ? .white : .primary)
                         .background(day.isToday ? Color.accentColor : .clear)
                         .clipShape(Circle())

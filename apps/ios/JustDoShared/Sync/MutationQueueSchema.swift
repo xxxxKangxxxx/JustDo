@@ -109,6 +109,8 @@ public enum LocalMutation: Codable, Equatable, Sendable {
 }
 
 public enum PreferenceKey: String, Codable, Equatable, Sendable {
+    case notify
+    case notifyTime = "notify_time"
     case weekStart = "week_start"
 }
 

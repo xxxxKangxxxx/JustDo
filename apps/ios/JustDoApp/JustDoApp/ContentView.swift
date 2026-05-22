@@ -68,6 +68,7 @@ struct ContentView: View {
             HomeRootView(
                 snapshotStore: snapshotStore,
                 syncStatus: syncStatus,
+                authProfile: auth.profile,
                 onOpenTask: { navigationPath.append(JustDoDetailRoute.task($0)) },
                 onOpenHabit: { navigationPath.append(JustDoDetailRoute.habit($0)) },
                 onSignOut: {
@@ -413,6 +414,7 @@ private struct EmailIcon: View {
 private struct HomeRootView: View {
     let snapshotStore: CoreDataAppSnapshotStore?
     @ObservedObject var syncStatus: AppSyncStatusStore
+    let authProfile: AuthProfile?
     let onOpenTask: (UUID) -> Void
     let onOpenHabit: (UUID) -> Void
     let onSignOut: () -> Void
@@ -426,7 +428,8 @@ private struct HomeRootView: View {
     @State private var isShowingHabitManager = false
     @State private var isShowingCategoryManager = false
     @State private var isShowingDayPanel = false
-    @State private var isDarkMode = false
+    @AppStorage("justdo.isDarkMode") private var isDarkMode = false
+    @State private var exportURL: ExportFile?
     @State private var loadError: String?
     @State private var actionMessage: String?
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
@@ -466,6 +469,13 @@ private struct HomeRootView: View {
                 onDelete: deleteCategory(_:)
             )
             .presentationDetents([.large])
+        }
+        .sheet(item: $exportURL) { file in
+            DataExportSheet(url: file.url)
+                .presentationDetents([.height(220)])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(22)
+                .presentationBackground(JDTheme.surface)
         }
         .sheet(isPresented: $isShowingDayPanel) {
             SelectedDayPanel(
@@ -552,12 +562,17 @@ private struct HomeRootView: View {
         case .settings:
             SettingsRootTabView(
                 settings: snapshot?.settings,
+                authProfile: authProfile,
                 isDarkMode: $isDarkMode,
                 actionMessage: actionMessage,
                 syncStatus: syncStatus.status,
-                onToggleWeekStart: toggleWeekStart,
+                onSetNotify: setNotify(_:),
+                onSetNotifyTime: setNotifyTime(_:),
+                onSetWeekStart: setWeekStart(_:),
                 onManageHabits: { isShowingHabitManager = true },
                 onManageCategories: { isShowingCategoryManager = true },
+                onExportData: exportData,
+                onResetData: resetAllData,
                 onRetrySync: retrySync,
                 onSignOut: onSignOut
             )
@@ -568,6 +583,7 @@ private struct HomeRootView: View {
     private var homeHeader: some View {
         VStack(alignment: .leading, spacing: 16) {
             JustDoWordmark(size: 24, dotSize: 6)
+                .offset(y: -14)
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(displayYear))
@@ -588,6 +604,17 @@ private struct HomeRootView: View {
                     moveMonth(1)
                 }
                 Spacer()
+                Button {
+                    moveToToday()
+                } label: {
+                    Text("오늘")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(JDTheme.accent)
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background(JDTheme.accent.opacity(0.12))
+                        .clipShape(Capsule())
+                }
                 Button {
                     isShowingAddTask = true
                 } label: {
@@ -617,6 +644,13 @@ private struct HomeRootView: View {
         let moved = JDDate.addMonths(year: displayYear, month: displayMonth, delta: delta)
         displayYear = moved.year
         displayMonth = moved.month
+    }
+
+    private func moveToToday() {
+        let today = JDDate.todayComponents
+        selectedDate = JDDate.todayISO
+        displayYear = today.year
+        displayMonth = today.month
     }
 
     private func loadSnapshot(preserveViewSelection: Bool = false) {
@@ -783,26 +817,49 @@ private struct HomeRootView: View {
     }
 
     private func toggleWeekStart() {
+        let current = snapshot?.settings.weekStart ?? 0
+        setWeekStart(current == 0 ? 1 : 0)
+    }
+
+    private func setNotify(_ isOn: Bool) {
+        setPreference(.notify, value: isOn ? 1 : 0, successMessage: "Notification settings updated.")
+    }
+
+    private func setNotifyTime(_ time: String) {
+        setPreference(.notifyTime, value: Self.minutes(fromTime: time), successMessage: "Notification time updated.")
+    }
+
+    private func setWeekStart(_ weekStart: Int) {
+        setPreference(.weekStart, value: weekStart == 1 ? 1 : 0, successMessage: "Calendar settings updated.")
+    }
+
+    private func setPreference(_ key: JustDoShared.PreferenceKey, value: Int, successMessage: String) {
         guard let snapshotStore else {
             actionMessage = "Local mirror is unavailable."
             return
         }
 
-        let current = snapshot?.settings.weekStart ?? 0
         do {
             try snapshotStore.applyAndEnqueue(
                 QueuedMutation(
                     id: UUID(),
                     updatedAt: JDDate.nowISODateTime,
-                    mutation: .preferencesSet(key: .weekStart, value: current == 0 ? 1 : 0)
+                    mutation: .preferencesSet(key: key, value: value)
                 )
             )
             loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
-            actionMessage = "Settings updated."
+            actionMessage = successMessage
         } catch {
             actionMessage = "Could not update settings."
         }
+    }
+
+    private static func minutes(fromTime time: String) -> Int {
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        let hour = min(max(parts.first ?? 9, 0), 23)
+        let minute = min(max(parts.dropFirst().first ?? 0, 0), 59)
+        return hour * 60 + minute
     }
 
     private func addCategory(name: String, color: String) {
@@ -882,6 +939,57 @@ private struct HomeRootView: View {
             actionMessage = "Habit deleted."
         } catch {
             actionMessage = "Could not delete habit."
+        }
+    }
+
+    private func exportData() {
+        guard let snapshot else {
+            actionMessage = "Export data is unavailable."
+            return
+        }
+
+        do {
+            let csv = CSVExporter.makeCSV(snapshot: snapshot)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("justdo-export-\(JDDate.todayISO).csv")
+            try csv.write(to: url, atomically: true, encoding: .utf8)
+            exportURL = ExportFile(url: url)
+            actionMessage = "Export file is ready."
+        } catch {
+            actionMessage = "Could not export data."
+        }
+    }
+
+    private func resetAllData() {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+        guard let snapshot else {
+            actionMessage = "No data to reset."
+            return
+        }
+
+        let updatedAt = JDDate.nowISODateTime
+        let mutations =
+            snapshot.tasks.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .taskDelete(id: $0.id)) } +
+            snapshot.habits.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .habitDelete(id: $0.id)) } +
+            snapshot.categories.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .categoryDelete(id: $0.id)) }
+
+        guard !mutations.isEmpty else {
+            actionMessage = "No data to reset."
+            return
+        }
+
+        do {
+            for mutation in mutations {
+                try snapshotStore.applyAndEnqueue(mutation)
+            }
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "All data reset."
+        } catch {
+            actionMessage = "Could not reset data."
         }
     }
 
@@ -1986,16 +2094,38 @@ private struct StatsRootTabView: View {
 
 private struct SettingsRootTabView: View {
     let settings: Settings?
+    let authProfile: AuthProfile?
     @Binding var isDarkMode: Bool
     let actionMessage: String?
     let syncStatus: AppSyncStatus
-    let onToggleWeekStart: () -> Void
+    let onSetNotify: (Bool) -> Void
+    let onSetNotifyTime: (String) -> Void
+    let onSetWeekStart: (Int) -> Void
     let onManageHabits: () -> Void
     let onManageCategories: () -> Void
+    let onExportData: () -> Void
+    let onResetData: () -> Void
     let onRetrySync: () -> Void
     let onSignOut: () -> Void
 
     @State private var localNotify = true
+    @State private var isShowingAccountDetail = false
+    @State private var isShowingNotifyTimePicker = false
+    @State private var notifyTimeValue = Date()
+    @State private var isShowingWeekStartPicker = false
+    @State private var weekStartValue = 0
+    @State private var accountMessage: String?
+    @State private var isShowingResetConfirmation = false
+    @State private var legalDocument: LegalDocument?
+    @State private var settingsMessage: String?
+
+    private var resolvedProfile: AuthProfile {
+        authProfile ?? AuthProfile(email: nil, displayName: nil, avatarURL: nil)
+    }
+
+    private var isProPlan: Bool {
+        (settings?.plan ?? "free") == "pro"
+    }
 
     var body: some View {
         ScrollView {
@@ -2007,11 +2137,41 @@ private struct SettingsRootTabView: View {
                     .padding(.bottom, 18)
 
                 SettingGroup(label: "계정") {
-                    SettingsRow(title: "지민", detail: "Google 로그인", avatar: true, chevron: true, isLast: true)
+                    SettingsRow(
+                        title: resolvedProfile.title,
+                        detail: resolvedProfile.detail,
+                        avatar: true,
+                        avatarText: resolvedProfile.initials,
+                        chevron: true,
+                        isLast: true
+                    ) {
+                        isShowingAccountDetail = true
+                    }
+                }
+                if let accountMessage {
+                    Text(accountMessage)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .padding(.horizontal, 34)
+                        .padding(.top, -12)
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
                 }
                 SettingGroup(label: "알림") {
-                    SettingsRow(title: "알림", right: AnyView(ToggleSwitch(isOn: $localNotify)))
-                    SettingsRow(title: "알림 시간", detail: settings?.notifyTime ?? "09:00", isLast: true)
+                    SettingsRow(
+                        title: "알림",
+                        right: AnyView(ToggleSwitch(isOn: notifyBinding))
+                    )
+                    SettingsRow(
+                        title: "알림 시간",
+                        detail: settings?.notifyTime ?? "09:00",
+                        chevron: true,
+                        isLast: true,
+                        action: {
+                            notifyTimeValue = Self.date(fromTime: settings?.notifyTime ?? "09:00")
+                            isShowingNotifyTimePicker = true
+                        }
+                    )
                 }
                 SettingGroup(label: "디스플레이") {
                     SettingsRow(title: "다크모드", right: AnyView(ToggleSwitch(isOn: $isDarkMode)))
@@ -2020,7 +2180,10 @@ private struct SettingsRootTabView: View {
                         detail: (settings?.weekStart ?? 0) == 0 ? "일요일" : "월요일",
                         chevron: true,
                         isLast: true,
-                        action: onToggleWeekStart
+                        action: {
+                            weekStartValue = settings?.weekStart ?? 0
+                            isShowingWeekStartPicker = true
+                        }
                     )
                 }
                 SettingGroup(label: "구독") {
@@ -2031,14 +2194,37 @@ private struct SettingsRootTabView: View {
                     SyncStatusRow(status: syncStatus, actionMessage: actionMessage, onRetry: onRetrySync)
                     SettingsRow(title: "습관 관리", chevron: true, action: onManageHabits)
                     SettingsRow(title: "카테고리 관리", chevron: true, action: onManageCategories)
-                    SettingsRow(title: "데이터 내보내기", chevron: true)
-                    SettingsRow(title: "모든 데이터 초기화", danger: true)
-                    SettingsRow(title: "로그아웃", danger: true, isLast: true, action: onSignOut)
+                    SettingsRow(
+                        title: "데이터 내보내기",
+                        pro: true,
+                        chevron: true,
+                        action: {
+                            guard isProPlan else {
+                                settingsMessage = "데이터 내보내기는 Pro 버전에서 사용할 수 있습니다."
+                                return
+                            }
+                            onExportData()
+                        }
+                    )
+                    SettingsRow(
+                        title: "모든 데이터 초기화",
+                        danger: true,
+                        isLast: true,
+                        action: { isShowingResetConfirmation = true }
+                    )
                 }
                 SettingGroup(label: "앱 정보") {
                     SettingsRow(title: "버전", detail: "1.0.2")
-                    SettingsRow(title: "이용약관", chevron: true)
-                    SettingsRow(title: "개인정보처리방침", chevron: true, isLast: true)
+                    SettingsRow(title: "이용약관", chevron: true, action: { legalDocument = .terms })
+                    SettingsRow(title: "개인정보처리방침", chevron: true, isLast: true, action: { legalDocument = .privacy })
+                }
+                if let settingsMessage {
+                    Text(settingsMessage)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .padding(.horizontal, 20)
+                        .padding(.top, -8)
+                        .padding(.bottom, 18)
                 }
             }
             .padding(.bottom, 8)
@@ -2046,6 +2232,444 @@ private struct SettingsRootTabView: View {
         .background(JDTheme.background)
         .onAppear {
             localNotify = settings?.notify ?? true
+            notifyTimeValue = Self.date(fromTime: settings?.notifyTime ?? "09:00")
+            weekStartValue = settings?.weekStart ?? 0
+        }
+        .onChange(of: settings?.notify ?? true) { _, value in
+            localNotify = value
+        }
+        .sheet(isPresented: $isShowingAccountDetail) {
+            AccountDetailSheet(
+                profile: resolvedProfile,
+                plan: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free",
+                message: accountMessage,
+                onChangeAccount: {
+                    isShowingAccountDetail = false
+                    onSignOut()
+                },
+                onSignOut: {
+                    isShowingAccountDetail = false
+                    onSignOut()
+                },
+                onDeleteAccount: {
+                    accountMessage = "회원 탈퇴는 서버 API 연결 후 활성화됩니다."
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
+        .sheet(isPresented: $isShowingNotifyTimePicker) {
+            TimePickerSheet(
+                title: "알림 시간",
+                date: $notifyTimeValue,
+                onDone: {
+                    onSetNotifyTime(Self.timeString(from: notifyTimeValue))
+                    isShowingNotifyTimePicker = false
+                }
+            )
+            .presentationDetents([.height(280)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
+        .sheet(isPresented: $isShowingWeekStartPicker) {
+            WeekStartPickerSheet(
+                selection: $weekStartValue,
+                onDone: {
+                    onSetWeekStart(weekStartValue)
+                    isShowingWeekStartPicker = false
+                }
+            )
+            .presentationDetents([.height(280)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
+        .sheet(item: $legalDocument) { document in
+            LegalDocumentSheet(document: document)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(22)
+                .presentationBackground(JDTheme.surface)
+        }
+        .confirmationDialog(
+            "모든 데이터를 초기화할까요?",
+            isPresented: $isShowingResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("초기화", role: .destructive) {
+                onResetData()
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("할 일, 습관, 카테고리 데이터가 삭제됩니다. 동기화 대기열에 삭제 작업이 추가됩니다.")
+        }
+    }
+
+    private var notifyBinding: Binding<Bool> {
+        Binding(
+            get: { localNotify },
+            set: { value in
+                localNotify = value
+                onSetNotify(value)
+            }
+        )
+    }
+
+    private static func date(fromTime time: String) -> Date {
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        var components = DateComponents()
+        components.hour = min(max(parts.first ?? 9, 0), 23)
+        components.minute = min(max(parts.dropFirst().first ?? 0, 0), 59)
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
+    private static func timeString(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0)
+    }
+}
+
+private struct TimePickerSheet: View {
+    let title: String
+    @Binding var date: Date
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(JDTheme.primaryText)
+                Spacer()
+                Button("완료", action: onDone)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(JDTheme.accent)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            Divider()
+
+            DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .tint(JDTheme.accent)
+                .scaleEffect(0.9)
+                .frame(maxWidth: .infinity)
+                .frame(height: 170)
+                .clipped()
+        }
+        .background(JDTheme.surface)
+    }
+}
+
+private struct WeekStartPickerSheet: View {
+    @Binding var selection: Int
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("캘린더 시작 요일")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(JDTheme.primaryText)
+                Spacer()
+                Button("완료", action: onDone)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(JDTheme.accent)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            Divider()
+
+            Picker("캘린더 시작 요일", selection: $selection) {
+                Text("일요일").tag(0)
+                Text("월요일").tag(1)
+            }
+            .pickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            .frame(height: 170)
+            .clipped()
+        }
+        .background(JDTheme.surface)
+    }
+}
+
+private struct AccountDetailSheet: View {
+    let profile: AuthProfile
+    let plan: String
+    let message: String?
+    let onChangeAccount: () -> Void
+    let onSignOut: () -> Void
+    let onDeleteAccount: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                Circle()
+                    .fill(LinearGradient(colors: [JDTheme.me, JDTheme.habit], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 48, height: 48)
+                    .overlay {
+                        Text(profile.initials)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.title)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                    Text(profile.detail)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(JDTheme.secondaryText)
+                }
+                Spacer()
+            }
+            .padding(.top, 10)
+
+            VStack(spacing: 0) {
+                AccountInfoRow(title: "이름", value: profile.title)
+                AccountInfoRow(title: "이메일", value: profile.email ?? "-")
+                AccountInfoRow(title: "로그인 방식", value: "Google")
+                AccountInfoRow(title: "현재 플랜", value: plan, isLast: true)
+            }
+            .background(JDTheme.surfaceAlt)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            VStack(spacing: 0) {
+                SettingsRow(title: "계정 변경", chevron: true, action: onChangeAccount)
+                SettingsRow(title: "로그아웃", danger: true, action: onSignOut)
+                SettingsRow(title: "회원 탈퇴", danger: true, isLast: true, action: onDeleteAccount)
+            }
+            .background(JDTheme.surfaceAlt)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if let message {
+                Text(message)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(JDTheme.secondaryText)
+                    .padding(.horizontal, 2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .background(JDTheme.surface)
+    }
+}
+
+private struct AccountInfoRow: View {
+    let title: String
+    let value: String
+    var isLast = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(JDTheme.secondaryText)
+            Spacer()
+            Text(value)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(JDTheme.primaryText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+                    .padding(.leading, 14)
+            }
+        }
+    }
+}
+
+private struct ExportFile: Identifiable {
+    let url: URL
+
+    var id: String {
+        url.absoluteString
+    }
+}
+
+private struct DataExportSheet: View {
+    let url: URL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("데이터 내보내기")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(JDTheme.primaryText)
+            Text("CSV 파일이 준비되었습니다. Excel 또는 Numbers에서 열 수 있습니다.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(JDTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            ShareLink(item: url) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("CSV 파일 공유")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(JDTheme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .background(JDTheme.surface)
+    }
+}
+
+private enum CSVExporter {
+    nonisolated static func makeCSV(snapshot: AppSnapshot) -> String {
+        var rows: [[String]] = [
+            ["type", "id", "title", "category", "date", "time", "status", "priority", "tags", "extra"]
+        ]
+        let categoriesByID = Dictionary(uniqueKeysWithValues: snapshot.categories.map { ($0.id, $0.name) })
+
+        rows += snapshot.tasks.map { task in
+            [
+                "task",
+                task.id.uuidString,
+                task.title,
+                task.categoryID.flatMap { categoriesByID[$0] } ?? "",
+                task.startDate == task.endDate ? task.startDate : "\(task.startDate)~\(task.endDate)",
+                task.scheduledTime ?? "",
+                task.isCompleted ? "completed" : "open",
+                task.priority?.rawValue ?? "",
+                task.tags.joined(separator: "|"),
+                ""
+            ]
+        }
+
+        rows += snapshot.habits.map { habit in
+            let completed = habit.log.filter { $0.value == 1 }.map(\.key).sorted().joined(separator: "|")
+            return [
+                "habit",
+                habit.id.uuidString,
+                habit.title,
+                "",
+                habit.startedAt,
+                habit.reminderTime ?? "",
+                "active",
+                "",
+                "",
+                "emoji=\(habit.emoji);completed=\(completed)"
+            ]
+        }
+
+        rows += snapshot.categories.map { category in
+            [
+                "category",
+                category.id.uuidString,
+                category.name,
+                "",
+                "",
+                "",
+                category.isDefault ? "default" : "custom",
+                "",
+                "",
+                "color=\(category.color);position=\(category.position)"
+            ]
+        }
+
+        return rows.map { row in
+            row.map(escape).joined(separator: ",")
+        }
+        .joined(separator: "\n")
+    }
+
+    nonisolated private static func escape(_ value: String) -> String {
+        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+        if escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n") {
+            return "\"\(escaped)\""
+        }
+        return escaped
+    }
+}
+
+private enum LegalDocument: String, Identifiable {
+    case terms
+    case privacy
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .terms:
+            return "이용약관"
+        case .privacy:
+            return "개인정보처리방침"
+        }
+    }
+
+    var sections: [(String, String)] {
+        switch self {
+        case .terms:
+            return [
+                ("서비스 이용", "Just Do는 할 일과 습관을 기록하고 관리하기 위한 개인 생산성 서비스입니다. 사용자는 본인의 계정과 데이터 사용에 대한 책임을 가집니다."),
+                ("계정", "Google 로그인을 통해 서비스를 사용할 수 있으며, 계정 정보는 로그인과 동기화 기능 제공을 위해 사용됩니다."),
+                ("데이터", "사용자가 입력한 할 일, 습관, 카테고리, 설정 정보는 서비스 제공과 동기화를 위해 저장될 수 있습니다."),
+                ("유료 기능", "Pro 기능과 결제 기능은 추후 별도 결제 정책과 함께 제공될 예정입니다."),
+                ("변경", "본 약관은 서비스 개선 또는 정책 변경에 따라 업데이트될 수 있습니다.")
+            ]
+        case .privacy:
+            return [
+                ("수집 항목", "서비스는 Google 계정의 기본 프로필 정보, 이메일, 사용자가 입력한 할 일과 습관 데이터를 처리할 수 있습니다."),
+                ("이용 목적", "수집된 정보는 로그인, 데이터 동기화, 위젯 표시, 사용자 설정 유지 등 서비스 제공 목적으로 사용됩니다."),
+                ("보관", "데이터는 사용자가 서비스를 이용하는 동안 보관되며, 계정 삭제 기능 제공 시 삭제 요청에 따라 처리될 예정입니다."),
+                ("제3자 제공", "법령에 따른 경우를 제외하고 사용자 정보를 임의로 제3자에게 제공하지 않습니다."),
+                ("문의", "개인정보 관련 문의는 앱 내 고객지원 채널 또는 운영자가 제공하는 연락처를 통해 접수할 수 있습니다.")
+            ]
+        }
+    }
+}
+
+private struct LegalDocumentSheet: View {
+    let document: LegalDocument
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(Array(document.sections.enumerated()), id: \.offset) { _, section in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(section.0)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(JDTheme.primaryText)
+                            Text(section.1)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineSpacing(3)
+                                .foregroundStyle(JDTheme.secondaryText)
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .background(JDTheme.background)
+            .navigationTitle(document.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { dismiss() }
+                        .font(.system(size: 14, weight: .semibold))
+                }
+            }
         }
     }
 }
@@ -2065,6 +2689,7 @@ private struct HabitManagementSheet: View {
             List {
                 Section("새 습관") {
                     TextField("습관 이름", text: $title)
+                        .font(.system(size: 14, weight: .medium))
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(emojis, id: \.self) { item in
@@ -2072,10 +2697,10 @@ private struct HabitManagementSheet: View {
                                     emoji = item
                                 } label: {
                                     Text(item)
-                                        .font(.system(size: 18))
-                                        .frame(width: 34, height: 34)
+                                        .font(.system(size: 15))
+                                        .frame(width: 30, height: 30)
                                         .background(emoji == item ? JDTheme.habit.opacity(0.18) : .clear)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .clipShape(RoundedRectangle(cornerRadius: 7))
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2087,16 +2712,19 @@ private struct HabitManagementSheet: View {
                         emoji = "🌱"
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .font(.system(size: 14, weight: .semibold))
                 }
 
                 Section("습관 목록") {
                     ForEach(habits) { habit in
-                        HStack {
+                        HStack(spacing: 10) {
                             Text(habit.emoji)
+                                .font(.system(size: 16))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(habit.title)
+                                    .font(.system(size: 14, weight: .semibold))
                                 Text("시작 \(JDDate.displayDate(habit.startedAt)) · \(JDDate.habitStreak(habit, selectedDate: JDDate.todayISO))일째")
-                                    .font(.caption)
+                                    .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -2104,16 +2732,22 @@ private struct HabitManagementSheet: View {
                                 onDelete(habit)
                             } label: {
                                 Image(systemName: "trash")
+                                    .font(.system(size: 13, weight: .semibold))
                             }
                             .buttonStyle(.plain)
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
+            .font(.system(size: 13, weight: .medium))
+            .listSectionSpacing(.compact)
             .navigationTitle("습관 관리")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("닫기") { dismiss() }
+                        .font(.system(size: 14, weight: .semibold))
                 }
             }
         }
@@ -2135,6 +2769,7 @@ private struct CategoryManagementSheet: View {
             List {
                 Section("새 카테고리") {
                     TextField("카테고리 이름", text: $name)
+                        .font(.system(size: 14, weight: .medium))
                     HStack(spacing: 10) {
                         ForEach(colors, id: \.self) { color in
                             Button {
@@ -2142,11 +2777,11 @@ private struct CategoryManagementSheet: View {
                             } label: {
                                 Circle()
                                     .fill(Color(hex: color) ?? JDTheme.me)
-                                    .frame(width: 28, height: 28)
+                                    .frame(width: 24, height: 24)
                                     .overlay {
                                         if selectedColor == color {
                                             Image(systemName: "checkmark")
-                                                .font(.system(size: 11, weight: .bold))
+                                                .font(.system(size: 9, weight: .bold))
                                                 .foregroundStyle(.white)
                                         }
                                     }
@@ -2160,18 +2795,20 @@ private struct CategoryManagementSheet: View {
                         selectedColor = "#558CB9"
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .font(.system(size: 14, weight: .semibold))
                 }
 
                 Section("카테고리 목록") {
                     ForEach(categories) { category in
-                        HStack {
+                        HStack(spacing: 10) {
                             Circle()
                                 .fill(category.displayColor)
                                 .frame(width: 10, height: 10)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(category.name)
+                                    .font(.system(size: 14, weight: .semibold))
                                 Text(category.isDefault ? "기본 카테고리" : "사용자 카테고리")
-                                    .font(.caption)
+                                    .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -2179,16 +2816,22 @@ private struct CategoryManagementSheet: View {
                                 onDelete(category)
                             } label: {
                                 Image(systemName: "trash")
+                                    .font(.system(size: 13, weight: .semibold))
                             }
                             .buttonStyle(.plain)
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
+            .font(.system(size: 13, weight: .medium))
+            .listSectionSpacing(.compact)
             .navigationTitle("카테고리 관리")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("닫기") { dismiss() }
+                        .font(.system(size: 14, weight: .semibold))
                 }
             }
         }
@@ -2350,6 +2993,7 @@ private struct SettingsRow: View {
     let title: String
     var detail: String?
     var avatar = false
+    var avatarText = "?"
     var danger = false
     var pro = false
     var chevron = false
@@ -2358,62 +3002,72 @@ private struct SettingsRow: View {
     var action: (() -> Void)?
 
     var body: some View {
-        Button {
-            action?()
-        } label: {
-            HStack(spacing: 12) {
-                if avatar {
-                    Circle()
-                        .fill(LinearGradient(colors: [JDTheme.me, JDTheme.habit], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 28, height: 28)
-                        .overlay {
-                            Text("지")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
+        Group {
+            if let action {
+                Button(action: action) {
+                    rowContent
                 }
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .medium))
-                    if pro {
-                        Text("PRO")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(JDTheme.me)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(JDTheme.me.opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                }
-                .foregroundStyle(danger ? JDTheme.external : (pro ? JDTheme.me : JDTheme.primaryText))
-                Spacer()
-                if let detail {
-                    Text(detail)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(JDTheme.secondaryText)
-                }
-                if let right {
-                    right
-                }
-                if chevron {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(JDTheme.tertiaryText)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .frame(minHeight: 44)
-            .overlay(alignment: .bottom) {
-                if !isLast {
-                    Rectangle()
-                        .fill(JDTheme.divider)
-                        .frame(height: 0.5)
-                        .padding(.leading, avatar ? 54 : 14)
-                }
+                .buttonStyle(.plain)
+            } else {
+                rowContent
             }
         }
-        .buttonStyle(.plain)
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 12) {
+            if avatar {
+                Circle()
+                    .fill(LinearGradient(colors: [JDTheme.me, JDTheme.habit], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 28, height: 28)
+                    .overlay {
+                        Text(avatarText)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+            }
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                if pro {
+                    Text("PRO")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(JDTheme.me)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(JDTheme.me.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+            }
+            .foregroundStyle(danger ? JDTheme.external : (pro ? JDTheme.me : JDTheme.primaryText))
+            Spacer()
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(JDTheme.secondaryText)
+            }
+            if let right {
+                right
+            }
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(JDTheme.tertiaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+                    .padding(.leading, avatar ? 54 : 14)
+            }
+        }
     }
 }
 
