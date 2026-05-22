@@ -214,20 +214,20 @@ they belong to other projects on this machine.
 
 ## Working Tree State
 
-After the 2026-05-22 Settings/Widget pass, the expected state is to commit and
-push the iOS Settings/Widget documentation and code changes together. A fresh
-`git status -sb` after that push should be clean.
+After the 2026-05-22 Settings/Widget pass, the iOS Settings/Widget code and
+documentation changes were committed and pushed. A fresh `git status -sb`
+should be clean after pulling `origin/main`.
 
-Latest pushed commits in this session (Claude Code, 2026-04-30):
+Latest pushed commits to check before continuing (2026-05-22):
 
 ```text
-090815a feat(ios): scaffold xcode app and widget targets
-f3e1b05 feat(ios): add widget layouts
-e5f0144 feat(ios): add widget snapshot store
-da793b2 feat(ios): add core data mappers
-21a093c test(ios): add drift fixtures
-cdd5b1f docs(ios): start phase 6 planning
+3e2e234 feat(ios): polish settings and widgets
 ```
+
+For Claude Code/Codex handoff, do not replay the chat. Start from this file,
+`docs/worklog.md` latest 2026-05-22 entries, and `docs/next_steps.md` current
+priority. Then run `git pull --ff-only origin main`, `git status -sb`, and the
+iOS build/test commands below before doing the next real-device smoke pass.
 
 ## Current Status
 
@@ -866,7 +866,7 @@ Recommended immediate next steps:
    환경변수 + CLI로 platform `WEB_COMPUTE` + framework `Next.js - SSR` 명시).
    새 Amplify 앱을 다시 만들 일이 생기면 이 세 가지 모두 적용해야 SSR로 배포됨.
 
-### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-21 갱신)
+### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-22 갱신)
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5, `next_steps.md` Phase 7 + Deployment
   Backlog, 그리고 본 문서의 운영 LIVE banner 읽기.
@@ -886,8 +886,10 @@ Recommended immediate next steps:
   B3 cron은 첫 자동 실행 두 번 확인까지 완료됐고, live billing 직전 DLQ만
   남음. B6은 Toss test-key E2E smoke와 webhook signature 검증만 남음.
   자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
-- iOS는 Phase 7과 독립 트랙. 현재 남은 것은 Xcode 직접 설치 또는 TestFlight
-  기반 실기기 시각 검증이며, Expo Go로 검증하지 않음.
+- iOS는 Phase 7과 독립 트랙. Auth landing, Home, Add Sheet, Task Detail
+  edit, Stats, Settings, Widget 보정은 iPhone 14 Pro iOS 26.5 피드백 기준으로
+  반영됨. 현재 남은 것은 실제 기기에서 현재 UI를 한 번 더 훑는 smoke와
+  TestFlight 준비이며, Expo Go로 검증하지 않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
   주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
   monorepo platform/framework 설정 유지.
