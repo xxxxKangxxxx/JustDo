@@ -46,6 +46,17 @@ implementation gaps, and checks to run before testing or shipping.
   tags/task_tags, habits, and habit logs.
 - Native Supabase PKCE OAuth is implemented with Keychain-backed session
   storage and refresh-token handling.
+- `AuthViewModel.reload()` (UI status binding) is `async` and, when it finds
+  an expired stored session, calls `SupabaseAuthClient.refreshSession(...)` to
+  refresh access/refresh tokens, then re-saves into Keychain and keeps
+  `status = .signedIn`. HTTP 400/401 from the refresh endpoint clears Keychain
+  and falls through to `.signedOut`; transient failures (network, server)
+  keep the user signed in using the stored profile so the UI does not drop
+  the session unnecessarily.
+- `ContentView` subscribes to `@Environment(\.scenePhase)` and re-runs
+  `auth.reload()` whenever the scene transitions to `.active`, so a
+  background → foreground return refreshes the token automatically instead of
+  surfacing the auth landing for users who never explicitly signed out.
 - App deep links still route pushed detail screens for:
   - `justdo://task/<task-id>`
   - `justdo://habit/<habit-id>`
@@ -111,6 +122,21 @@ implementation gaps, and checks to run before testing or shipping.
 - **Add sheet height.** The add sheet previously used a full-height `.large`
   detent. Fix: it now uses a partial-height detent and proto-like bottom-sheet
   layout.
+- **Auth session dropped after access-token expiry.** Closing the app for an
+  hour or longer and reopening it showed the auth landing, even though the
+  stored refresh token was still valid. Root cause: `AuthViewModel.reload()`
+  flipped to `.signedOut` the moment `SupabaseStoredSession.isExpired()`
+  returned `true`, with no refresh attempt, and `ContentView` only ran
+  `reload()` from `.task` so background → foreground transitions did not
+  trigger another reload either. Fix: `reload()` is now async and refreshes
+  via `SupabaseAuthClient.refreshSession(...)` before signing the user out
+  (transient errors keep the user signed in; HTTP 400/401 clears Keychain),
+  and `ContentView` watches `scenePhase` to re-run `reload()` on `.active`.
+  Pending follow-up: `AuthViewModel.reload()` and
+  `AppSyncCoordinator.validAppSession()` both refresh through the same
+  `KeychainSupabaseSessionStore`, so a foreground entry can fire two refresh
+  calls in quick succession; if Supabase refresh-token rotation breaks one of
+  them, serialize the store access or unify the refresh path.
 
 ## Remaining App Gaps
 
@@ -246,9 +272,29 @@ swift test
 
 ## Next Work
 
+> 2026-05-25: 운영 도메인 신규 Google 가입 차단 버그(handle_new_auth_user
+> 트리거 ON CONFLICT 매치 실패)는 마이그레이션
+> `supabase/migrations/20260525090000_categories_user_name_unique.sql`로 hosted
+> 적용 완료, 신규 가입 검증 정상.
+> iOS 세션이 1시간+ 종료 후 재진입 시 로그인 화면을 다시 띄우던 문제는
+> `AuthViewModel.reload()` async + `ContentView` scenePhase reload로 fix.
+> 실기기 1시간+ 종료 → 재진입 smoke가 다음 검증 항목이며 통과 후 commit.
+>
 > 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing +
 > Add Sheet + Task Detail edit + Stats + Settings + Widget 보정까지 통과.
 > 다음 차례는 문서/커밋 정리 후 잔여 실기기 smoke와 Toss 외부 의존 트랙.
+
+- [ ] **세션 자동 refresh 실기기 smoke (2026-05-25 추가)**.
+  - 시나리오: 정상 로그인 → 앱 종료(또는 백그라운드 보내기) → 1시간+ 대기 →
+    다시 열기.
+  - 기대: 로그인 루트 화면 없이 홈으로 바로 진입. 콘솔에 refresh 호출 로그
+    또는 sync 동작 확인.
+  - 통과 시: 미커밋 변경(`AuthViewModel.swift`, `ContentView.swift`)을
+    `feat(ios): auto-refresh auth session on foreground` 형태로 commit.
+  - 실패 시: `AuthViewModel.reload()` /
+    `AppSyncCoordinator.validAppSession()`의 동시 refresh 호출에 의한
+    refresh-token rotation 충돌 의심 → sessionStore 접근 직렬화 또는 refresh
+    경로 일원화 follow-up 진행.
 
 - [x] **Add Sheet 시각 검증**.
   - Reference: `reference/proto/sheet-detail.jsx` (PAddSheet).

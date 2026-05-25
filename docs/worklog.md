@@ -3341,3 +3341,115 @@ This document records coordination notes for work done with Codex and Claude Cod
   -destination 'generic/platform=iOS Simulator' build` passed after the
   Settings, Widget, and Home changes.
 - `swift test` passed with 40 tests.
+
+## 2026-05-25 Production signup DB error fix (categories ON CONFLICT)
+
+### User + Claude Code
+
+- 사용자가 운영 도메인 `https://www.justdo.co.kr`에서 처음 가입하는 Google
+  계정으로 로그인 시도 시 callback URL에 `server_error` / "Database error"가
+  표시되고 로그인 루트 페이지로 되돌아오는 증상을 보고함.
+- 원인 진단:
+  - `handle_new_auth_user()` 트리거 (`20260430090000_category_management.sql`,
+    `20260514061000_toss_billing.sql` 양쪽 모두)는 시드 카테고리를 넣을 때
+    `insert into public.categories ... on conflict (user_id, name) do nothing`
+    구문을 사용함.
+  - 그러나 `public.categories` 테이블에는 `(user_id, name)`에 매칭되는
+    unique index/constraint가 어디에도 정의되지 않음 (`init_schema.sql`에는
+    `idx_categories_user_id` 단독 non-unique만, `category_management.sql`에는
+    `idx_categories_user_position` 추가만).
+  - PostgreSQL은 `ON CONFLICT (col1, col2)` 추론 시 매칭 unique constraint가
+    없으면 즉시 "there is no unique or exclusion constraint matching the ON
+    CONFLICT specification" 에러를 던지고, 이게 Supabase auth 경로로 전파되어
+    "Database error saving new user" 응답이 됨. 사용자는 callback redirect URL
+    hash에 `error=server_error&error_code=unexpected_failure&error_description=...`
+    가 붙은 채 로그인 페이지로 되돌아옴.
+- 운영 LIVE 시점(2026-05-17) 이후 이 함정이 발견되지 않은 이유: 그 시점에
+  signup한 유저는 사용자 본인의 운영 계정 하나뿐이었고, 그 계정은 이미
+  hosted Supabase에 row가 존재해서 트리거가 다시 호출되지 않음. _신규_ 가입
+  이벤트가 운영에서 처음 일어난 게 이번 사례.
+- Fix:
+  - 신규 마이그레이션 `supabase/migrations/20260525090000_categories_user_name_unique.sql`
+    추가. `create unique index if not exists idx_categories_user_id_name on
+    public.categories(user_id, name)` 만 포함. 헤더 코멘트에 원인과 사전 확인
+    쿼리(`select user_id, name, count(*) ... having count(*) > 1`)를 명시.
+  - 사용자가 hosted Supabase SQL Editor에서 사전 확인 쿼리를 실행해 0행을
+    확인한 뒤 `supabase db push`로 적용. CLI 응답에서 `Applying migration
+    20260525090000_categories_user_name_unique.sql... Finished supabase db push.`
+    확인.
+- 적용 후 사용자가 새 Google 계정으로 재시도해 정상 로그인 / 홈 진입 확인.
+
+### Notes
+
+- ON CONFLICT 추론용 unique index 부재는 `category_management.sql`이 트리거를
+  rewrite한 2026-04-30 시점부터 잠재해 있던 latent bug. 이번 사례 전까지는
+  운영에서 새 user signup이 일어나지 않아서 노출되지 않았음.
+- Toss billing 마이그레이션(`20260514061000_toss_billing.sql`)이 트리거를 다시
+  CREATE OR REPLACE 하면서 같은 ON CONFLICT 구문을 그대로 유지함 — billing
+  follow-up에서도 발견되지 않은 것은 같은 이유 (signup 자체가 일어나지 않음).
+- 향후 트리거 본문에 ON CONFLICT를 추가할 때는 동일 마이그레이션에서 매칭 unique
+  index도 함께 보장하도록 주의. `init_schema.sql` 기준으로 `categories`는 같은
+  user 안에서 같은 이름 카테고리 생성 시도가 들어올 수 있는 surface (Phase 5.5
+  category management)였지만 unique 강제는 없었음. 이번 unique index 도입으로
+  앞으로는 같은 이름 중복 생성이 DB 레벨에서 막힘 — 앱 코드(`apps/web` 등)에서
+  중복 이름 막는 추가 가드는 별도 follow-up으로 검토 가능.
+- 운영 첫 가입 검증을 v1 ship 직전 production smoke 체크리스트에 명시할 것.
+
+## 2026-05-25 iOS auth session auto-refresh on foreground
+
+### User + Claude Code
+
+- 사용자가 "iOS 앱을 일정 시간 이상 닫았다가 다시 열면 로그인을 다시 해야 하는
+  로그인 루트 화면이 나온다. 사용자가 명시적으로 로그아웃하지 않았으면 로그인
+  상태가 유지되어야 한다"고 보고.
+- 원인 진단:
+  - `AuthViewModel.reload()`는 Keychain에 저장된 `SupabaseStoredSession`을
+    꺼내서 `isExpired()`만 확인하고, expired면 `refreshToken` 보유 여부와 관계
+    없이 즉시 `status = .signedOut`으로 전환했음.
+  - Supabase access token 기본 만료가 1시간이라서 앱을 1시간 이상 백그라운드
+    혹은 종료 상태에 두고 다시 열면, refresh token이 살아있어도 UI는 무조건
+    로그인 루트 화면을 띄움.
+  - 반면 `AppSyncCoordinator.validAppSession()`은 같은 sessionStore를 사용해
+    expired 만나면 `authClient.refreshSession(...)`으로 정상 refresh를 수행함.
+    UI 판정과 sync 판정이 갈라져 있어 일관성 깨짐.
+  - 추가로 `ContentView`의 `.task { auth.reload() }`는 view 첫 등장 시 한 번만
+    실행되어 백그라운드 → 포그라운드 복귀 시 reload가 다시 호출되지 않았음.
+- Fix (`apps/ios/JustDoApp/JustDoApp/AuthViewModel.swift`):
+  - `reload()`를 `func reload() async`로 변경. expired 세션을 만나면
+    `authClient.refreshSession(configuration:refreshToken:)`을 호출해서 새 세션을
+    Keychain에 저장한 뒤 `status = .signedIn`을 유지.
+  - refresh가 명확히 무효(HTTP 400/401, 즉 `SupabaseAuthError.httpStatus`)인
+    경우에만 Keychain을 비우고 `.signedOut`으로 전환. 네트워크 일시 실패 등
+    transient 에러에서는 기존 stored profile로 `.signedIn`을 유지해서 오프라인
+    관용성 확보 (sync 레이어가 다음 시도에 refresh 재시도).
+  - `case .working`일 때는 reload를 skip해서 진행 중인 `signIn(...)` flow와의
+    race를 차단.
+  - `private static func isRefreshTokenInvalid(_:) -> Bool` 헬퍼 추가.
+- Fix (`apps/ios/JustDoApp/JustDoApp/ContentView.swift`):
+  - `@Environment(\.scenePhase) private var scenePhase` 구독 추가.
+  - `.task { await auth.reload() }`로 signature 변경 대응.
+  - `.onChange(of: scenePhase) { _, newPhase in ... }`에서 `.active`로 진입할
+    때마다 `_Concurrency.Task { await auth.reload() }` 호출. 백그라운드 →
+    포그라운드 전환 시 만료 토큰을 자동 갱신.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 40 tests passed.
+- `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -destination 'generic/platform=iOS Simulator' build` -> `** BUILD SUCCEEDED **`.
+- 실기기(iPhone 14 Pro / iOS 26.5)에서 1시간+ 종료 후 재실행 시 로그인 화면
+  없이 홈으로 바로 진입되는지 검증은 사용자 트랙에서 진행 예정.
+
+### Notes (잠재 follow-up)
+
+- `AuthViewModel.reload()`와 `AppSyncCoordinator.validAppSession()`이 각자
+  독립적으로 같은 `KeychainSupabaseSessionStore`를 사용해 refresh API를 호출함.
+  포그라운드 진입 시 두 경로가 거의 동시에 refresh를 트리거할 수 있고, Supabase
+  refresh token rotation 정책에 따라 한쪽이 invalidated될 수 있음. 실사용에서
+  의심 증상이 보이면 sessionStore 접근을 actor로 직렬화하거나 한쪽으로
+  일원화하는 follow-up 검토.
+- Refresh token 자체가 만료(Supabase 기본 inactivity 30일)되어 400/401이
+  떨어지면 자동으로 sign out되지만, 그 경우 사용자에게 "세션이 만료되어 다시
+  로그인해 주세요" 식의 안내를 보여주는 UX는 별도로 없음. 필요 시 후속.
+- 본 fix는 `AuthViewModel`, `ContentView` 두 파일만 변경하며 `AppSyncCoordinator`
+  의 refresh 경로는 손대지 않음 — 기존 동작이 정상이라 그대로 둠.

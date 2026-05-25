@@ -12,6 +12,47 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
+## Where We Are (2026-05-25)
+
+- **운영 신규 가입 차단 버그 fix**. `handle_new_auth_user()` 트리거의
+  `insert into public.categories ... on conflict (user_id, name) do nothing`이
+  매칭 unique index 부재로 PostgreSQL 에러를 던지고 있었고, 이게 Supabase auth
+  경로로 전파되어 새 Google 계정으로 첫 가입하는 사용자가 "Database error
+  saving new user"로 callback redirect되어 로그인 루트 페이지로 돌아가는
+  증상을 일으켰음. 운영 첫 신규 가입 시도에서 발견. 신규 마이그레이션
+  `supabase/migrations/20260525090000_categories_user_name_unique.sql`로
+  `(user_id, name)` unique index 추가, hosted Supabase에 push 적용 완료
+  (사전에 `select user_id, name, count(*) from public.categories group by 1,2
+  having count(*) > 1` 0행 확인). 새 Google 계정 가입 → 홈 진입 정상 확인.
+  자세한 진단/경위: `worklog.md` 2026-05-25 "Production signup DB error fix"
+  엔트리.
+- **iOS 세션 자동 refresh + foreground reload fix**. iOS 앱을 1시간 이상
+  종료/백그라운드 상태에 두고 다시 열면, refresh token이 살아있어도
+  `AuthViewModel.reload()`가 expired 세션을 만나는 즉시 `.signedOut`으로
+  떨어뜨려 로그인 루트 화면이 다시 보이던 문제를 fix.
+  - `AuthViewModel.reload()`를 `async`로 바꿔, expired 만나면
+    `authClient.refreshSession(...)`으로 자동 갱신해 Keychain에 저장한 뒤
+    `.signedIn` 유지.
+  - refresh가 HTTP 400/401 (invalid_grant 류)인 경우에만 Keychain clear +
+    `.signedOut`. 네트워크 일시 실패 등 transient는 stored profile로
+    `.signedIn` 유지 (오프라인 관용).
+  - `ContentView`에 `@Environment(\.scenePhase)` 구독 추가. `.active` 진입
+    시 `auth.reload()` 재호출 — 백그라운드 → 포그라운드 복귀에서 토큰
+    자동 refresh.
+  - `swift test` 40개 + simulator build 통과. 실기기 1시간+ 종료 후 재진입
+    시나리오는 사용자 트랙에서 검증 예정.
+  - 잠재 follow-up: `AuthViewModel.reload()`와
+    `AppSyncCoordinator.validAppSession()`이 같은 sessionStore를 사용해
+    각자 refresh API를 호출할 수 있어, foreground 복귀 시 동시 호출이 Supabase
+    refresh-token rotation과 충돌할 가능성. 실사용 증상이 나오면 sessionStore
+    접근 직렬화 또는 한쪽 경로로 일원화하는 작업이 따로 필요.
+- **웹 세션 영속화는 변경 없음**. `@supabase/ssr` 기본값(쿠키 + 자동 refresh)을
+  그대로 사용하고 있어 별도 손댈 곳 없음. 본 fix는 iOS 한정.
+- 다음 우선순위: **iOS 실기기 1시간+ 재진입 smoke 검증 (사용자 트랙)** +
+  **iOS 잔여 실기기 smoke / TestFlight 준비** + **Toss 가맹점 심사 외부 트랙
+  병행**. Toss 가맹점 심사가 가장 긴 외부 차단(~2–3주)이라 사용자 외부 트랙
+  먼저 시작 권장.
+
 ## Where We Are (2026-05-22)
 
 - **iOS 실기기 검증 트랙 시작**. iPhone 14 Pro (iOS 26.5)에 JustDo 정식
