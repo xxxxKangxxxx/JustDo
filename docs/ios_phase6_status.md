@@ -132,11 +132,13 @@ implementation gaps, and checks to run before testing or shipping.
   via `SupabaseAuthClient.refreshSession(...)` before signing the user out
   (transient errors keep the user signed in; HTTP 400/401 clears Keychain),
   and `ContentView` watches `scenePhase` to re-run `reload()` on `.active`.
-  Pending follow-up: `AuthViewModel.reload()` and
+  Verified on iPhone 14 Pro / iOS 26.5 via 1-hour close-and-relaunch smoke
+  on 2026-05-25. Watch item: `AuthViewModel.reload()` and
   `AppSyncCoordinator.validAppSession()` both refresh through the same
   `KeychainSupabaseSessionStore`, so a foreground entry can fire two refresh
-  calls in quick succession; if Supabase refresh-token rotation breaks one of
-  them, serialize the store access or unify the refresh path.
+  calls in quick succession; the 2026-05-25 smoke did not surface this, but
+  if Supabase refresh-token rotation later breaks one of them, serialize
+  the store access or unify the refresh path.
 
 ## Remaining App Gaps
 
@@ -277,24 +279,23 @@ swift test
 > `supabase/migrations/20260525090000_categories_user_name_unique.sql`로 hosted
 > 적용 완료, 신규 가입 검증 정상.
 > iOS 세션이 1시간+ 종료 후 재진입 시 로그인 화면을 다시 띄우던 문제는
-> `AuthViewModel.reload()` async + `ContentView` scenePhase reload로 fix.
-> 실기기 1시간+ 종료 → 재진입 smoke가 다음 검증 항목이며 통과 후 commit.
+> `AuthViewModel.reload()` async + `ContentView` scenePhase reload로 fix됨.
+> iPhone 14 Pro / iOS 26.5에서 1시간+ 종료 후 재진입 smoke 통과 확인.
 >
 > 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing +
 > Add Sheet + Task Detail edit + Stats + Settings + Widget 보정까지 통과.
 > 다음 차례는 문서/커밋 정리 후 잔여 실기기 smoke와 Toss 외부 의존 트랙.
 
-- [ ] **세션 자동 refresh 실기기 smoke (2026-05-25 추가)**.
+- [x] **세션 자동 refresh 실기기 smoke (2026-05-25 통과)**.
   - 시나리오: 정상 로그인 → 앱 종료(또는 백그라운드 보내기) → 1시간+ 대기 →
     다시 열기.
-  - 기대: 로그인 루트 화면 없이 홈으로 바로 진입. 콘솔에 refresh 호출 로그
-    또는 sync 동작 확인.
-  - 통과 시: 미커밋 변경(`AuthViewModel.swift`, `ContentView.swift`)을
-    `feat(ios): auto-refresh auth session on foreground` 형태로 commit.
-  - 실패 시: `AuthViewModel.reload()` /
-    `AppSyncCoordinator.validAppSession()`의 동시 refresh 호출에 의한
-    refresh-token rotation 충돌 의심 → sessionStore 접근 직렬화 또는 refresh
-    경로 일원화 follow-up 진행.
+  - 결과: 로그인 루트 화면 없이 홈으로 바로 진입 확인. `AuthViewModel.reload()`
+    의 async refresh + `ContentView` scenePhase reload 경로가 의도대로 동작.
+  - Watch item: `AuthViewModel.reload()` /
+    `AppSyncCoordinator.validAppSession()`의 동시 refresh 호출이 Supabase
+    refresh-token rotation과 충돌할 가능성은 이번 smoke에서 증상으로
+    드러나지 않았음. 추후 unexpected sign-out이 보이면 sessionStore 접근
+    직렬화 또는 refresh 경로 일원화 follow-up 진행.
 
 - [x] **Add Sheet 시각 검증**.
   - Reference: `reference/proto/sheet-detail.jsx` (PAddSheet).

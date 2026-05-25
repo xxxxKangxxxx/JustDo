@@ -3437,8 +3437,10 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `cd apps/ios && swift test` -> 40 tests passed.
 - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
   -destination 'generic/platform=iOS Simulator' build` -> `** BUILD SUCCEEDED **`.
-- 실기기(iPhone 14 Pro / iOS 26.5)에서 1시간+ 종료 후 재실행 시 로그인 화면
-  없이 홈으로 바로 진입되는지 검증은 사용자 트랙에서 진행 예정.
+- 실기기(iPhone 14 Pro / iOS 26.5)에서 1시간+ 종료 후 재실행 시 로그인 루트
+  화면 없이 홈으로 바로 진입되는 것 확인 (사용자 검증). 잠재 follow-up으로
+  남긴 sessionStore 동시 refresh race는 이번 smoke에서 증상으로 드러나지
+  않음.
 
 ### Notes (잠재 follow-up)
 

@@ -39,10 +39,11 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 그대로 들고 있던 latent bug였으므로 향후 트리거 본문에 ON CONFLICT를 추가할
 > 때는 매칭 unique index를 같은 마이그레이션에서 함께 보장할 것.
 
-> **2026-05-25 iOS 세션 자동 refresh fix (실기기 검증 대기)** — iOS 앱을
-> 1시간 이상 종료/백그라운드 상태에 두고 다시 열면, refresh token이 살아있어도
+> **2026-05-25 iOS 세션 자동 refresh fix LIVE** — iOS 앱을 1시간 이상
+> 종료/백그라운드 상태에 두고 다시 열면, refresh token이 살아있어도
 > `AuthViewModel.reload()`가 expired 세션을 만나는 즉시 `.signedOut`으로
-> 떨어뜨려 로그인 루트 화면이 다시 표시되던 증상을 fix. 변경:
+> 떨어뜨려 로그인 루트 화면이 다시 표시되던 증상을 fix. iPhone 14 Pro / iOS
+> 26.5 실기기에서 1시간+ 종료 후 재진입 시 로그인 유지 확인 완료. 변경:
 > `apps/ios/JustDoApp/JustDoApp/AuthViewModel.swift`에서 `reload()`를 async로
 > 바꿔 expired 세션을 만나면 `authClient.refreshSession(...)`으로 자동 갱신
 > (HTTP 400/401만 sign-out, 그 외 transient는 stored profile로 `.signedIn`
@@ -56,24 +57,20 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 실사용 증상이 나오면 sessionStore 접근 직렬화 또는 한쪽 경로 일원화 follow-up.
 
 > **다음 작업자가 픽업할 우선순위 (2026-05-25 갱신)**:
-> 1. **iOS 세션 자동 refresh 실기기 검증 (사용자 트랙)**. iPhone 14 Pro /
->    iOS 26.5에서 정상 로그인 → 1시간+ 앱 종료 또는 백그라운드 → 다시 열기
->    → 로그인 루트 없이 홈으로 바로 진입되는지 smoke. 통과하면 commit + 문서
->    유지. 실패하면 위 follow-up (sessionStore 직렬화 / refresh 경로 일원화)
->    먼저 진행.
-> 2. **iOS 잔여 실기기 smoke / TestFlight 준비**. Auth landing, Home,
+> 1. **iOS 잔여 실기기 smoke / TestFlight 준비**. Auth landing, Home,
 >    Add Sheet, Task Detail edit, Stats, Settings, Widget 보정은 iPhone 14 Pro
 >    iOS 26.5 실기기 피드백을 반영했고 simulator build/shared tests 통과.
->    남은 것은 현재 UI를 한 번 더 실제 기기에서 훑는 smoke와 배포 준비.
-> 3. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
+>    세션 자동 refresh도 1시간+ 종료 후 재진입 smoke 통과. 남은 것은 현재
+>    UI를 한 번 더 실제 기기에서 훑는 smoke와 배포 준비.
+> 2. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서. 코드
 >    트랙은 이와 병렬로 진행 가능. 체크리스트:
 >    `docs/toss_merchant_review_plan.md`.
-> 4. **Pro Checkout B6 외부 의존 검증** — route 단위 테스트, Toss SDK
+> 3. **Pro Checkout B6 외부 의존 검증** — route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 운영/테스트 Toss 키를 이용한 E2E smoke와 Toss 공식 dashboard
 >    secret/header 확인 후 webhook signature 검증.
-> 5. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
+> 4. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
 >    invocation에 SQS DLQ 연결. Toss 가맹점 심사 통과 + live billing 활성화
 >    직전에 진행.
 >
@@ -250,13 +247,14 @@ they belong to other projects on this machine.
 
 ## Working Tree State
 
-After the 2026-05-25 signup fix + iOS auth refresh commits, the working tree
-is clean once this docs commit lands. The supabase migration was applied to
-hosted Supabase via `supabase db push` on 2026-05-25 before commit. The iOS
-auth refresh change is committed locally but the real-device 1-hour
-close-and-relaunch smoke is still pending; if that smoke fails, the
-follow-up (sessionStore serialization or unified refresh path) should ship
-as a separate commit instead of reverting.
+After the 2026-05-25 signup fix + iOS auth refresh commits and the
+verification capture, the working tree is clean once this docs commit
+lands and is pushed to `origin/main`. The supabase migration was applied
+to hosted Supabase via `supabase db push` on 2026-05-25 before commit. The
+iOS auth refresh change passed the real-device 1-hour close-and-relaunch
+smoke on iPhone 14 Pro / iOS 26.5; the sessionStore concurrent-refresh
+race documented as a follow-up did not surface during the smoke, so it
+stays as a watch item rather than an active task.
 
 Latest local commits to check before continuing (2026-05-25):
 
@@ -423,12 +421,14 @@ e65a405 feat: add app icon and web favicon
 32d619a docs: confirm B3 first scheduled invocation
 ```
 
-Still pending:
+Watch items (not active tasks):
 
-- Real-device 1-hour close-and-relaunch smoke for the iOS auth session
-  refresh fix (iPhone 14 Pro iOS 26.5). On failure, ship the sessionStore
-  serialization / unified refresh-path follow-up as a separate commit.
-- Push these local commits to `origin/main` once smoke confirms behaviour.
+- `AuthViewModel.reload()` and `AppSyncCoordinator.validAppSession()` both
+  refresh through the same `KeychainSupabaseSessionStore`, so a foreground
+  entry can fire two refresh calls back-to-back. The 2026-05-25 real-device
+  smoke did not show a Supabase refresh-token rotation conflict, but if a
+  future smoke surfaces one (e.g. unexpected sign-outs after a foreground
+  return), serialize the store access or unify the refresh path.
 
 ## App Shape Now
 
@@ -841,18 +841,9 @@ Recommended immediate next steps:
 
 > 2026-05-25 기준 — 배포 트랙은 운영 LIVE로 종료됨. Phase 7 Web Desktop
 > Redesign은 Pro checkout 운영 확인/외부 의존만 남아 있고, iOS 잔여 작업은
-> 실기기 시각 검증 + 세션 자동 refresh 실기기 smoke 중심. Toss 가맹점 심사는
-> 가장 긴 차단 항목 (~2–3주)이라 사용자 외부 트랙으로 먼저 시작하는 것이 유리.
-> 운영 신규 가입 차단 버그는 2026-05-25 fix LIVE.
-
-0. **iOS 세션 자동 refresh 실기기 smoke (사용자 트랙, 가장 가까운 검증)**
-   - 시나리오: 정상 로그인 → 앱 종료(또는 백그라운드) → 1시간+ 대기 → 다시 열기.
-   - 기대 동작: 로그인 루트 화면을 거치지 않고 홈으로 바로 진입.
-   - 통과하면 위 "Working Tree State"의 commit 순서대로 push.
-   - 실패하면 `AuthViewModel.reload()` /
-     `AppSyncCoordinator.validAppSession()` 동시 refresh 호출에 의한
-     refresh-token rotation 충돌 가능성 의심 → sessionStore 접근 직렬화 또는
-     refresh 경로 단일화 follow-up 진행.
+> 실기기 시각 검증 중심. Toss 가맹점 심사는 가장 긴 차단 항목 (~2–3주)이라
+> 사용자 외부 트랙으로 먼저 시작하는 것이 유리. 운영 신규 가입 차단 버그
+> 및 iOS 세션 자동 refresh fix는 모두 2026-05-25 LIVE 검증 완료.
 
 1. **Toss 가맹점 심사 준비 (사용자 외부 트랙, 가장 긴 차단 항목)**
    - 순서: 사업자등록 (개인사업자) → 통신판매업 신고 → Toss Payments 가맹점
@@ -937,9 +928,9 @@ Recommended immediate next steps:
   적용 완료. 같은 날 iOS 세션이 1시간+ 종료 후 재진입 시 로그인 루트로
   떨어지던 문제는 `AuthViewModel.reload()` async 변환 + scenePhase reload로
   fix됨 (`apps/ios/JustDoApp/JustDoApp/AuthViewModel.swift`,
-  `apps/ios/JustDoApp/JustDoApp/ContentView.swift`). 이 두 변경은 본 handoff
-  시점에 _아직 미커밋_이고, iOS 변경분은 실기기 1시간+ 종료 후 재진입 smoke
-  통과 후 commit하기로 했음. `worklog.md` 2026-05-25 두 엔트리를 먼저 읽기.
+  `apps/ios/JustDoApp/JustDoApp/ContentView.swift`). 두 변경 모두 커밋 완료,
+  iOS 세션 fix는 iPhone 14 Pro / iOS 26.5 실기기에서 1시간+ 종료 후 재진입
+  smoke 통과. `worklog.md` 2026-05-25 두 엔트리를 먼저 읽기.
 
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5, `next_steps.md` Phase 7 + Deployment

@@ -39,19 +39,20 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - `ContentView`에 `@Environment(\.scenePhase)` 구독 추가. `.active` 진입
     시 `auth.reload()` 재호출 — 백그라운드 → 포그라운드 복귀에서 토큰
     자동 refresh.
-  - `swift test` 40개 + simulator build 통과. 실기기 1시간+ 종료 후 재진입
-    시나리오는 사용자 트랙에서 검증 예정.
-  - 잠재 follow-up: `AuthViewModel.reload()`와
+  - `swift test` 40개 + simulator build 통과. iPhone 14 Pro / iOS 26.5
+    실기기에서 1시간+ 종료 후 재진입 시 로그인 루트 없이 홈으로 바로 진입
+    되는 것 확인 완료.
+  - 잠재 follow-up (watch item, 미발현): `AuthViewModel.reload()`와
     `AppSyncCoordinator.validAppSession()`이 같은 sessionStore를 사용해
     각자 refresh API를 호출할 수 있어, foreground 복귀 시 동시 호출이 Supabase
-    refresh-token rotation과 충돌할 가능성. 실사용 증상이 나오면 sessionStore
-    접근 직렬화 또는 한쪽 경로로 일원화하는 작업이 따로 필요.
+    refresh-token rotation과 충돌할 가능성. 이번 smoke에서는 증상 없음.
+    추후 unexpected sign-out이 보이면 sessionStore 접근 직렬화 또는 한쪽
+    경로로 일원화하는 작업이 따로 필요.
 - **웹 세션 영속화는 변경 없음**. `@supabase/ssr` 기본값(쿠키 + 자동 refresh)을
   그대로 사용하고 있어 별도 손댈 곳 없음. 본 fix는 iOS 한정.
-- 다음 우선순위: **iOS 실기기 1시간+ 재진입 smoke 검증 (사용자 트랙)** +
-  **iOS 잔여 실기기 smoke / TestFlight 준비** + **Toss 가맹점 심사 외부 트랙
-  병행**. Toss 가맹점 심사가 가장 긴 외부 차단(~2–3주)이라 사용자 외부 트랙
-  먼저 시작 권장.
+- 다음 우선순위: **iOS 잔여 실기기 smoke / TestFlight 준비** +
+  **Toss 가맹점 심사 외부 트랙 병행**. Toss 가맹점 심사가 가장 긴 외부
+  차단(~2–3주)이라 사용자 외부 트랙 먼저 시작 권장.
 
 ## Where We Are (2026-05-22)
 
