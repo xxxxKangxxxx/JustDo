@@ -46,7 +46,7 @@ final class AuthViewModel: ObservableObject {
         )
     }
 
-    func reload() {
+    func reload() async {
         #if DEBUG
         if JustDoUITestSupport.isEnabled {
             profile = AuthProfile(email: "uitest@justdo.local", displayName: "UI Test", avatarURL: nil)
@@ -55,24 +55,72 @@ final class AuthViewModel: ObservableObject {
         }
         #endif
 
+        if case .working = status {
+            return
+        }
+
+        guard let configuration = configurationLoader.load() else {
+            profile = nil
+            status = .missingConfiguration
+            return
+        }
+
+        let storedSession: SupabaseStoredSession?
         do {
-            guard configurationLoader.load() != nil else {
-                profile = nil
-                status = .missingConfiguration
-                return
-            }
-            let session = try sessionStore.load()
-            if let session, !session.isExpired() {
-                profile = session.profile
-                status = .signedIn
-            } else {
-                profile = nil
-                status = .signedOut
-            }
+            storedSession = try sessionStore.load()
         } catch {
             profile = nil
             status = .failed(error.localizedDescription)
+            return
         }
+
+        guard let session = storedSession else {
+            profile = nil
+            status = .signedOut
+            return
+        }
+
+        if !session.isExpired() {
+            profile = session.profile
+            status = .signedIn
+            return
+        }
+
+        guard let refreshToken = session.refreshToken else {
+            try? sessionStore.clear()
+            profile = nil
+            status = .signedOut
+            return
+        }
+
+        do {
+            let refreshed = try await authClient.refreshSession(
+                configuration: configuration,
+                refreshToken: refreshToken
+            )
+            try sessionStore.save(refreshed)
+            profile = refreshed.profile
+            status = .signedIn
+        } catch {
+            if Self.isRefreshTokenInvalid(error) {
+                try? sessionStore.clear()
+                profile = nil
+                status = .signedOut
+            } else {
+                profile = session.profile
+                status = .signedIn
+            }
+        }
+    }
+
+    private static func isRefreshTokenInvalid(_ error: Error) -> Bool {
+        guard let authError = error as? SupabaseAuthError else {
+            return false
+        }
+        if case .httpStatus(let code, _) = authError {
+            return code == 400 || code == 401
+        }
+        return false
     }
 
     func signIn(with provider: SupabaseAuthProvider) async {

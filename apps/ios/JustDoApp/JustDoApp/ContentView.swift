@@ -16,6 +16,7 @@ struct ContentView: View {
     @ObservedObject private var syncStatus: AppSyncStatusStore
     @State private var navigationPath = NavigationPath()
     @State private var didOpenInitialUITestURL = false
+    @Environment(\.scenePhase) private var scenePhase
     var snapshotStore: CoreDataAppSnapshotStore?
     var onSessionChanged: () async -> Void = {}
 
@@ -43,8 +44,12 @@ struct ContentView: View {
             }
         }
         .task {
-            auth.reload()
+            await auth.reload()
             openInitialUITestURLIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            _Concurrency.Task { await auth.reload() }
         }
         .onOpenURL { url in
             open(url)
