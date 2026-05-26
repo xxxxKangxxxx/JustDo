@@ -410,7 +410,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Progress label uses the active mode's task-only or habit-only
     `completed/total`.
   - Completed rows are displayed below incomplete rows.
-- [ ] Real-device iOS visual verification against `reference/proto/`.
+- [x] Real-device iOS visual verification against `reference/proto/`.
   - Setup (2026-05-22): iPhone 14 Pro iOS 26.5 paired with Xcode 26.3,
     Developer Team signing active, Bundle ID 운영용 `kr.justdo.app`로 확정,
     wireless debugging 자동 활성.
@@ -430,6 +430,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     계정/profile, 알림/표시 picker, data/legal 섹션 보강. Home-screen widget은
     row 전체 탭 완료 토글, mode별 count, font/check-dot/spacing 보정.
     Lock-screen widget은 Task-only accessory로 분리.
+  - Session refresh (2026-05-25): 1시간+ 종료 후 재진입 시 로그인 루트 없이
+    홈으로 진입하는 smoke 통과.
+  - Remaining: 출시 전 전체 smoke와 TestFlight/App Store 준비.
 - [x] Add route tests for widget deep-link opening.
   - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
     `JustDoDetailRoute`, and `ContentView` uses that route in its

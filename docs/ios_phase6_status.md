@@ -142,8 +142,7 @@ implementation gaps, and checks to run before testing or shipping.
 
 ## Remaining App Gaps
 
-- Real-device visual verification (2026-05-22 in progress on iPhone 14 Pro
-  iOS 26.5):
+- Real-device visual verification (iPhone 14 Pro / iOS 26.5):
   - [x] Auth landing — passed after `.preferredColorScheme(.light)` fix.
   - [x] Home calendar / panel — passed after the bottom-sheet redesign,
     cell-tap expansion, and the calendar/sheet swipe gestures.
@@ -284,7 +283,8 @@ swift test
 >
 > 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing +
 > Add Sheet + Task Detail edit + Stats + Settings + Widget 보정까지 통과.
-> 다음 차례는 문서/커밋 정리 후 잔여 실기기 smoke와 Toss 외부 의존 트랙.
+> 2026-05-25: 세션 자동 refresh smoke까지 통과. 다음 차례는 출시 전 전체
+> smoke와 TestFlight/App Store 준비, 그리고 Toss 외부 의존 트랙.
 
 - [x] **세션 자동 refresh 실기기 smoke (2026-05-25 통과)**.
   - 시나리오: 정상 로그인 → 앱 종료(또는 백그라운드 보내기) → 1시간+ 대기 →

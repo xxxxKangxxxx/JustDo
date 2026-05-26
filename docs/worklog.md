@@ -3455,3 +3455,32 @@ This document records coordination notes for work done with Codex and Claude Cod
   로그인해 주세요" 식의 안내를 보여주는 UX는 별도로 없음. 필요 시 후속.
 - 본 fix는 `AuthViewModel`, `ContentView` 두 파일만 변경하며 `AppSyncCoordinator`
   의 refresh 경로는 손대지 않음 — 기존 동작이 정상이라 그대로 둠.
+
+## 2026-05-25 Documentation state cleanup
+
+### Codex
+
+- 사용자가 "README 문서 포함해서 문서들 정리부터 진행"을 요청.
+- 최신 기준을 `docs/claude_handoff.md`, `docs/next_steps.md`,
+  `docs/ios_phase6_status.md`의 2026-05-25 상태로 잡고 오래된 표현을 정리.
+- 정리 내용:
+  - `README.md`와 `apps/ios/README.md`의 "Settings -> Widget이 다음 순서"
+    문구를 제거하고, Auth/Home/Add/Detail/Stats/Settings/Widget 및 1시간+
+    세션 refresh smoke가 통과했으며 남은 iOS 트랙은 최종 whole-app smoke와
+    TestFlight/App Store 준비라고 갱신.
+  - `docs/next_steps.md`의 Real-device iOS visual verification 체크박스를
+    완료로 변경하고 2026-05-25 session refresh smoke 완료 및 남은 작업을
+    명시.
+  - `docs/ios_phase6_status.md`의 "in progress" 표현을 제거하고 다음 작업을
+    최종 smoke/TestFlight 준비로 정리.
+  - `docs/ios_phase6_plan.md`의 오래된 "Future Xcode targets" 명칭을 현재
+    target layout으로 갱신하고 Next Implementation Steps를 완료/잔여 상태로
+    정리.
+  - `docs/claude_handoff.md` 하단 중간 섹션의 오래된 B3/Amplify/iOS 상태를
+    2026-05-25 기준으로 맞춤.
+
+### Verification
+
+- `rg`로 stale phrase 재검색: 실제 상충 표현 없음. `B3 first scheduled
+  invocation`은 과거 커밋명으로만 남아 있어 유지.
+- `git diff --check` 통과.

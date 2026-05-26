@@ -328,20 +328,22 @@ iOS build/test commands below before doing the next real-device smoke pass.
       - app-shell tests mock the Toss SDK client and verify Settings -> 구독
         -> `Toss 결제 연결` -> upgrade modal -> Toss billing auth request.
       - Current web suite: `npm run test` passes 100 tests.
-    - Remaining: B3 first scheduled invocation confirmation, Toss test-key E2E
-      smoke, and Toss webhook signature verification once official dashboard
-      secret/header details are available.
+    - B3 cron is complete: Lambda + EventBridge schedule + manual test + first
+      two scheduled invocations confirmed. Remaining billing items are Toss
+      test-key E2E smoke, Toss webhook signature verification once official
+      dashboard secret/header details are available, and live-billing DLQ.
     - v1 keeps Toss Payments billing. Naver Pay recurring, Kakao Pay recurring,
       and PortOne multi-PG are documented as future payment-method expansion.
-  - Amplify 배포는 Phase 7 완료 후. v3까지 Android 사용자는 데스크탑 web 으로 우회.
+  - Amplify/Route 53 production deployment is live at
+    `https://www.justdo.co.kr`. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
-- Phase 6 iOS / Widget — current state (2026-05-22):
+- Phase 6 iOS / Widget — current state (2026-05-25):
   - `JustDoShared` includes Swift domain models, mutation queue schema, drift
     fixtures, Core Data model/mappers, App Group snapshot/mutation stores,
     Supabase REST read/flush sync, and WidgetKit display models.
-  - Real-device verification track is active on iPhone 14 Pro / iOS 26.5
-    against Xcode 26.3 / macOS Tahoe 26.3.1.
+  - Real-device verification ran on iPhone 14 Pro / iOS 26.5 against Xcode
+    26.3 / macOS Tahoe 26.3.1.
   - Xcode project targets (Bundle ID 2026-05-22 갱신):
     - `JustDoApp` (`kr.justdo.app`)
     - `JustDoWidgetExtension` (`kr.justdo.app.widget`)
@@ -351,8 +353,8 @@ iOS build/test commands below before doing the next real-device smoke pass.
   - Native signed-in shell includes Home / Stats / Settings based on
     `reference/proto/`.
   - Settings includes sync status/error UI.
-  - Home calendar task bars/no-dot rendering and resizable selected-day panel
-    were implemented.
+  - Home calendar task bars/no-dot rendering and the selected-day bottom sheet
+    modal were implemented and verified.
   - Detail edit/delete from pushed task/habit detail screens is implemented.
   - Widget Task/Habit mode toggle is implemented for small/medium/large widgets.
   - Home-screen widget row text no longer deep-links; tapping the row toggles
@@ -366,9 +368,12 @@ iOS build/test commands below before doing the next real-device smoke pass.
     - `cd apps/ios && swift test` -> pass, 40 tests.
     - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` -> pass, 2 UI tests.
     - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
-  - Remaining iOS work is mostly real-device visual verification. Because this
-    is a native SwiftUI/Xcode app, do **not** use Expo Go; install directly from
-    Xcode to a real iPhone or use TestFlight later.
+  - Auth landing, Home, Add Sheet, Task Detail edit, Stats, Settings, Widget,
+    and 1-hour+ auth session refresh smoke passed on the configured real
+    device. Remaining iOS work is final whole-app smoke and TestFlight/App
+    Store preparation. Because this is a native SwiftUI/Xcode app, do **not**
+    use Expo Go; install directly from Xcode to a real iPhone or use TestFlight
+    later.
   - Both targets share App Group `group.kr.justdo.app`.
   - Auto-generated `JustDoWidgetControl` (iOS 18-only) removed.
   - `JustDoWidget.swift` now reads `widget_snapshot.json` from the App Group,
@@ -376,8 +381,6 @@ iOS build/test commands below before doing the next real-device smoke pass.
     `JustDoWidgetView` for small / medium / large widget families.
   - The main app has `WidgetSnapshotWriter` and writes
     `widget_snapshot.json` on launch/foreground from the Core Data mirror.
-    The mirror is currently seeded locally until the app wires Supabase Auth
-    credentials into sync.
   - `JustDoShared/Sync/SupabaseRestSync.swift` contains the first Supabase REST
     read-sync client for categories, tasks, tags/task_tags, habits, and habit
     logs. It maps account rows into `AppSnapshot` and replaces the Core Data
@@ -389,9 +392,11 @@ iOS build/test commands below before doing the next real-device smoke pass.
     mirror fallback.
   - `JustDoApp/SupabaseAuthClient.swift` implements a minimal REST/PKCE OAuth
     flow using `ASWebAuthenticationSession`, plus refresh-token exchange.
-  - `JustDoApp/AuthViewModel.swift` and `ContentView.swift` expose minimal
-    Google/Apple sign-in and sign-out controls. Successful sign-in writes the
-    Keychain session and triggers the existing widget snapshot refresh path.
+  - `JustDoApp/AuthViewModel.swift` and `ContentView.swift` expose Google/Apple
+    sign-in and sign-out controls. Successful sign-in writes the Keychain
+    session and triggers the existing widget snapshot refresh path. Expired
+    access tokens are refreshed on reload/foreground; HTTP 400/401 refresh
+    failures sign out, transient failures keep the stored profile signed in.
 
 ## v1 Open Decisions — all closed
 
@@ -409,6 +414,8 @@ See `docs/worklog.md` 2026-04-29 entries for full rationale.
 ## Latest Implementation Commit Trail
 
 ```text
+230a979 docs: capture ios session refresh real-device smoke pass
+63db17a docs: capture 2026-05-25 signup fix and ios session refresh
 80381c7 feat(ios): auto-refresh auth session on foreground
 21ee0cd feat(supabase): add categories user-name unique index for signup trigger
 83a0e61 docs: clarify claude handoff state

@@ -26,13 +26,14 @@ apps/ios/
       MutationQueueSchema.swift
 ```
 
-Future Xcode targets:
+Current Xcode targets:
 
 ```text
-JustDoApp        SwiftUI application
-JustDoWidget     WidgetKit extension
-JustDoShared     Shared domain/storage/sync module
-JustDoTests      Domain and storage tests
+JustDoApp                 SwiftUI application
+JustDoWidgetExtension     WidgetKit extension
+JustDoShared              Shared domain/storage/sync module
+JustDoSharedTests         Domain/storage/widget drift tests
+JustDoAppUITests          Deep-link UI tests
 ```
 
 ## Domain Mapping
@@ -134,7 +135,8 @@ mutations, requests a timeline reload, and lets the app drain App Group
 
 ## Next Implementation Steps
 
-1. Create Xcode project/targets around `JustDoShared`.
+1. Create Xcode project/targets around `JustDoShared`. (Done under
+   `apps/ios/JustDoApp`.)
 2. Add drift tests that encode/decode sample JSON matching the web persisted
    snapshot and mutation queue. (Done in `apps/ios/Tests/JustDoSharedTests`.)
 3. Implement Core Data model and mappers from Swift domain structs. (Initial
@@ -145,5 +147,12 @@ mutations, requests a timeline reload, and lets the app drain App Group
    (Initial SwiftUI layouts done in `JustDoShared/Widgets`; Xcode widget
    extension now hosts them through `AppGroupWidgetSnapshotStore` and
    `JustDoWidgetDisplayModelFactory`.)
-6. Add app-side `widget_snapshot.json` writer. (Done with a bootstrap snapshot
-   source; real native app data wiring remains.)
+6. Add app-side `widget_snapshot.json` writer. (Done. The app writes snapshots
+   from the Core Data mirror on launch/foreground.)
+7. Complete native Home / Stats / Settings, Add Sheet, detail edit/delete,
+   sync status UI, hosted OAuth/offline sync, widget interactions, and
+   real-device visual verification. (Done through the 2026-05-22 iPhone 14 Pro
+   pass.)
+8. Fix auth session persistence after access-token expiry and verify a 1-hour+
+   close/reopen smoke. (Done on 2026-05-25.)
+9. Remaining: final whole-app smoke and TestFlight/App Store preparation.

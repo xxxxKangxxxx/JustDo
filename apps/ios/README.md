@@ -68,6 +68,7 @@ swift test
 ```
 
 The latest full simulator checks are tracked in `docs/claude_handoff.md`.
-Real-device visual verification is currently in progress on iPhone 14 Pro /
-iOS 26.5. Auth landing, Home, Add Sheet, and Stats have passed; the next
-screens are Settings and Widget.
+Real-device visual verification on iPhone 14 Pro / iOS 26.5 has passed for
+Auth landing, Home, Add Sheet, Task Detail, Stats, Settings, and Widget. The
+2026-05-25 1-hour+ auth session refresh smoke also passed. The remaining iOS
+track is final whole-app smoke and TestFlight/App Store preparation.
