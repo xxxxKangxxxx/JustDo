@@ -100,18 +100,18 @@ private struct WidgetItemList: View {
             ForEach(items) { item in
                 HStack(spacing: 7) {
                     CheckDot(item: item)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.title)
-                            .font(.system(size: 11, weight: .medium))
+                    Text(item.title)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .strikethrough(item.isDone)
+                        .foregroundStyle(item.isDone ? .secondary : .primary)
+                    Spacer(minLength: 4)
+                    if item.kind == .task, let subtitle = item.subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
                             .lineLimit(1)
-                            .strikethrough(item.isDone)
-                            .foregroundStyle(item.isDone ? .secondary : .primary)
-                        if let subtitle = item.subtitle {
-                            Text(subtitle)
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
                     }
                 }
             }

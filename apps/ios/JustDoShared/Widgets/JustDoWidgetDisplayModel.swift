@@ -144,23 +144,25 @@ public enum JustDoWidgetDisplayModelFactory {
 
     private static func allItems(from snapshot: WidgetSnapshot) -> [JustDoWidgetItem] {
         let categoriesByID = Dictionary(uniqueKeysWithValues: snapshot.categories.map { ($0.id, $0) })
-        let taskItems = snapshot.tasks.map { task -> JustDoWidgetItem in
+        let taskItems = snapshot.tasks
+            .filter { $0.startDate <= snapshot.selectedDate && snapshot.selectedDate <= $0.endDate }
+            .map { task -> JustDoWidgetItem in
             let categoryColor = task.categoryID.flatMap { categoriesByID[$0]?.color } ?? "#6D7694"
             return JustDoWidgetItem(
                 id: task.id,
                 title: task.title,
-                subtitle: task.scheduledTime,
+                subtitle: formatClock(task.scheduledTime),
                 isDone: task.isCompleted,
                 colorHex: categoryColor,
                 kind: .task
             )
         }
 
-        let habitItems = snapshot.habits.map { habit in
+        let habitItems = snapshot.habits.filter { habitActiveOn($0, iso: snapshot.selectedDate) }.map { habit in
             JustDoWidgetItem(
                 id: habit.id,
                 title: "\(habit.emoji) \(habit.title)",
-                subtitle: habit.reminderTime,
+                subtitle: formatClock(habit.reminderTime),
                 isDone: habit.log[snapshot.selectedDate] == 1,
                 colorHex: habitColor,
                 kind: .habit
@@ -168,6 +170,37 @@ public enum JustDoWidgetDisplayModelFactory {
         }
 
         return taskItems + habitItems
+    }
+
+    private static func habitActiveOn(_ habit: Habit, iso: String) -> Bool {
+        switch habit.recurType {
+        case .daily:
+            return true
+        case .weekly:
+            guard let weekday = weekdayIndex(for: iso) else {
+                return false
+            }
+            return habit.recurDays?.contains(weekday) ?? false
+        }
+    }
+
+    private static func weekdayIndex(for iso: String) -> Int? {
+        guard let date = parseDate(iso) else {
+            return nil
+        }
+        return gregorianCalendar.component(.weekday, from: date) - 1
+    }
+
+    private static func formatClock(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else {
+            return nil
+        }
+        let parts = value.split(separator: ":").compactMap { Int($0) }
+        guard let hour = parts.first else {
+            return value
+        }
+        let minute = parts.dropFirst().first ?? 0
+        return String(format: "%02d:%02d", min(max(hour, 0), 23), min(max(minute, 0), 59))
     }
 
     private static func prioritizedItems(_ items: [JustDoWidgetItem]) -> [JustDoWidgetItem] {

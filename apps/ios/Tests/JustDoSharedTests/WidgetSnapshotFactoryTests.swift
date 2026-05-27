@@ -2,7 +2,7 @@ import XCTest
 @testable import JustDoShared
 
 final class WidgetSnapshotFactoryTests: XCTestCase {
-    func testFactoryKeepsOnlySelectedDateTasksAndActiveHabits() {
+    func testFactoryKeepsFullTaskAndHabitSetForDateRollover() {
         let categoryID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
         let snapshot = WidgetSnapshotFactory.make(
             from: AppSnapshot(
@@ -80,7 +80,7 @@ final class WidgetSnapshotFactoryTests: XCTestCase {
 
         XCTAssertEqual(snapshot.generatedAt, "2026-05-07T00:00:00Z")
         XCTAssertEqual(snapshot.selectedDate, "2026-04-30")
-        XCTAssertEqual(snapshot.tasks.map(\.title), ["Visible"])
-        XCTAssertEqual(snapshot.habits.map(\.title), ["Daily"])
+        XCTAssertEqual(snapshot.tasks.map(\.title), ["Visible", "Hidden"])
+        XCTAssertEqual(snapshot.habits.map(\.title), ["Daily", "Inactive weekly"])
     }
 }

@@ -21,13 +21,15 @@ struct Provider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<JustDoEntry>) -> Void) {
         let entry = loadEntry(for: context.family)
-        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date()
+        let nextRefresh = nextTimelineRefresh()
         completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
     }
 
     private func loadEntry(for family: WidgetFamily) -> JustDoEntry {
         let size = JustDoWidgetSize(family: family)
-        let snapshot = (try? AppGroupWidgetSnapshotStore().read()) ?? WidgetSnapshot.placeholder()
+        let snapshot = todaySnapshot(
+            from: (try? AppGroupWidgetSnapshotStore().read()) ?? WidgetSnapshot.placeholder()
+        )
         let displayMode: WidgetDisplayMode = family.isLockScreenAccessory ? .task : ((try? AppGroupWidgetDisplayModeStore().read()) ?? .task)
         let model = JustDoWidgetDisplayModelFactory.make(
             from: snapshot,
@@ -35,6 +37,40 @@ struct Provider: TimelineProvider {
             displayMode: displayMode
         )
         return JustDoEntry(date: Date(), model: model, size: size)
+    }
+
+    private func todaySnapshot(from snapshot: WidgetSnapshot) -> WidgetSnapshot {
+        let today = Self.todayISO()
+        guard snapshot.selectedDate != today else {
+            return snapshot
+        }
+        var adjusted = snapshot
+        adjusted.selectedDate = today
+        return adjusted
+    }
+
+    private func nextTimelineRefresh() -> Date {
+        let now = Date()
+        let calendar = Calendar.current
+        let nextQuarterHour = calendar.date(byAdding: .minute, value: 15, to: now) ?? now
+        guard let nextMidnight = calendar.nextDate(
+            after: now,
+            matching: DateComponents(hour: 0, minute: 1),
+            matchingPolicy: .nextTime
+        ) else {
+            return nextQuarterHour
+        }
+        return min(nextQuarterHour, nextMidnight)
+    }
+
+    private static func todayISO() -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        return String(
+            format: "%04d-%02d-%02d",
+            components.year ?? 2026,
+            components.month ?? 1,
+            components.day ?? 1
+        )
     }
 }
 
@@ -237,14 +273,7 @@ private struct LockScreenRectangularBody: View {
             } else {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(Array(taskItems.prefix(2))) { item in
-                        HStack(spacing: 6) {
-                            itemButton(item)
-                            Text(item.title)
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .lineLimit(1)
-                                .strikethrough(item.isDone)
-                                .foregroundStyle(item.isDone ? .secondary : .primary)
-                        }
+                        itemButton(item)
                     }
                 }
             }
@@ -261,7 +290,17 @@ private struct LockScreenRectangularBody: View {
                 isCompleted: !item.isDone
             )
         ) {
-            LockScreenCheckDot(item: item)
+            HStack(spacing: 6) {
+                LockScreenCheckDot(item: item)
+                Text(item.title)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .lineLimit(1)
+                    .strikethrough(item.isDone)
+                    .foregroundStyle(item.isDone ? .secondary : .primary)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -438,7 +477,7 @@ private struct InteractiveWidgetItemList: View {
     }
 
     private var showsSubtitle: Bool {
-        size != .small
+        true
     }
 
     @ViewBuilder
@@ -471,20 +510,19 @@ private struct InteractiveWidgetItemList: View {
     private func itemRow(_ item: JustDoWidgetItem) -> some View {
         HStack(spacing: 6) {
             CheckDot(item: item)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.title)
-                    .font(.system(size: titleFontSize, weight: .medium))
+            Text(item.title)
+                .font(.system(size: titleFontSize, weight: .medium))
+                .lineLimit(1)
+                .strikethrough(item.isDone)
+                .foregroundStyle(item.isDone ? .secondary : .primary)
+            Spacer(minLength: 4)
+            if showsSubtitle, item.kind == .task, let subtitle = item.subtitle {
+                Text(subtitle)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
                     .lineLimit(1)
-                    .strikethrough(item.isDone)
-                    .foregroundStyle(item.isDone ? .secondary : .primary)
-                if showsSubtitle, let subtitle = item.subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
             }
-            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())

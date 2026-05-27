@@ -3456,6 +3456,51 @@ This document records coordination notes for work done with Codex and Claude Cod
 - 본 fix는 `AuthViewModel`, `ContentView` 두 파일만 변경하며 `AppSyncCoordinator`
   의 refresh 경로는 손대지 않음 — 기존 동작이 정상이라 그대로 둠.
 
+## 2026-05-27 iOS smoke feedback fixes
+
+### Codex
+
+- Home:
+  - 선택한 날짜 bottom sheet 우측 하단에 `+` 버튼을 추가해, 해당 날짜 기준으로
+    기존 add task/habit sheet를 열 수 있게 함.
+  - Settings의 calendar week start가 Monday일 때 Home 월간 캘린더 헤더와 날짜
+    grid도 월요일 시작으로 렌더링되도록 연결.
+- Add/Detail:
+  - Task/Habit detail의 edit 동작을 detail 화면 내 inline edit 대신 기존
+    추가 UI와 같은 형태의 sheet editor로 표시하도록 변경.
+- Widget:
+  - task time을 task title 우측 끝에 같은 row로 배치.
+  - task time 표시를 `HH:mm`으로 정규화해 초 단위를 제거.
+  - 잠금화면 rectangular widget에서 check dot뿐 아니라 row 전체가 complete
+    action tap target이 되도록 조정.
+- Widget date rollover/sync:
+  - App Group widget snapshot이 선택 날짜의 항목만 저장하던 구조를 전체 task/habit
+    저장으로 변경해, 앱을 열지 않아도 위젯이 오늘 날짜 기준으로 다시 필터링할 수
+    있게 함.
+  - Widget timeline refresh를 15분 주기와 다음 local midnight 직후 중 빠른 시점으로
+    예약하도록 조정.
+  - Widget load 시 저장 snapshot의 selected date가 오래됐으면 local today로
+    교체해서 표시 모델을 생성.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 41 tests passed.
+- `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -destination 'generic/platform=iOS Simulator' build` -> `** BUILD SUCCEEDED **`.
+- `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -configuration Release -destination 'generic/platform=iOS' build` ->
+  `** BUILD SUCCEEDED **`.
+- `git diff --check` 통과.
+
+### Notes
+
+- WidgetKit refresh는 iOS가 최종 스케줄링을 관리하므로 정확히 00:01에 보장되는
+  방식은 아니지만, 현재 구현은 날짜 변경 직후 refresh를 명시적으로 요청하고
+  snapshot 자체도 날짜 재계산이 가능하도록 변경함.
+- 기존 설치본은 새 전체 snapshot을 App Group에 다시 쓰기 위해 업데이트 후 앱을
+  한 번 실행해야 함. 그 이후부터는 위젯이 저장된 전체 항목을 기준으로 날짜
+  rollover를 처리할 수 있음.
+
 ## 2026-05-25 Documentation state cleanup
 
 ### Codex

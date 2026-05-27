@@ -56,6 +56,29 @@ final class WidgetDisplayModelTests: XCTestCase {
         XCTAssertTrue(model.items.allSatisfy { $0.kind == .habit })
     }
 
+    func testModelFiltersBySelectedDateAndNormalizesTaskTime() {
+        var fixture = snapshot()
+        fixture.selectedDate = "2026-05-01"
+        fixture.tasks.append(
+            Task(
+                id: uuid("55555555-5555-5555-5555-555555555555"),
+                title: "다음 날 작업",
+                categoryID: uuid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                startDate: "2026-05-01",
+                endDate: "2026-05-01",
+                priority: .medium,
+                isCompleted: false,
+                scheduledTime: "09:15:30",
+                tags: []
+            )
+        )
+
+        let model = JustDoWidgetDisplayModelFactory.make(from: fixture, size: .small)
+
+        XCTAssertEqual(model.items.map(\.title), ["다음 날 작업"])
+        XCTAssertEqual(model.items.first?.subtitle, "09:15")
+    }
+
     private func snapshot() -> WidgetSnapshot {
         WidgetSnapshot(
             generatedAt: "2026-04-30T00:00:00Z",

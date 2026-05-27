@@ -497,6 +497,12 @@ private struct HomeRootView: View {
                 onOpenHabit: { id in
                     isShowingDayPanel = false
                     onOpenHabit(id)
+                },
+                onAdd: {
+                    isShowingDayPanel = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        isShowingAddTask = true
+                    }
                 }
             )
             .presentationDetents([.height(420)])
@@ -534,6 +540,7 @@ private struct HomeRootView: View {
                     year: displayYear,
                     month: displayMonth,
                     selectedDate: selectedDate,
+                    weekStart: snapshot?.settings.weekStart ?? 0,
                     tasks: snapshot?.tasks ?? [],
                     categories: snapshot?.categories ?? [],
                     onSelectDate: { date in
@@ -1038,11 +1045,11 @@ private struct MonthCalendarView: View {
     let year: Int
     let month: Int
     let selectedDate: String
+    let weekStart: Int
     let tasks: [Task]
     let categories: [JDCategory]
     let onSelectDate: (String) -> Void
 
-    private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
     private let barLaneHeight: CGFloat = 14
     private let barLaneSpacing: CGFloat = 2
 
@@ -1071,14 +1078,19 @@ private struct MonthCalendarView: View {
     }
 
     private var weeks: [[CalendarDay]] {
-        JDDate.monthGrid(year: year, month: month)
+        JDDate.monthGrid(year: year, month: month, weekStart: weekStart)
+    }
+
+    private var weekdays: [String] {
+        JDDate.weekdayLabels(weekStart: weekStart)
     }
 
     private func weekdayColor(_ index: Int) -> Color {
-        if index == 0 {
+        let weekday = (weekStart + index) % 7
+        if weekday == 0 {
             return JDTheme.external
         }
-        if index == 6 {
+        if weekday == 6 {
             return JDTheme.me
         }
         return JDTheme.tertiaryText
@@ -1268,16 +1280,17 @@ private struct CalendarDayCell: View {
     }
 
     private var textColor: Color {
+        let weekday = JDDate.weekday(day.iso)
         if day.iso == JDDate.todayISO {
             return .white
         }
         if !day.isCurrentMonth {
             return JDTheme.tertiaryText.opacity(0.55)
         }
-        if index == 0 {
+        if weekday == 0 {
             return JDTheme.external
         }
-        if index == 6 {
+        if weekday == 6 {
             return JDTheme.me
         }
         return JDTheme.primaryText
@@ -1309,40 +1322,60 @@ private struct SelectedDayPanel: View {
     let onToggleHabit: (Habit, String) -> Void
     let onOpenTask: (UUID) -> Void
     let onOpenHabit: (UUID) -> Void
+    let onAdd: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            dragHeader
+        ZStack(alignment: .bottomTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                dragHeader
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(groupedTasks, id: \.category.id) { group in
-                        TaskGroupSection(
-                            category: group.category,
-                            tasks: group.tasks,
-                            onToggleTask: onToggleTask,
-                            onOpenTask: onOpenTask
-                        )
-                    }
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(groupedTasks, id: \.category.id) { group in
+                            TaskGroupSection(
+                                category: group.category,
+                                tasks: group.tasks,
+                                onToggleTask: onToggleTask,
+                                onOpenTask: onOpenTask
+                            )
+                        }
 
-                    if !habits.isEmpty {
-                        HabitGroupSection(
-                            habits: habits,
-                            selectedDate: selectedDate,
-                            onToggleHabit: onToggleHabit,
-                            onOpenHabit: onOpenHabit
-                        )
-                    }
+                        if !habits.isEmpty {
+                            HabitGroupSection(
+                                habits: habits,
+                                selectedDate: selectedDate,
+                                onToggleHabit: onToggleHabit,
+                                onOpenHabit: onOpenHabit
+                            )
+                        }
 
-                    if tasks.isEmpty && habits.isEmpty {
-                        Text("이 날엔 할일이 없어요. + 로 추가해보세요.")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(JDTheme.tertiaryText)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 32)
+                        if tasks.isEmpty && habits.isEmpty {
+                            Text("이 날엔 할일이 없어요. + 로 추가해보세요.")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(JDTheme.tertiaryText)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 32)
+                        }
+
+                        Spacer()
+                            .frame(height: 76)
                     }
                 }
             }
+
+            Button(action: onAdd) {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 54, height: 54)
+                    .background(JDTheme.accent)
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("선택한 날짜에 추가")
+            .padding(.trailing, 2)
+            .padding(.bottom, 2)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
@@ -3299,16 +3332,18 @@ private enum JDDate {
         )
     }
 
-    static func monthGrid(year: Int, month: Int) -> [[CalendarDay]] {
+    static func monthGrid(year: Int, month: Int, weekStart: Int = 0) -> [[CalendarDay]] {
         let firstWeekday = weekday(year: year, month: month, day: 1)
+        let normalizedWeekStart = weekStart == 1 ? 1 : 0
+        let leadingDayCount = (firstWeekday - normalizedWeekStart + 7) % 7
         let daysInMonth = days(year: year, month: month)
         let previous = addMonths(year: year, month: month, delta: -1)
         let previousDays = days(year: previous.year, month: previous.month)
         let next = addMonths(year: year, month: month, delta: 1)
         var cells: [CalendarDay] = []
 
-        if firstWeekday > 0 {
-            for offset in stride(from: firstWeekday - 1, through: 0, by: -1) {
+        if leadingDayCount > 0 {
+            for offset in stride(from: leadingDayCount - 1, through: 0, by: -1) {
                 let day = previousDays - offset
                 cells.append(CalendarDay(iso: iso(year: previous.year, month: previous.month, day: day), day: day, isCurrentMonth: false))
             }
@@ -3345,8 +3380,13 @@ private enum JDDate {
     }
 
     static func weekdayName(_ iso: String) -> String {
+        weekdayLabels()[weekday(iso)]
+    }
+
+    static func weekdayLabels(weekStart: Int = 0) -> [String] {
         let names = ["일", "월", "화", "수", "목", "금", "토"]
-        return names[weekday(iso)]
+        let normalizedStart = weekStart == 1 ? 1 : 0
+        return (0..<7).map { names[(normalizedStart + $0) % 7] }
     }
 
     static func weekday(year: Int, month: Int, day: Int) -> Int {
@@ -3511,7 +3551,7 @@ private struct TaskDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var detail: DeepLinkDetail?
     @State private var categories: [JDCategory] = []
-    @State private var isEditing = false
+    @State private var editingTask: Task?
     @State private var message: DetailActionMessage?
     @State private var showingDeleteConfirmation = false
 
@@ -3519,20 +3559,11 @@ private struct TaskDetailScreen: View {
         DetailScreenScaffold(title: "Task Detail") {
             switch detail ?? loadDetail() {
             case .task(let task):
-                if isEditing {
-                    TaskDetailEditor(
-                        task: task,
-                        categories: categories,
-                        onCancel: { isEditing = false },
-                        onSave: saveTask
-                    )
-                } else {
-                    TaskDetailContent(task: task)
-                    DetailActionBar(
-                        onEdit: { isEditing = true },
-                        onDelete: { showingDeleteConfirmation = true }
-                    )
-                }
+                TaskDetailContent(task: task)
+                DetailActionBar(
+                    onEdit: { editingTask = task },
+                    onDelete: { showingDeleteConfirmation = true }
+                )
             case .missing(let link):
                 FallbackDetailContent(
                     title: "Detail not found",
@@ -3551,6 +3582,21 @@ private struct TaskDetailScreen: View {
             }
         }
         .onAppear(perform: refresh)
+        .sheet(item: $editingTask) { task in
+            TaskDetailEditor(
+                task: task,
+                categories: categories,
+                onCancel: { editingTask = nil },
+                onSave: saveTask
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 30)
+            .presentationDetents([.height(560)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
         .alert("Task 삭제", isPresented: $showingDeleteConfirmation) {
             Button("취소", role: .cancel) {}
             Button("삭제", role: .destructive, action: deleteTask)
@@ -3581,7 +3627,7 @@ private struct TaskDetailScreen: View {
                     mutation: .taskUpsert(task)
                 )
             )
-            isEditing = false
+            editingTask = nil
             message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
             refresh()
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
@@ -3618,7 +3664,7 @@ private struct HabitDetailScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var detail: DeepLinkDetail?
-    @State private var isEditing = false
+    @State private var editingHabit: Habit?
     @State private var message: DetailActionMessage?
     @State private var showingDeleteConfirmation = false
 
@@ -3626,19 +3672,11 @@ private struct HabitDetailScreen: View {
         DetailScreenScaffold(title: "Habit Detail") {
             switch detail ?? loadDetail() {
             case .habit(let habit):
-                if isEditing {
-                    HabitDetailEditor(
-                        habit: habit,
-                        onCancel: { isEditing = false },
-                        onSave: saveHabit
-                    )
-                } else {
-                    HabitDetailContent(habit: habit)
-                    DetailActionBar(
-                        onEdit: { isEditing = true },
-                        onDelete: { showingDeleteConfirmation = true }
-                    )
-                }
+                HabitDetailContent(habit: habit)
+                DetailActionBar(
+                    onEdit: { editingHabit = habit },
+                    onDelete: { showingDeleteConfirmation = true }
+                )
             case .missing(let link):
                 FallbackDetailContent(
                     title: "Detail not found",
@@ -3657,6 +3695,20 @@ private struct HabitDetailScreen: View {
             }
         }
         .onAppear(perform: refresh)
+        .sheet(item: $editingHabit) { habit in
+            HabitDetailEditor(
+                habit: habit,
+                onCancel: { editingHabit = nil },
+                onSave: saveHabit
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 30)
+            .presentationDetents([.height(500)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
         .alert("Habit 삭제", isPresented: $showingDeleteConfirmation) {
             Button("취소", role: .cancel) {}
             Button("삭제", role: .destructive, action: deleteHabit)
@@ -3686,7 +3738,7 @@ private struct HabitDetailScreen: View {
                     mutation: .habitUpsert(habit)
                 )
             )
-            isEditing = false
+            editingHabit = nil
             message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
             refresh()
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
