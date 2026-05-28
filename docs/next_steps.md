@@ -12,6 +12,68 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
+## Implemented Product Track: Just Do Mode
+
+> 2026-05-28 implemented on iOS and web. Product spec anchor:
+> `docs/just_do_prd.md` Just Do Mode.
+
+- Pro-gated Home display mode.
+- Home UI remains the same; selected-date sheet/panel exposes `오늘만` and
+  `이 날까지`.
+- `오늘만` keeps the existing selected-date behavior.
+- `이 날까지` shows incomplete tasks with `endDate <= selectedDate`.
+- Habits are not accumulated; they remain selectedDate-based.
+- Completed tasks are hidden in Just Do Mode.
+- Just Do Mode sections: `지난일 / 오늘 / 해야할일`.
+- Due-by task rows show due date/time.
+- Calendar cell dot/bar rendering remains unchanged.
+- `+` defaults:
+  - Normal mode: selectedDate to selectedDate.
+  - Just Do Mode: today to selectedDate.
+  - If selectedDate is in the past, selectedDate to selectedDate.
+- Enforcement uses `effectiveJustDoMode = hasProEntitlement && settings.justDoMode`.
+
+## Planned Product Track: Goal & Pro Report
+
+> 2026-05-28 decision: this is separate from Just Do Mode. Just Do Mode changes
+> Home's task display behavior; Goal & Pro Report captures monthly/yearly goals
+> and turns them into Pro-gated reports.
+
+- Goal input is available to Free / Trial / Pro users.
+- Monthly/yearly goal report detail is Trial / Pro only. Free users see a report
+  preview with a Pro CTA.
+- First-time users should see an optional goal setup modal. It must include a
+  bottom `나중에 할게요` action so onboarding is not blocked.
+- Monthly goals:
+  - Prompt can appear from day 1 through day 3 of each month.
+  - Do not prompt if goals for that month already exist.
+  - If the user closes with `다시 보지 않기`, do not prompt again for that month.
+  - Maximum 5 goals per month.
+- Yearly goals:
+  - Prompt can appear from January 1 through January 7.
+  - Do not prompt if goals for that year already exist.
+  - If the user closes with `다시 보지 않기`, do not prompt again for that year.
+  - New users should still be asked about yearly goals during onboarding even
+    outside January 1-7.
+  - Maximum 5 goals per year.
+- Monthly and yearly goals do not need a hard parent/child relationship. A yearly
+  goal may be shown as context while setting monthly goals, but data should stay
+  loosely coupled.
+- Goal fields for the first implementation: title, optional note, sort order,
+  lock flag.
+- Goal lock is a confirmation UX, not permanent immutability:
+  - User-facing option: `이번 기간 동안 목표를 고정할게요`.
+  - Locked goals require a confirmation modal before editing.
+  - Example confirmation: `고정한 목표를 수정할까요? 처음 세운 목표와 달라질 수
+    있어요.`
+- Initial reports should use real-time calculation plus template narrative.
+  AI narrative and saved report snapshots are future work.
+- Initial prompt delivery is in-app/web modal on entry. Push notifications are
+  future work.
+- Documentation anchors:
+  - Product spec: `docs/just_do_prd.md` Goal & Pro Report.
+  - Future schema: `docs/just_do_db_schema.md` Goal & Pro Report schema.
+
 ## Where We Are (2026-05-25)
 
 - **운영 신규 가입 차단 버그 fix**. `handle_new_auth_user()` 트리거의

@@ -23,7 +23,7 @@ type HabitRow = Parameters<typeof habitRowToDomain>[0];
 type HabitLogRow = Parameters<typeof mergeHabitLogs>[1][number];
 type TagRow = { id: string; user_id: string; name: string };
 type TaskTagRow = { task_id: string; tag_id: string };
-type UserPreferences = { week_start?: unknown };
+type UserPreferences = { week_start?: unknown; just_do_mode?: unknown };
 
 /**
  * Supabase implementation of `JustDoStorage`.
@@ -173,21 +173,24 @@ export const createSupabaseStorage = (
       .map(categoryRowToDomain);
   };
 
-  const loadWeekStartPreference = async (): Promise<0 | 1> => {
+  const loadPreferences = async (): Promise<Pick<Persisted["settings"], "weekStart" | "justDoMode">> => {
     const { data, error } = await client
       .from("users")
       .select("preferences")
       .eq("id", userId)
       .maybeSingle();
     if (error) {
-      if (error.code === "42703") return 0;
+      if (error.code === "42703") return { weekStart: 0, justDoMode: false };
       throw error;
     }
     const preferences = (data?.preferences ?? {}) as UserPreferences;
-    return preferences.week_start === 1 ? 1 : 0;
+    return {
+      weekStart: preferences.week_start === 1 ? 1 : 0,
+      justDoMode: preferences.just_do_mode === 1,
+    };
   };
 
-  const saveWeekStartPreference = async (weekStart: 0 | 1) => {
+  const savePreferences = async (settings: Persisted["settings"]) => {
     const { data, error } = await client
       .from("users")
       .select("preferences")
@@ -202,7 +205,11 @@ export const createSupabaseStorage = (
       data?.preferences && typeof data.preferences === "object" && !Array.isArray(data.preferences)
         ? data.preferences
         : {};
-    const preferences: Json = { ...current, week_start: weekStart };
+    const preferences: Json = {
+      ...current,
+      week_start: settings.weekStart,
+      just_do_mode: settings.justDoMode ? 1 : 0,
+    };
     const { error: updateError } = await client
       .from("users")
       .update({ preferences })
@@ -215,7 +222,7 @@ export const createSupabaseStorage = (
 
   return {
     async load(): Promise<Persisted | null> {
-      const [categoriesResult, tasksResult, habitsResult, logsResult, weekStart] = await Promise.all([
+      const [categoriesResult, tasksResult, habitsResult, logsResult, preferences] = await Promise.all([
         loadCategories(),
         client
           .from("tasks")
@@ -223,7 +230,7 @@ export const createSupabaseStorage = (
           .eq("user_id", userId),
         client.from("habits").select("*").eq("user_id", userId),
         client.from("habit_logs").select("*").eq("user_id", userId),
-        loadWeekStartPreference(),
+        loadPreferences(),
       ]);
 
       if (tasksResult.error) throw tasksResult.error;
@@ -251,14 +258,15 @@ export const createSupabaseStorage = (
         settings: {
           notify: true,
           notifyTime: "09:00",
-          weekStart,
+          weekStart: preferences.weekStart,
           plan: "free",
+          justDoMode: preferences.justDoMode,
         },
       };
     },
 
     async saveSettings(settings) {
-      await saveWeekStartPreference(settings.weekStart);
+      await savePreferences(settings);
     },
 
     async saveView() {

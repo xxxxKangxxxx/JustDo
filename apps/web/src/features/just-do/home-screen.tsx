@@ -6,12 +6,13 @@ import {
   isoOf,
   monthCalendar,
   parseISO,
+  todayISO,
   weekdayLabels,
   weekdayOfISO,
 } from "@/lib/date";
 import type { Category, Task } from "@/types/domain";
 import { CatDot, CircleCheck, IconButton } from "./primitives";
-import { tasksInRange, tasksOnDate } from "./selectors";
+import { justDoTaskSections, justDoTasksUntil, tasksInRange, tasksOnDate } from "./selectors";
 import { useJustDo } from "./store";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
 
@@ -22,7 +23,12 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
   const t = tokens[mode];
   const { year, month, selectedDate } = s.state.view;
   const selected = parseISO(selectedDate);
-  const selectedTasks = tasksOnDate(s.state.tasks, selectedDate);
+  const canUseJustDoMode = s.state.settings.plan === "pro";
+  const effectiveJustDoMode = canUseJustDoMode && s.state.settings.justDoMode;
+  const selectedTasks = effectiveJustDoMode
+    ? justDoTasksUntil(s.state.tasks, selectedDate)
+    : tasksOnDate(s.state.tasks, selectedDate);
+  const justDoSections = justDoTaskSections(s.state.tasks, selectedDate, todayISO());
   const categories = sortedCategories(s.state.categories);
   const grouped = categories
     .map((category) => ({
@@ -31,6 +37,13 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
     }))
     .filter((group) => group.tasks.length > 0);
   const uncategorizedTasks = selectedTasks.filter((task) => !task.categoryId);
+  const setJustDoMode = (value: boolean) => {
+    if (value && !canUseJustDoMode) {
+      window.alert("Just Do Mode는 Pro 기능입니다.");
+      return;
+    }
+    s.updateSetting("justDoMode", value);
+  };
 
   return (
     <>
@@ -104,14 +117,60 @@ export function HomeScreen({ mode }: { mode: ThemeMode }) {
           </span>
         </div>
 
-        {grouped.map(({ category, tasks }) => (
-          <TaskGroup key={category.id} category={category} tasks={tasks} mode={mode} />
-        ))}
-        {uncategorizedTasks.length ? (
-          <TaskGroup category={null} tasks={uncategorizedTasks} mode={mode} />
-        ) : null}
+        <ModeToggle mode={mode} active={effectiveJustDoMode} canUse={canUseJustDoMode} onChange={setJustDoMode} />
+
+        {effectiveJustDoMode ? (
+          justDoSections.map((section) => (
+            <TaskGroup key={section.title} title={section.title} category={null} tasks={section.items} mode={mode} showDueDate />
+          ))
+        ) : (
+          <>
+            {grouped.map(({ category, tasks }) => (
+              <TaskGroup key={category.id} category={category} tasks={tasks} mode={mode} />
+            ))}
+            {uncategorizedTasks.length ? (
+              <TaskGroup category={null} tasks={uncategorizedTasks} mode={mode} />
+            ) : null}
+          </>
+        )}
       </section>
     </>
+  );
+}
+
+function ModeToggle({
+  mode,
+  active,
+  canUse,
+  onChange,
+}: {
+  mode: ThemeMode;
+  active: boolean;
+  canUse: boolean;
+  onChange: (active: boolean) => void;
+}) {
+  const t = tokens[mode];
+  return (
+    <div className="mb-2.5 grid grid-cols-2 rounded-[10px] p-0.5" style={{ background: t.surfaceAlt }}>
+      {[
+        { label: "오늘만", value: false },
+        { label: "이 날까지", value: true },
+      ].map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          onClick={() => onChange(item.value)}
+          className="rounded-lg px-2 py-1.5 text-[12px] font-bold"
+          style={{
+            background: active === item.value ? t.surface : "transparent",
+            color: active === item.value ? t.text : t.textSecondary,
+          }}
+        >
+          {item.label}
+          {item.value && !canUse ? <span className="ml-1 text-[9px]" style={{ color: t.accent }}>Pro</span> : null}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -222,25 +281,37 @@ function Calendar({ mode }: { mode: ThemeMode }) {
   );
 }
 
-function TaskGroup({ category, tasks, mode }: { category: Category | null; tasks: Task[]; mode: ThemeMode }) {
+function TaskGroup({
+  category,
+  tasks,
+  mode,
+  title,
+  showDueDate = false,
+}: {
+  category: Category | null;
+  tasks: Task[];
+  mode: ThemeMode;
+  title?: string;
+  showDueDate?: boolean;
+}) {
   return (
     <div className="mt-3.5">
-      <GroupTitle category={category} count={tasks.length} mode={mode} />
+      <GroupTitle category={category} title={title} count={tasks.length} mode={mode} />
       {tasks.map((task, index) => (
-        <TaskRow key={task.id} task={task} mode={mode} last={index === tasks.length - 1} />
+        <TaskRow key={task.id} task={task} mode={mode} last={index === tasks.length - 1} showDueDate={showDueDate} />
       ))}
     </div>
   );
 }
 
-function GroupTitle({ category, count, mode }: { category: Category | null; count: number; mode: ThemeMode }) {
+function GroupTitle({ category, title, count, mode }: { category: Category | null; title?: string; count: number; mode: ThemeMode }) {
   const t = tokens[mode];
   const c = categoryStyle(category, mode);
   return (
     <div className="mb-1 flex items-center gap-1.5">
       <span className="h-3 w-[3px] rounded-sm" style={{ background: c.solid }} />
       <span className="text-xs font-semibold tracking-[0.2px]" style={{ color: c.ink }}>
-        [{category?.name ?? "미분류"}]
+        [{title ?? category?.name ?? "미분류"}]
       </span>
       <span className="ml-0.5 text-[11px]" style={{ color: t.textTertiary }}>
         {count}
@@ -249,14 +320,16 @@ function GroupTitle({ category, count, mode }: { category: Category | null; coun
   );
 }
 
-function TaskRow({ task, mode, last }: { task: Task; mode: ThemeMode; last: boolean }) {
+function TaskRow({ task, mode, last, showDueDate = false }: { task: Task; mode: ThemeMode; last: boolean; showDueDate?: boolean }) {
   const s = useJustDo();
   const t = tokens[mode];
   const category = s.state.categories.find((item) => item.id === task.categoryId) ?? null;
   const isRange = task.startDate !== task.endDate;
   const start = parseISO(task.startDate);
   const end = parseISO(task.endDate);
-  const detail = isRange ? `${start.month}/${start.day} - ${end.month}/${end.day}` : formatTime(task.scheduledTime);
+  const detail = showDueDate
+    ? `${end.month}/${end.day}${task.scheduledTime ? ` ${formatTime(task.scheduledTime)}` : ""}`
+    : isRange ? `${start.month}/${start.day} - ${end.month}/${end.day}` : formatTime(task.scheduledTime);
   return (
     <div className="flex items-center gap-3 py-3" style={{ borderBottom: last ? "none" : `0.5px solid ${t.divider}` }}>
       <button type="button" onClick={() => s.toggleTask(task.id)}>

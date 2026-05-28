@@ -394,22 +394,81 @@ CREATE TABLE public.payment_events (
 
 ---
 
-## 7. 월간 리포트 집계 방식
+## 7. Goal & Pro Report schema (future)
 
-> Supabase Edge Function으로 서버에서 집계 후 앱/웹에 전달
+> Goal 입력은 Free / Trial / Pro 모두 가능하다. 목표 기반 월간/연간 리포트 상세는
+> Trial / Pro 전용으로 gate한다.
+
+### 7-1. goals
+
+월간/연간 목표를 하나의 테이블에 저장한다. 월간 목표와 연간 목표는 강제 연결하지
+않는다.
+
+```sql
+CREATE TABLE public.goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  period_type TEXT NOT NULL CHECK (period_type IN ('monthly', 'yearly')),
+  period_key TEXT NOT NULL, -- monthly: '2026-06', yearly: '2026'
+  title TEXT NOT NULL,
+  note TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  locked BOOLEAN NOT NULL DEFAULT FALSE,
+  locked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX goals_user_period_idx
+  ON public.goals (user_id, period_type, period_key, sort_order);
+```
+
+- 같은 `user_id + period_type + period_key` 기준으로 최대 5개까지 허용한다.
+- `locked = TRUE`는 영구 수정 금지가 아니라, 수정 전 확인 모달을 띄우는 UX
+  플래그다.
+- 목표와 Task/Habit 직접 연결은 후속 범위로 둔다.
+
+### 7-2. goal_prompt_dismissals
+
+월초/연초 목표 설정 모달을 해당 기간에 다시 띄우지 않기 위한 상태를 저장한다.
+
+```sql
+CREATE TABLE public.goal_prompt_dismissals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  prompt_type TEXT NOT NULL CHECK (prompt_type IN ('onboarding', 'monthly', 'yearly')),
+  period_key TEXT NOT NULL,
+  dismissed_permanently_for_period BOOLEAN NOT NULL DEFAULT TRUE,
+  dismissed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, prompt_type, period_key)
+);
+```
+
+- 월간 프롬프트는 매월 1~3일 사이에 표시 가능하다.
+- 연간 프롬프트는 매년 1월 1~7일 사이에 표시 가능하다.
+- 첫 가입 사용자는 위 기간이 아니더라도 onboarding flow에서 연간 목표 설정
+  여부를 물을 수 있다.
+- 해당 기간의 목표가 이미 존재하면 프롬프트를 표시하지 않는다.
+
+## 8. 월간/연간 리포트 집계 방식
+
+> 초기 구현은 앱/웹에서 실시간 계산 + 템플릿 narrative로 시작한다. Edge Function,
+> AI narrative, report snapshot 저장은 후속 범위로 둔다.
 
 ```
-월간 리포트 요청
-  └── Edge Function 호출
+월간/연간 리포트 요청
+  └── 목표 + tasks + habits + habit_logs 로컬/클라이언트 집계
       ├── 해당 월 tasks 완료율 집계
       ├── 카테고리별 완료율 집계
       ├── habit_logs 기반 달성률 / 스트릭 계산
-      └── 결과 JSON 반환 → 앱/웹에서 렌더링
+      ├── 목표 대비 진행 narrative 생성
+      └── 앱/웹에서 렌더링
 ```
 
 ---
 
-## 8. 미결 사항
+## 9. 미결 사항
 
 - [x] 구독 가격 정책 (월 ₩1,900 / 연 ₩9,900)
 - [ ] 공유/협업 기능 테이블 설계 (v2)

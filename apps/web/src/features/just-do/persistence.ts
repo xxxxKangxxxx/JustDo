@@ -18,6 +18,7 @@ export type LocalMutation =
   | { type: "category_upsert"; category: Category }
   | { type: "category_delete"; id: string }
   | { type: "preferences_set"; key: "week_start"; value: Settings["weekStart"] }
+  | { type: "preferences_set"; key: "just_do_mode"; value: 0 | 1 }
   | { type: "task_upsert"; task: Task }
   | { type: "task_delete"; id: string }
   | { type: "habit_upsert"; habit: Habit }
@@ -173,6 +174,7 @@ const normalizePersistedSnapshot = (saved: Persisted): Persisted => {
       notifyTime: "09:00",
       weekStart: 0,
       plan: "free",
+      justDoMode: false,
       ...savedSettings,
     },
     view: {
@@ -210,6 +212,7 @@ const ensureSnapshot = (ref: MemoryStateRef): Persisted => {
         notifyTime: "09:00",
         weekStart: 0,
         plan: "free",
+        justDoMode: false,
       },
     };
   }
@@ -481,6 +484,9 @@ export const createSnapshotStorage = (
       if (previous.settings.weekStart !== settings.weekStart) {
         await enqueue({ type: "preferences_set", key: "week_start", value: settings.weekStart });
       }
+      if (previous.settings.justDoMode !== settings.justDoMode) {
+        await enqueue({ type: "preferences_set", key: "just_do_mode", value: settings.justDoMode ? 1 : 0 });
+      }
     },
     saveView: (view) => mutate((snap) => ({ ...snap, view })),
     upsertCategory: async (category) => {
@@ -692,12 +698,22 @@ export const createIndexedDBStorage = (
 const applyQueuedMutation = async (storage: JustDoStorage, queued: QueuedMutation) => {
   switch (queued.mutation.type) {
     case "preferences_set":
-      await storage.saveSettings({
-        notify: true,
-        notifyTime: "09:00",
-        plan: "free",
-        weekStart: queued.mutation.value,
-      });
+      {
+        const current = await storage.load();
+        const base = current?.settings ?? {
+          notify: true,
+          notifyTime: "09:00",
+          plan: "free" as const,
+          weekStart: 0 as const,
+          justDoMode: false,
+        };
+        await storage.saveSettings({
+          ...base,
+          ...(queued.mutation.key === "week_start"
+            ? { weekStart: queued.mutation.value as Settings["weekStart"] }
+            : { justDoMode: queued.mutation.value === 1 }),
+        });
+      }
       return;
     case "category_upsert":
       await storage.upsertCategory(queued.mutation.category);
@@ -813,6 +829,15 @@ export const createSyncedStorage = (
       ) {
         await remoteStorage.saveSettings(local.settings);
         remote.settings = { ...remote.settings, weekStart: local.settings.weekStart };
+      }
+      if (
+        remote &&
+        local &&
+        !remote.settings.justDoMode &&
+        local.settings.justDoMode
+      ) {
+        await remoteStorage.saveSettings(local.settings);
+        remote.settings = { ...remote.settings, justDoMode: local.settings.justDoMode };
       }
       if (remote && localStorage.replaceSnapshot) {
         await localStorage.replaceSnapshot(remote);

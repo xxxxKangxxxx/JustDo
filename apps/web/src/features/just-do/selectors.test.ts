@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Habit, Task } from "@/types/domain";
-import { habitActiveOn, habitStreak, tasksInRange, tasksOnDate } from "./selectors";
+import {
+  habitActiveOn,
+  habitStreak,
+  justDoTaskSections,
+  justDoTasksUntil,
+  tasksInRange,
+  tasksOnDate,
+} from "./selectors";
 
 const makeTask = (over: Partial<Task> = {}): Task => ({
   id: "t",
@@ -57,6 +64,32 @@ describe("tasksInRange", () => {
     ];
     const ids = tasksInRange(tasksAt, "2026-04-01", "2026-04-30").map((task) => task.id);
     expect(ids).toEqual(["endOnly", "startOnly"]);
+  });
+});
+
+describe("justDoTasksUntil", () => {
+  const tasks: Task[] = [
+    makeTask({ id: "done", endDate: "2026-04-08", isCompleted: true }),
+    makeTask({ id: "overdue", endDate: "2026-04-09", scheduledTime: "10:00" }),
+    makeTask({ id: "today", endDate: "2026-04-10", scheduledTime: "09:00" }),
+    makeTask({ id: "later", endDate: "2026-04-12" }),
+    makeTask({ id: "future", endDate: "2026-04-13" }),
+  ];
+
+  it("returns incomplete tasks due by the selected date in due order", () => {
+    expect(justDoTasksUntil(tasks, "2026-04-12").map((task) => task.id)).toEqual([
+      "overdue",
+      "today",
+      "later",
+    ]);
+  });
+
+  it("groups due tasks into overdue, today, and upcoming sections", () => {
+    expect(justDoTaskSections(tasks, "2026-04-12", "2026-04-10")).toEqual([
+      { title: "지난일", items: [tasks[1]] },
+      { title: "오늘", items: [tasks[2]] },
+      { title: "해야할일", items: [tasks[3]] },
+    ]);
   });
 });
 

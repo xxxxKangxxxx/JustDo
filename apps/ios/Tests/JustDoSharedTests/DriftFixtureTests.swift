@@ -14,6 +14,7 @@ final class DriftFixtureTests: XCTestCase {
 
         XCTAssertEqual(snapshot.view.tab, .habit)
         XCTAssertEqual(snapshot.settings.weekStart, 1)
+        XCTAssertFalse(snapshot.settings.justDoMode)
         XCTAssertEqual(snapshot.categories.map(\.name), ["취업", "업무"])
         XCTAssertEqual(snapshot.tasks.first?.categoryID?.uuidString.lowercased(), "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
         XCTAssertEqual(snapshot.tasks.first?.tags, ["취업", "서류"])

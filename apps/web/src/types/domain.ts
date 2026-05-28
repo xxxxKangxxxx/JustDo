@@ -40,6 +40,7 @@ export type Settings = {
   notifyTime: string;
   weekStart: 0 | 1;
   plan: "free" | "pro";
+  justDoMode: boolean;
 };
 
 export type ViewState = {

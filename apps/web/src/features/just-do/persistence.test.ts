@@ -159,7 +159,7 @@ describe("createMemoryStorage", () => {
 
   it("saveSettings and saveView persist atomically", async () => {
     const storage = createMemoryStorage();
-    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 1, plan: "pro" });
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 1, plan: "pro", justDoMode: true });
     await storage.saveView({
       tab: "settings",
       year: 2027,
@@ -280,12 +280,39 @@ describe("createSnapshotStorage", () => {
       },
     );
 
-    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 0, plan: "free" });
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 0, plan: "free", justDoMode: false });
     expect(await storage.listQueuedMutations?.()).toEqual([]);
 
-    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 1, plan: "free" });
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 1, plan: "free", justDoMode: false });
     expect((await storage.listQueuedMutations?.())?.map((item) => item.mutation)).toEqual([
       { type: "preferences_set", key: "week_start", value: 1 },
+    ]);
+  });
+
+  it("queues Just Do Mode preference changes", async () => {
+    const queue = createMemoryMutationQueue();
+    let snapshot: Persisted | null = null;
+    const storage = createSnapshotStorage(
+      {
+        async read() {
+          return snapshot;
+        },
+        async write(next) {
+          snapshot = next;
+        },
+      },
+      {
+        queue,
+        now: () => "2026-04-29T00:00:00.000Z",
+        createId: () => "just-do-mode",
+      },
+    );
+
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 0, plan: "free", justDoMode: false });
+    await storage.saveSettings({ notify: false, notifyTime: "08:00", weekStart: 0, plan: "free", justDoMode: true });
+
+    expect((await storage.listQueuedMutations?.())?.map((item) => item.mutation)).toEqual([
+      { type: "preferences_set", key: "just_do_mode", value: 1 },
     ]);
   });
 });
@@ -478,11 +505,11 @@ describe("createSyncedStorage", () => {
   it("pushes local weekStart once when the remote preference is still default", async () => {
     const local = createMemoryStorage({
       ...stripVolatile(createInitialState()),
-      settings: { notify: false, notifyTime: "08:00", weekStart: 1, plan: "free" },
+      settings: { notify: false, notifyTime: "08:00", weekStart: 1, plan: "free", justDoMode: false },
     });
     const remote = createMemoryStorage({
       ...stripVolatile(createInitialState()),
-      settings: { notify: true, notifyTime: "09:00", weekStart: 0, plan: "free" },
+      settings: { notify: true, notifyTime: "09:00", weekStart: 0, plan: "free", justDoMode: false },
     });
     const synced = createSyncedStorage(local, remote);
 

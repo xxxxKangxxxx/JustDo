@@ -7,6 +7,36 @@ export const tasksOnDate = (tasks: Task[], iso: string) =>
 export const tasksInRange = (tasks: Task[], startISO: string, endISO: string) =>
   tasks.filter((task) => !(task.endDate < startISO || task.startDate > endISO));
 
+export const sortTasksByDueDate = (tasks: Task[]) =>
+  tasks.slice().sort((a, b) => {
+    if (a.endDate !== b.endDate) return a.endDate.localeCompare(b.endDate);
+    const aTime = a.scheduledTime ?? "99:99";
+    const bTime = b.scheduledTime ?? "99:99";
+    if (aTime !== bTime) return aTime.localeCompare(bTime);
+    return a.title.localeCompare(b.title, "ko-KR");
+  });
+
+export const justDoTasksUntil = (tasks: Task[], selectedDate: string) =>
+  sortTasksByDueDate(
+    tasks.filter((task) => !task.isCompleted && task.endDate <= selectedDate),
+  );
+
+export const justDoTaskSections = (
+  tasks: Task[],
+  selectedDate: string,
+  today: string,
+) => {
+  const items = justDoTasksUntil(tasks, selectedDate);
+  return [
+    { title: "지난일", items: items.filter((task) => task.endDate < today) },
+    { title: "오늘", items: items.filter((task) => task.endDate === today) },
+    {
+      title: "해야할일",
+      items: items.filter((task) => task.endDate > today && task.endDate <= selectedDate),
+    },
+  ].filter((section) => section.items.length > 0);
+};
+
 export const habitActiveOn = (habit: Habit, iso: string) => {
   if (habit.recurType !== "weekly") return true;
   if (!habit.recurDays?.length) return false;

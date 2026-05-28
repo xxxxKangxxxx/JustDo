@@ -112,6 +112,7 @@ public enum PreferenceKey: String, Codable, Equatable, Sendable {
     case notify
     case notifyTime = "notify_time"
     case weekStart = "week_start"
+    case justDoMode = "just_do_mode"
 }
 
 public struct QueuedMutation: Identifiable, Codable, Equatable, Sendable {

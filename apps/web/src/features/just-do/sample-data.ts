@@ -118,5 +118,6 @@ export const createInitialState = (): AppState => ({
     notifyTime: "09:00",
     weekStart: 0,
     plan: "free",
+    justDoMode: false,
   },
 });

@@ -123,6 +123,7 @@ const persistedState = (): Persisted => ({
     notifyTime: "09:00",
     weekStart: 0,
     plan: "free",
+    justDoMode: false,
   },
 });
 
@@ -295,7 +296,7 @@ describe("desktop app shell interactions", () => {
     renderApp();
 
     await screen.findByRole("button", { name: /새 Task/ });
-    const addForToday = screen.getByLabelText(`${selected.day}일에 항목 추가`);
+    const addForToday = screen.getAllByLabelText(`${selected.day}일에 항목 추가`)[0];
 
     click(addForToday.parentElement as HTMLElement);
     expect(screen.queryByPlaceholderText("무엇을 할까요?")).not.toBeInTheDocument();

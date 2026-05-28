@@ -156,6 +156,18 @@ private struct TaskDraft {
     var scheduledTime: String?
 }
 
+private func sortTasksByDueDate(_ lhs: Task, _ rhs: Task) -> Bool {
+    if lhs.endDate != rhs.endDate {
+        return lhs.endDate < rhs.endDate
+    }
+    let lhsTime = lhs.scheduledTime ?? "99:99"
+    let rhsTime = rhs.scheduledTime ?? "99:99"
+    if lhsTime != rhsTime {
+        return lhsTime < rhsTime
+    }
+    return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+}
+
 private struct LoadingRootView: View {
     var body: some View {
         ZStack {
@@ -430,6 +442,8 @@ private struct HomeRootView: View {
     @State private var displayMonth = JDDate.todayComponents.month
     @State private var selectedTab: RootTab = .home
     @State private var isShowingAddTask = false
+    @State private var addTaskStartDate: String?
+    @State private var addTaskEndDate: String?
     @State private var isShowingHabitManager = false
     @State private var isShowingCategoryManager = false
     @State private var isShowingDayPanel = false
@@ -450,6 +464,8 @@ private struct HomeRootView: View {
         .sheet(isPresented: $isShowingAddTask) {
             AddTaskSheet(
                 selectedDate: selectedDate,
+                initialStartDate: addTaskStartDate ?? selectedDate,
+                initialEndDate: addTaskEndDate ?? selectedDate,
                 categories: snapshot?.categories ?? [],
                 onSaveTask: addTask(_:),
                 onSaveHabit: addHabit(title:emoji:)
@@ -485,9 +501,12 @@ private struct HomeRootView: View {
         .sheet(isPresented: $isShowingDayPanel) {
             SelectedDayPanel(
                 selectedDate: selectedDate,
-                tasks: tasksForSelectedDate,
+                tasks: tasksForSelectedDayPanel,
                 habits: snapshot?.habits ?? [],
                 categories: snapshot?.categories ?? [],
+                isJustDoMode: effectiveJustDoMode,
+                canUseJustDoMode: isProPlan,
+                onSetJustDoMode: setJustDoModeFromHome(_:),
                 onToggleTask: toggleTask(_:),
                 onToggleHabit: toggleHabit(_:on:),
                 onOpenTask: { id in
@@ -501,7 +520,7 @@ private struct HomeRootView: View {
                 onAdd: {
                     isShowingDayPanel = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                        isShowingAddTask = true
+                        presentAddSheetForSelectedDate()
                     }
                 }
             )
@@ -581,6 +600,7 @@ private struct HomeRootView: View {
                 onSetNotify: setNotify(_:),
                 onSetNotifyTime: setNotifyTime(_:),
                 onSetWeekStart: setWeekStart(_:),
+                onSetJustDoMode: setJustDoModeFromSettings(_:),
                 onManageHabits: { isShowingHabitManager = true },
                 onManageCategories: { isShowingCategoryManager = true },
                 onExportData: exportData,
@@ -628,7 +648,7 @@ private struct HomeRootView: View {
                         .clipShape(Capsule())
                 }
                 Button {
-                    isShowingAddTask = true
+                    presentAddSheet(startDate: selectedDate, endDate: selectedDate)
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .semibold))
@@ -650,6 +670,38 @@ private struct HomeRootView: View {
 
     private var tasksForSelectedDate: [Task] {
         (snapshot?.tasks ?? []).filter { $0.startDate <= selectedDate && selectedDate <= $0.endDate }
+    }
+
+    private var tasksForSelectedDayPanel: [Task] {
+        guard effectiveJustDoMode else {
+            return tasksForSelectedDate
+        }
+        return (snapshot?.tasks ?? [])
+            .filter { !$0.isCompleted && $0.endDate <= selectedDate }
+            .sorted(by: sortTasksByDueDate)
+    }
+
+    private var isProPlan: Bool {
+        (snapshot?.settings.plan ?? "free") == "pro"
+    }
+
+    private var effectiveJustDoMode: Bool {
+        isProPlan && (snapshot?.settings.justDoMode ?? false)
+    }
+
+    private func presentAddSheetForSelectedDate() {
+        if effectiveJustDoMode {
+            let startDate = selectedDate < JDDate.todayISO ? selectedDate : JDDate.todayISO
+            presentAddSheet(startDate: startDate, endDate: selectedDate)
+        } else {
+            presentAddSheet(startDate: selectedDate, endDate: selectedDate)
+        }
+    }
+
+    private func presentAddSheet(startDate: String, endDate: String) {
+        addTaskStartDate = startDate
+        addTaskEndDate = endDate
+        isShowingAddTask = true
     }
 
     private func moveMonth(_ delta: Int) {
@@ -843,6 +895,26 @@ private struct HomeRootView: View {
 
     private func setWeekStart(_ weekStart: Int) {
         setPreference(.weekStart, value: weekStart == 1 ? 1 : 0, successMessage: "Calendar settings updated.")
+    }
+
+    private func setJustDoModeFromHome(_ isOn: Bool) {
+        guard isProPlan else {
+            actionMessage = "Just Do Mode는 Pro 기능입니다."
+            return
+        }
+        setJustDoMode(isOn)
+    }
+
+    private func setJustDoMode(_ isOn: Bool) {
+        setPreference(.justDoMode, value: isOn ? 1 : 0, successMessage: "Just Do Mode updated.")
+    }
+
+    private func setJustDoModeFromSettings(_ isOn: Bool) {
+        guard isProPlan else {
+            actionMessage = "Just Do Mode는 Pro 기능입니다."
+            return
+        }
+        setJustDoMode(isOn)
     }
 
     private func setPreference(_ key: JustDoShared.PreferenceKey, value: Int, successMessage: String) {
@@ -1318,6 +1390,9 @@ private struct SelectedDayPanel: View {
     let tasks: [Task]
     let habits: [Habit]
     let categories: [JDCategory]
+    let isJustDoMode: Bool
+    let canUseJustDoMode: Bool
+    let onSetJustDoMode: (Bool) -> Void
     let onToggleTask: (Task) -> Void
     let onToggleHabit: (Habit, String) -> Void
     let onOpenTask: (UUID) -> Void
@@ -1328,16 +1403,30 @@ private struct SelectedDayPanel: View {
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: 0) {
                 dragHeader
+                modePicker
+                    .padding(.bottom, 8)
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(groupedTasks, id: \.category.id) { group in
-                            TaskGroupSection(
-                                category: group.category,
-                                tasks: group.tasks,
-                                onToggleTask: onToggleTask,
-                                onOpenTask: onOpenTask
-                            )
+                        if isJustDoMode {
+                            ForEach(justDoTaskSections, id: \.title) { section in
+                                JustDoTaskSectionView(
+                                    title: section.title,
+                                    tasks: section.tasks,
+                                    categories: categories,
+                                    onToggleTask: onToggleTask,
+                                    onOpenTask: onOpenTask
+                                )
+                            }
+                        } else {
+                            ForEach(groupedTasks, id: \.category.id) { group in
+                                TaskGroupSection(
+                                    category: group.category,
+                                    tasks: group.tasks,
+                                    onToggleTask: onToggleTask,
+                                    onOpenTask: onOpenTask
+                                )
+                            }
                         }
 
                         if !habits.isEmpty {
@@ -1397,6 +1486,43 @@ private struct SelectedDayPanel: View {
         .padding(.bottom, 8)
     }
 
+    private var modePicker: some View {
+        HStack(spacing: 0) {
+            modeButton(title: "오늘만", isSelected: !isJustDoMode) {
+                onSetJustDoMode(false)
+            }
+            modeButton(title: "이 날까지", isSelected: isJustDoMode) {
+                onSetJustDoMode(true)
+            }
+        }
+        .padding(3)
+        .background(JDTheme.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func modeButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Text(title)
+                if title == "이 날까지" && !canUseJustDoMode {
+                    Text("Pro")
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(JDTheme.accent.opacity(0.14))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+            }
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(isSelected ? JDTheme.primaryText : JDTheme.secondaryText)
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
+            .background(isSelected ? JDTheme.surface : .clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var components: (month: Int, day: Int) {
         let parts = JDDate.parts(selectedDate)
         return (parts.month, parts.day)
@@ -1411,6 +1537,41 @@ private struct SelectedDayPanel: View {
             let items = tasks.filter { $0.categoryID == category.id }
             return items.isEmpty ? nil : (category, items)
         }
+    }
+
+    private var justDoTaskSections: [(title: String, tasks: [Task])] {
+        [
+            ("지난일", tasks.filter { $0.endDate < JDDate.todayISO }),
+            ("오늘", tasks.filter { $0.endDate == JDDate.todayISO }),
+            ("해야할일", tasks.filter { $0.endDate > JDDate.todayISO && $0.endDate <= selectedDate }),
+        ]
+        .filter { !$0.tasks.isEmpty }
+    }
+}
+
+private struct JustDoTaskSectionView: View {
+    let title: String
+    let tasks: [Task]
+    let categories: [JDCategory]
+    let onToggleTask: (Task) -> Void
+    let onOpenTask: (UUID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionHeader(title: title, count: tasks.count, color: JDTheme.accent)
+            ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                let category = categories.first { $0.id == task.categoryID }
+                TaskRow(
+                    task: task,
+                    color: category?.displayColor ?? JDTheme.me,
+                    isLast: index == tasks.count - 1,
+                    showsDueDate: true,
+                    onToggle: { onToggleTask(task) },
+                    onOpen: { onOpenTask(task.id) }
+                )
+            }
+        }
+        .padding(.top, 14)
     }
 }
 
@@ -1428,6 +1589,7 @@ private struct TaskGroupSection: View {
                     task: task,
                     color: category.displayColor,
                     isLast: index == tasks.count - 1,
+                    showsDueDate: false,
                     onToggle: { onToggleTask(task) },
                     onOpen: { onOpenTask(task.id) }
                 )
@@ -1485,6 +1647,7 @@ private struct TaskRow: View {
     let task: Task
     let color: Color
     let isLast: Bool
+    let showsDueDate: Bool
     let onToggle: () -> Void
     let onOpen: () -> Void
 
@@ -1546,6 +1709,10 @@ private struct TaskRow: View {
     }
 
     private var taskDetailText: String {
+        if showsDueDate {
+            let time = JDDate.formatTime(task.scheduledTime)
+            return time.isEmpty ? JDDate.monthDay(task.endDate) : "\(JDDate.monthDay(task.endDate)) \(time)"
+        }
         if task.startDate != task.endDate {
             return "\(JDDate.monthDay(task.startDate)) - \(JDDate.monthDay(task.endDate))"
         }
@@ -1639,6 +1806,8 @@ private struct AddTaskSheet: View {
     }
 
     let selectedDate: String
+    let initialStartDate: String
+    let initialEndDate: String
     let categories: [JDCategory]
     let onSaveTask: (TaskDraft) -> Void
     let onSaveHabit: (String, String) -> Void
@@ -1800,9 +1969,8 @@ private struct AddTaskSheet: View {
         .background(JDTheme.surface)
         .onAppear {
             selectedCategoryID = selectedCategoryID ?? categories.first?.id
-            let initialDate = Self.date(from: selectedDate)
-            startDateValue = initialDate
-            endDateValue = initialDate
+            startDateValue = Self.date(from: initialStartDate)
+            endDateValue = Self.date(from: initialEndDate)
         }
         .sheet(item: $editingScheduleField) { field in
             DateTimeWheelSheet(
@@ -2139,6 +2307,7 @@ private struct SettingsRootTabView: View {
     let onSetNotify: (Bool) -> Void
     let onSetNotifyTime: (String) -> Void
     let onSetWeekStart: (Int) -> Void
+    let onSetJustDoMode: (Bool) -> Void
     let onManageHabits: () -> Void
     let onManageCategories: () -> Void
     let onExportData: () -> Void
@@ -2226,6 +2395,12 @@ private struct SettingsRootTabView: View {
                 }
                 SettingGroup(label: "구독") {
                     SettingsRow(title: "현재 플랜", detail: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free", chevron: true)
+                    SettingsRow(
+                        title: "Just Do Mode",
+                        detail: "선택한 날짜까지 할 일",
+                        pro: !isProPlan,
+                        right: AnyView(ToggleSwitch(isOn: justDoModeBinding))
+                    )
                     SettingsRow(title: "Pro로 업그레이드", pro: true, chevron: true, isLast: true)
                 }
                 SettingGroup(label: "데이터") {
@@ -2352,6 +2527,19 @@ private struct SettingsRootTabView: View {
             set: { value in
                 localNotify = value
                 onSetNotify(value)
+            }
+        )
+    }
+
+    private var justDoModeBinding: Binding<Bool> {
+        Binding(
+            get: { isProPlan && (settings?.justDoMode ?? false) },
+            set: { value in
+                if value && !isProPlan {
+                    settingsMessage = "Just Do Mode는 Pro 버전에서 사용할 수 있습니다."
+                    return
+                }
+                onSetJustDoMode(value)
             }
         )
     }

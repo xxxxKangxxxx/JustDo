@@ -121,12 +121,31 @@ public struct Settings: Codable, Equatable, Sendable {
     public var notifyTime: String
     public var weekStart: Int
     public var plan: String
+    public var justDoMode: Bool
 
-    public init(notify: Bool, notifyTime: String, weekStart: Int, plan: String) {
+    public init(notify: Bool, notifyTime: String, weekStart: Int, plan: String, justDoMode: Bool = false) {
         self.notify = notify
         self.notifyTime = notifyTime
         self.weekStart = weekStart
         self.plan = plan
+        self.justDoMode = justDoMode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case notify
+        case notifyTime
+        case weekStart
+        case plan
+        case justDoMode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        notify = try container.decode(Bool.self, forKey: .notify)
+        notifyTime = try container.decode(String.self, forKey: .notifyTime)
+        weekStart = try container.decode(Int.self, forKey: .weekStart)
+        plan = try container.decode(String.self, forKey: .plan)
+        justDoMode = try container.decodeIfPresent(Bool.self, forKey: .justDoMode) ?? false
     }
 }
 

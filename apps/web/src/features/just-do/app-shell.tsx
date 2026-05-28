@@ -19,7 +19,7 @@ import {
   type TossBillingPlanInterval,
 } from "@/lib/billing/toss-client";
 import type { Habit, HabitRecurType, Priority, Task } from "@/types/domain";
-import { habitActiveOn, habitStreak, tasksOnDate } from "./selectors";
+import { habitActiveOn, habitStreak, justDoTaskSections, justDoTasksUntil, tasksOnDate } from "./selectors";
 import { JustDoProvider, useJustDo } from "./store";
 import { mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
@@ -375,7 +375,7 @@ function JustDoViewport() {
               {visiblePage === "stats" ? <StatsDashboard mode={mode} /> : null}
               {visiblePage === "settings" ? <SettingsPage mode={mode} /> : null}
             </div>
-            {visiblePage === "calendar" && showToday ? <TodayPanel mode={mode} onOpenTask={setTaskModalId} /> : null}
+            {visiblePage === "calendar" && showToday ? <TodayPanel mode={mode} onOpenTask={setTaskModalId} onNewTask={setNewTask} /> : null}
           </div>
         </main>
         <TaskModal mode={mode} taskId={taskModalId} onClose={() => setTaskModalId(null)} onToast={flash} />
@@ -1162,44 +1162,109 @@ function ListView({
 function TodayPanel({
   mode,
   onOpenTask,
+  onNewTask,
 }: {
   mode: ThemeMode;
   onOpenTask: (id: string) => void;
+  onNewTask: (draft: NewTaskDraft) => void;
 }) {
   const s = useJustDo();
   const t = webTokens(mode);
+  const billing = useBillingSubscription();
+  const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
   const date = s.state.view.selectedDate;
   const parsed = parseISO(date);
-  const tasks = tasksOnDate(s.state.tasks, date);
+  const canUseJustDoMode = hasProEntitlement(billing.subscription);
+  const effectiveJustDoMode = canUseJustDoMode && s.state.settings.justDoMode;
+  const tasks = effectiveJustDoMode
+    ? justDoTasksUntil(s.state.tasks, date)
+    : tasksOnDate(s.state.tasks, date);
+  const sections = justDoTaskSections(s.state.tasks, date, todayISO());
   const done = tasks.filter((task) => task.isCompleted);
   const habits = s.state.habits.filter((habit) => habitActiveOn(habit, date));
+  const setJustDoMode = (value: boolean) => {
+    if (value && !canUseJustDoMode) {
+      setUpgradePlan("monthly");
+      return;
+    }
+    s.updateSetting("justDoMode", value);
+  };
+  const openAdd = () => {
+    if (effectiveJustDoMode) {
+      const start = date < todayISO() ? date : todayISO();
+      onNewTask({ date, range: [start, date] });
+      return;
+    }
+    onNewTask({ date });
+  };
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col overflow-auto border-l" style={{ background: t.bg2, borderColor: t.divider }}>
-      <div className="border-b px-4 py-3.5" style={{ borderColor: t.divider }}>
-        <div className="text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>{date === todayISO() ? "오늘" : "선택 날짜"}</div>
-        <div className="mt-0.5 text-[22px] font-bold tracking-[-0.5px]">
-          {parsed.month}월 {parsed.day}일 <span className="ml-1 text-[13px] font-medium" style={{ color: t.textTertiary }}>{weekdayLabels()[weekdayOfISO(date)]}요일</span>
+    <>
+      <aside className="flex w-[280px] shrink-0 flex-col overflow-auto border-l" style={{ background: t.bg2, borderColor: t.divider }}>
+        <div className="border-b px-4 py-3.5" style={{ borderColor: t.divider }}>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>{date === todayISO() ? "오늘" : "선택 날짜"}</div>
+          <div className="mt-0.5 flex items-start gap-2">
+            <div className="min-w-0 flex-1 text-[22px] font-bold tracking-[-0.5px]">
+              {parsed.month}월 {parsed.day}일 <span className="ml-1 text-[13px] font-medium" style={{ color: t.textTertiary }}>{weekdayLabels()[weekdayOfISO(date)]}요일</span>
+            </div>
+            <button type="button" onClick={openAdd} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[16px] font-bold text-white" style={{ background: t.accent }} aria-label="선택 날짜에 추가">
+              +
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-2 rounded-lg p-0.5" style={{ background: t.surfaceAlt }}>
+            {[
+              { label: "오늘만", value: false },
+              { label: "이 날까지", value: true },
+            ].map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setJustDoMode(item.value)}
+                className="rounded-md px-2 py-1.5 text-[11px] font-bold"
+                style={{
+                  background: effectiveJustDoMode === item.value ? t.surface : "transparent",
+                  color: effectiveJustDoMode === item.value ? t.text : t.textSecondary,
+                }}
+              >
+                {item.label}
+                {item.value && !canUseJustDoMode ? <span className="ml-1 text-[9px]" style={{ color: t.accent }}>Pro</span> : null}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 h-1 overflow-hidden rounded-full" style={{ background: t.surfaceAlt }}>
+            <div className="h-full rounded-full" style={{ width: `${tasks.length ? Math.round((done.length / tasks.length) * 100) : 0}%`, background: t.me.solid }} />
+          </div>
+          <div className="mt-1 text-[11px]" style={{ color: t.textTertiary }}>{done.length}/{tasks.length} 완료</div>
         </div>
-        <div className="mt-2 h-1 overflow-hidden rounded-full" style={{ background: t.surfaceAlt }}>
-          <div className="h-full rounded-full" style={{ width: `${tasks.length ? Math.round((done.length / tasks.length) * 100) : 0}%`, background: t.me.solid }} />
+        <div className="px-3.5 py-3">
+          {effectiveJustDoMode ? (
+            sections.length ? sections.map((section) => (
+              <div key={section.title} className="mb-3">
+                <div className="mb-1.5 flex items-center text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>
+                  {section.title} {section.items.length}
+                </div>
+                {section.items.map((task) => <TodayCard key={task.id} mode={mode} task={task} onOpen={onOpenTask} showDueDate />)}
+              </div>
+            )) : <div className="px-1 py-2 text-[12px]" style={{ color: t.textTertiary }}>선택한 날짜까지 할 일이 없어요</div>
+          ) : (
+            <>
+              <div className="mb-1.5 flex items-center text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>
+                할일 {tasks.length}
+              </div>
+              {tasks.length ? tasks.map((task) => <TodayCard key={task.id} mode={mode} task={task} onOpen={onOpenTask} />) : <div className="px-1 py-2 text-[12px]" style={{ color: t.textTertiary }}>등록된 할일이 없어요</div>}
+            </>
+          )}
         </div>
-        <div className="mt-1 text-[11px]" style={{ color: t.textTertiary }}>{done.length}/{tasks.length} 완료</div>
-      </div>
-      <div className="px-3.5 py-3">
-        <div className="mb-1.5 flex items-center text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>
-          할일 {tasks.length}
+        <div className="mt-1 border-t px-3.5 py-4" style={{ borderColor: t.divider }}>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>습관</div>
+          <div className="flex flex-col gap-1.5">
+            {habits.map((habit) => (
+              <HabitMiniRow key={habit.id} mode={mode} habit={habit} iso={date} />
+            ))}
+          </div>
         </div>
-        {tasks.length ? tasks.map((task) => <TodayCard key={task.id} mode={mode} task={task} onOpen={onOpenTask} />) : <div className="px-1 py-2 text-[12px]" style={{ color: t.textTertiary }}>등록된 할일이 없어요</div>}
-      </div>
-      <div className="mt-1 border-t px-3.5 py-4" style={{ borderColor: t.divider }}>
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>습관</div>
-        <div className="flex flex-col gap-1.5">
-          {habits.map((habit) => (
-            <HabitMiniRow key={habit.id} mode={mode} habit={habit} iso={date} />
-          ))}
-        </div>
-      </div>
-    </aside>
+      </aside>
+      {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
+    </>
   );
 }
 
@@ -1995,6 +2060,7 @@ function HabitEditModalBody({ mode, habit, onClose }: { mode: ThemeMode; habit: 
 }
 
 function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (plan: UpgradePlan) => void }) {
+  const s = useJustDo();
   const auth = useAuth();
   const t = webTokens(mode);
   const billing = useBillingSubscription();
@@ -2049,6 +2115,24 @@ function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
           <SettingRow mode={mode} label="다음 결제일" value={formatDateLabel(subscription?.next_billing_at)} />
           <SettingRow mode={mode} label="결제수단" value={paymentMethod} />
           <SettingRow mode={mode} label="Trial 종료" value={formatDateLabel(subscription?.trial_end_at)} />
+          <SettingRow
+            mode={mode}
+            label="Just Do Mode"
+            value={isPro ? "선택 날짜까지" : "Pro"}
+            right={
+              <Switch
+                mode={mode}
+                on={isPro && s.state.settings.justDoMode}
+                onChange={(value) => {
+                  if (value && !isPro) {
+                    onUpgrade("monthly");
+                    return;
+                  }
+                  s.updateSetting("justDoMode", value);
+                }}
+              />
+            }
+          />
         </div>
         {needsBillingMethod ? (
           <div className="mt-3 rounded-lg border p-3 text-[12px] leading-5" style={{ borderColor: t.divider, background: t.surface, color: t.textSecondary }}>
@@ -2487,7 +2571,7 @@ function CompactTask({ mode, task, onOpen }: { mode: ThemeMode; task: Task; onOp
   );
 }
 
-function TodayCard({ mode, task, onOpen }: { mode: ThemeMode; task: Task; onOpen: (id: string) => void }) {
+function TodayCard({ mode, task, onOpen, showDueDate = false }: { mode: ThemeMode; task: Task; onOpen: (id: string) => void; showDueDate?: boolean }) {
   const s = useJustDo();
   const t = webTokens(mode);
   const category = s.state.categories.find((item) => item.id === task.categoryId);
@@ -2496,7 +2580,9 @@ function TodayCard({ mode, task, onOpen }: { mode: ThemeMode; task: Task; onOpen
     <div className="mb-1.5 flex w-full items-center gap-2 rounded-[7px] border p-2 text-left" style={{ background: t.surface, borderColor: t.divider }}>
       <button type="button" onClick={() => onOpen(task.id)} className="min-w-0 flex-1 text-left">
         <div className="truncate text-[12.5px] font-semibold" style={{ textDecoration: task.isCompleted ? "line-through" : "none", opacity: task.isCompleted ? 0.55 : 1 }}>{task.title}</div>
-        <div className="mt-1 text-[10.5px]" style={{ color: t.textTertiary }}>{task.scheduledTime ? formatTime(task.scheduledTime) : dateRangeLabel(task.startDate, task.endDate)}</div>
+        <div className="mt-1 text-[10.5px]" style={{ color: t.textTertiary }}>
+          {showDueDate ? dueDateLabel(task) : task.scheduledTime ? formatTime(task.scheduledTime) : dateRangeLabel(task.startDate, task.endDate)}
+        </div>
       </button>
       <button
         type="button"
@@ -2510,6 +2596,11 @@ function TodayCard({ mode, task, onOpen }: { mode: ThemeMode; task: Task; onOpen
       </button>
     </div>
   );
+}
+
+function dueDateLabel(task: Task) {
+  const end = parseISO(task.endDate);
+  return `${end.month}/${end.day}${task.scheduledTime ? ` ${formatTime(task.scheduledTime)}` : ""}`;
 }
 
 function HabitMiniRow({ mode, habit, iso }: { mode: ThemeMode; habit: Habit; iso: string }) {

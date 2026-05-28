@@ -278,6 +278,8 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
                 settings.notifyTime = Self.timeString(fromMinutes: value)
             case .weekStart:
                 settings.weekStart = value == 1 ? 1 : 0
+            case .justDoMode:
+                settings.justDoMode = value == 1
             }
         }
         return settings
@@ -327,7 +329,8 @@ public enum AppSnapshotDefaults {
             notify: true,
             notifyTime: "09:00",
             weekStart: 1,
-            plan: "free"
+            plan: "free",
+            justDoMode: false
         )
     }
 

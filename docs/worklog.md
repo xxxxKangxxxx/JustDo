@@ -3456,6 +3456,81 @@ This document records coordination notes for work done with Codex and Claude Cod
 - 본 fix는 `AuthViewModel`, `ContentView` 두 파일만 변경하며 `AppSyncCoordinator`
   의 refresh 경로는 손대지 않음 — 기존 동작이 정상이라 그대로 둠.
 
+## 2026-05-28 Just Do Mode implementation
+
+### Codex
+
+- Shared settings:
+  - `Settings.justDoMode` 추가. 기존 snapshot/fixture가 해당 키를 갖고 있지
+    않아도 `false`로 decode되도록 iOS 모델을 호환 처리.
+  - iOS/Web preference key `just_do_mode` 추가. CoreData local mirror,
+    mutation queue, Supabase user preferences sync에 반영.
+- iOS:
+  - Home selected-day bottom sheet에 `[오늘만] [이 날까지]` segmented control 추가.
+  - Pro 사용자만 Just Do Mode를 실제 적용하도록
+    `effectiveJustDoMode = isProPlan && settings.justDoMode`로 gate.
+  - Free 사용자가 sheet/Settings에서 켜려 하면 Pro 안내 메시지 표시.
+  - Just Do Mode ON 시 task는 `!isCompleted && endDate <= selectedDate` 기준으로
+    표시하고, `지난일 / 오늘 / 해야할일` 섹션으로 분리.
+  - Just Do Mode task row에는 due date/time을 표시.
+  - 시트 `+` 버튼은 Just Do Mode에서 `startDate = today`, `endDate = selectedDate`
+    로 기본값을 열고, 선택 날짜가 과거면 둘 다 selectedDate로 설정.
+  - Settings 구독 섹션에 Just Do Mode toggle 추가.
+- Web:
+  - 모바일 Home panel과 desktop Today panel에 같은 `[오늘만] [이 날까지]`
+    전환을 추가.
+  - Desktop Today panel에서 Free 사용자가 `이 날까지`를 누르면 Pro upgrade modal로
+    연결.
+  - Desktop subscription panel에 Just Do Mode switch 추가.
+  - Just Do Mode selector helpers 추가: due-by 필터, due date 정렬,
+    `지난일 / 오늘 / 해야할일` sectioning.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 41 tests passed.
+- `cd apps/web && npm test` -> 8 files / 103 tests passed.
+- `cd apps/web && npm run lint` -> passed.
+- `cd apps/web && npm run build` -> passed after rerunning with escalated
+  permission because Turbopack worker port binding is blocked in sandbox.
+- `xcodebuild -quiet -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -destination 'generic/platform=iOS Simulator' build` -> passed.
+- `xcodebuild -quiet -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+  -configuration Release -destination 'generic/platform=iOS' build` -> passed.
+- `git diff --check` 통과.
+
+## 2026-05-28 Goal & Pro Report planning
+
+### User + Codex
+
+- Just Do Mode와 별도로 후속 **Goal & Pro Report** 기능을 기획하기로 결정.
+- 결정 사항:
+  - 목표 입력은 Free / Trial / Pro 모두 가능.
+  - 목표 기반 월간/연간 리포트 상세는 Trial / Pro 전용.
+  - Free 사용자는 리포트 preview + Pro CTA를 본다.
+  - 첫 사용자에게 선택형 목표 설정 모달을 표시하되, 하단 `나중에 할게요`로
+    건너뛸 수 있게 한다.
+  - 월간 목표 프롬프트는 매월 1~3일 동안 표시 가능. 해당 월 목표가 있거나
+    사용자가 `다시 보지 않기`로 닫으면 그 달에는 다시 표시하지 않는다.
+  - 연간 목표 프롬프트는 매년 1월 1~7일 동안 표시 가능. 해당 연도 목표가
+    있거나 사용자가 `다시 보지 않기`로 닫으면 그 해에는 다시 표시하지 않는다.
+    신규 사용자는 이 기간이 아니어도 onboarding에서 연간 목표 설정 여부를 묻는다.
+  - 월간 목표와 연간 목표는 강제 연결하지 않는다.
+  - 월간 목표 최대 5개, 연간 목표 최대 5개.
+  - 목표 수정 잠금은 영구 수정 금지가 아니라 확인 UX로 운영한다. 잠긴 목표
+    수정 시 `고정한 목표를 수정할까요?` 확인 모달을 거친다.
+  - 초기 리포트는 실시간 계산 + 템플릿 narrative로 구현하고, AI narrative와
+    report snapshot 저장은 후속 범위로 둔다.
+  - 초기 알림은 앱/웹 진입 모달만 사용하고, 푸시 알림은 후속 범위.
+
+### Documentation Updates
+
+- `docs/just_do_prd.md`: 월간 리포트를 Goal & Pro Report 정책으로 확장하고,
+  목표 입력/프롬프트/잠금/Pro gate 결정을 추가.
+- `docs/just_do_db_schema.md`: future `goals` 및 `goal_prompt_dismissals`
+  schema 초안과 리포트 집계 방향 추가.
+- `docs/next_steps.md`: Just Do Mode와 별도인 planned product track으로 Goal &
+  Pro Report 후속 계획 추가.
+
 ## 2026-05-27 iOS smoke feedback fixes
 
 ### Codex
