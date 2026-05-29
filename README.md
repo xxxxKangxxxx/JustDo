@@ -11,6 +11,12 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
 
 - **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일
   네이티브, Android=v3. 자세한 내용: `docs/just_do_prd.md` §1.5.
+- **Active next product track (2026-05-29)**: Goal & Pro Report MVP. Just Do
+  Mode iOS/Web implementation and smoke follow-up are complete enough to move
+  on. Next work should start with Supabase schema migration, then Web MVP, then
+  iOS MVP. TestFlight/App Store preparation remains next after the team decides
+  whether the first TestFlight build includes Goal & Pro Report. 자세한 내용:
+  `docs/next_steps.md` Active Next Track.
 - **Phase 7 Web Desktop Redesign** is complete except the Pro checkout track.
   데스크탑 reference는 `reference/web_proto/`와
   `reference/Just Do - Web Prototype.html`. 현재 Pro checkout은 Toss
@@ -23,7 +29,8 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
   Auth landing, Home, Add Sheet, edit-sheet routing, Stats, Settings,
   Widget까지 통과. Task/Habit pushed detail page는 제거했고, Home과 app
   deep link는 기존 add UI와 같은 editor sheet를 연다. 2026-05-29 최종 실기기
-  smoke도 통과했으며, 남은 iOS 트랙은 TestFlight/App Store 준비.
+  smoke도 통과했으며, 남은 iOS 트랙은 Goal & Pro Report 포함 여부 결정 후
+  TestFlight/App Store 준비.
 - 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
   기존 구현을 유지함. 결제 모달은 v1에서 Toss만 활성화하고 네이버페이 /
   카카오페이 / PortOne 경유 다중 PG는 추후 확장 트랙으로 남겨둠.
@@ -149,6 +156,7 @@ native editor sheets rather than pushed detail pages. Detail edit/delete,
 app-facing sync status UI, hosted OAuth/offline sync, Supabase subscription
 plan read-sync, Home/Add/Stats/Settings/Widget visual checks, deep-link UI
 tests, 1-hour+ auth session refresh smoke, and final real-device smoke are
-complete. The active iOS work is TestFlight/App Store preparation. 자세한 내용:
+complete. The active product work is Goal & Pro Report MVP; iOS TestFlight/App
+Store preparation follows after the inclusion decision for that MVP. 자세한 내용:
 `docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`,
 `docs/claude_handoff.md`.

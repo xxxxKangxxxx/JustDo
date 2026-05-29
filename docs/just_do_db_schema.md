@@ -394,10 +394,13 @@ CREATE TABLE public.payment_events (
 
 ---
 
-## 7. Goal & Pro Report schema (future)
+## 7. Goal & Pro Report schema (next implementation)
 
 > Goal 입력은 Free / Trial / Pro 모두 가능하다. 목표 기반 월간/연간 리포트 상세는
-> Trial / Pro 전용으로 gate한다.
+> Trial / Pro 전용으로 gate한다. 2026-05-29 기준 다음 구현 트랙이다.
+>
+> 중요: 이 문서의 기존 백엔드 전략과 동일하게, business data FK는
+> `auth.users`를 직접 참조하지 않고 `public.users(id)`를 참조한다.
 
 ### 7-1. goals
 
@@ -407,7 +410,7 @@ CREATE TABLE public.payment_events (
 ```sql
 CREATE TABLE public.goals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   period_type TEXT NOT NULL CHECK (period_type IN ('monthly', 'yearly')),
   period_key TEXT NOT NULL, -- monthly: '2026-06', yearly: '2026'
   title TEXT NOT NULL,
@@ -423,10 +426,22 @@ CREATE INDEX goals_user_period_idx
   ON public.goals (user_id, period_type, period_key, sort_order);
 ```
 
+- Add `set_updated_at()` trigger on `public.goals` in the migration.
+- Add owner-only RLS policies following existing app tables:
+  - `SELECT`: `auth.uid() = user_id`
+  - `INSERT`: `auth.uid() = user_id`
+  - `UPDATE`: `auth.uid() = user_id`
+  - `DELETE`: `auth.uid() = user_id`
 - 같은 `user_id + period_type + period_key` 기준으로 최대 5개까지 허용한다.
+  MVP에서는 app/service layer에서 먼저 제한한다. DB trigger는 추후 필요 시
+  추가한다.
 - `locked = TRUE`는 영구 수정 금지가 아니라, 수정 전 확인 모달을 띄우는 UX
   플래그다.
 - 목표와 Task/Habit 직접 연결은 후속 범위로 둔다.
+- `period_key` format은 application code에서 생성한다:
+  - monthly: `YYYY-MM`
+  - yearly: `YYYY`
+- `sort_order`는 같은 기간 내 사용자가 입력한 순서를 유지하기 위한 값이다.
 
 ### 7-2. goal_prompt_dismissals
 
@@ -435,7 +450,7 @@ CREATE INDEX goals_user_period_idx
 ```sql
 CREATE TABLE public.goal_prompt_dismissals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   prompt_type TEXT NOT NULL CHECK (prompt_type IN ('onboarding', 'monthly', 'yearly')),
   period_key TEXT NOT NULL,
   dismissed_permanently_for_period BOOLEAN NOT NULL DEFAULT TRUE,
@@ -445,11 +460,16 @@ CREATE TABLE public.goal_prompt_dismissals (
 );
 ```
 
+- Add owner-only RLS policies following existing app tables.
 - 월간 프롬프트는 매월 1~3일 사이에 표시 가능하다.
 - 연간 프롬프트는 매년 1월 1~7일 사이에 표시 가능하다.
 - 첫 가입 사용자는 위 기간이 아니더라도 onboarding flow에서 연간 목표 설정
   여부를 물을 수 있다.
 - 해당 기간의 목표가 이미 존재하면 프롬프트를 표시하지 않는다.
+- `prompt_type = 'onboarding'`은 첫 사용자 목표 설정 진입을 다시 띄우지 않기
+  위한 상태다. 월간/연간 기간 프롬프트와 별도로 취급한다.
+- `dismissed_permanently_for_period`는 MVP에서는 항상 true로 저장해도 된다.
+  향후 "이번에는 닫기"와 "다시 보지 않기"를 분리할 때 확장 여지를 남긴다.
 
 ## 8. 월간/연간 리포트 집계 방식
 
@@ -466,9 +486,36 @@ CREATE TABLE public.goal_prompt_dismissals (
       └── 앱/웹에서 렌더링
 ```
 
+- Free user behavior:
+  - 목표 입력/수정은 허용한다.
+  - 리포트 상세는 잠그고, 일부 요약 preview와 Pro CTA를 보여준다.
+- Trial / Pro behavior:
+  - 월간/연간 리포트 상세를 보여준다.
+  - Trial 사용자는 Pro entitlement와 동일하게 취급하되, subscription panel의
+    Trial/결제 연결 안내는 기존 정책을 따른다.
+- MVP report inputs:
+  - goals for `period_type + period_key`
+  - tasks whose date range intersects the period
+  - habit logs inside the period
+  - existing category names and completion status
+- MVP report outputs:
+  - 목표 목록과 간단한 진행 narrative
+  - Task 완료율
+  - 카테고리별 Task 완료율
+  - Habit 달성률 / 최고 스트릭
+  - 가장 많이 밀린 작업
+- Explicitly out of scope for MVP:
+  - saved report snapshots
+  - AI-generated narrative
+  - push notification reminders
+  - numeric goal target/progress fields
+  - direct task/habit-goal relationships
+
 ---
 
 ## 9. 미결 사항
 
 - [x] 구독 가격 정책 (월 ₩1,900 / 연 ₩9,900)
+- [x] Goal & Pro Report MVP 정책 (Free 입력 허용, Trial/Pro 리포트 상세,
+  실시간 계산 + 템플릿 narrative)
 - [ ] 공유/협업 기능 테이블 설계 (v2)

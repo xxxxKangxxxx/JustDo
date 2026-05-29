@@ -73,5 +73,7 @@ Auth landing, Home, Add Sheet, editor-sheet routing, Stats, Settings, and
 Widget. The 2026-05-25 1-hour+ auth session refresh smoke also passed. App
 deep links open task/habit editor sheets, while Home selected-day sheet task
 taps edit inline and habit row taps no-op except for the check control. The
-2026-05-29 final real-device smoke also passed. The remaining iOS track is
-TestFlight/App Store preparation.
+2026-05-29 final real-device smoke also passed. The next product track is Goal
+& Pro Report MVP, starting on Web after schema migration and then mirrored to
+iOS. TestFlight/App Store preparation follows after deciding whether that MVP is
+included in the first TestFlight build.

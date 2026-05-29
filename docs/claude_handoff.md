@@ -82,21 +82,34 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > `xcodebuild -project JustDoApp.xcodeproj ...`로 실행한다.
 
 > **다음 작업자가 픽업할 우선순위 (2026-05-29 갱신)**:
-> 1. **iOS TestFlight/App Store 준비**. Auth landing, Home, Add Sheet,
->    editor-sheet routing, Just Do Mode, Stats, Settings, Widget 보정은 iPhone
->    14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션 자동 refresh도 1시간+
->    종료 후 재진입 smoke 통과. 남은 것은 archive/TestFlight/App Store 준비.
-> 2. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
->    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서. 코드
->    트랙은 이와 병렬로 진행 가능. 체크리스트:
->    `docs/toss_merchant_review_plan.md`.
-> 3. **Pro Checkout B6 외부 의존 검증** — route 단위 테스트, Toss SDK
+> 1. **Goal & Pro Report MVP 구현**. Just Do Mode iOS/Web 구현과 smoke
+>    follow-up은 완료 흐름으로 정리됨. 다음 제품 트랙은 월간/연간 목표 입력과
+>    Pro-gated 리포트다. `docs/next_steps.md`의 "Active Next Track"과
+>    "Planned Product Track: Goal & Pro Report", `docs/just_do_prd.md`의
+>    Goal & Pro Report 섹션, `docs/just_do_db_schema.md`의 next implementation schema를
+>    기준으로 진행.
+> 2. **Goal & Pro Report schema migration 먼저**. Future schema를 실제
+>    Supabase migration으로 옮기되, 현재 backend strategy에 맞춰 business data
+>    FK는 `public.users(id)`를 사용한다. owner-only RLS, `set_updated_at()`
+>    trigger, `user_id + period_type + period_key + sort_order` index를 포함.
+>    최대 5개 제한은 MVP에서는 app/service layer에서 먼저 enforce.
+> 3. **Web MVP 후 iOS MVP**. Web은 `app-shell.tsx`, `store.tsx`,
+>    `persistence.ts`, `supabase-storage.ts`, `supabase-mapping.ts`,
+>    `selectors.ts`와 관련 tests에서 시작. iOS는 Web behavior가 안정된 뒤
+>    `ContentView.swift` 및 `apps/ios/Sources` 공유 모델/스토리지로 반영.
+> 4. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
+>    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
+>    체크리스트: `docs/toss_merchant_review_plan.md`.
+> 5. **iOS TestFlight/App Store 준비**. Goal & Pro Report를 첫 TestFlight에
+>    포함할지 결정한 뒤 archive/TestFlight 작업으로 이동. 현재 Auth landing,
+>    Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats, Settings,
+>    Widget 보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션
+>    자동 refresh도 1시간+ 종료 후 재진입 smoke 통과.
+> 6. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
->    남은 항목은 운영/테스트 Toss 키를 이용한 E2E smoke와 Toss 공식 dashboard
->    secret/header 확인 후 webhook signature 검증.
-> 4. **(라이브 직전) DLQ 추가** — `justdo-prod-billing-cron` Lambda async
->    invocation에 SQS DLQ 연결. Toss 가맹점 심사 통과 + live billing 활성화
->    직전에 진행.
+>    남은 항목은 Toss test-key E2E smoke, Toss 공식 dashboard secret/header 확인
+>    후 webhook signature 검증, live billing 직전 `justdo-prod-billing-cron`
+>    Lambda async invocation SQS DLQ 연결.
 >
 > **유지 상태 (참고)**:
 > - **iOS Bundle ID 확정**: `kr.justdo.app` (앱) / `kr.justdo.app.widget`
@@ -403,10 +416,10 @@ iOS build/test commands below before doing the next real-device smoke pass.
     - `git diff --check` -> pass.
   - Auth landing, Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats,
     Settings, Widget, 1-hour+ auth session refresh smoke, and final real-device
-    smoke passed on the configured real device. Remaining iOS work is
-    TestFlight/App Store preparation. Because this is a native SwiftUI/Xcode app, do **not**
-    use Expo Go; install directly from Xcode to a real iPhone or use TestFlight
-    later.
+    smoke passed on the configured real device. TestFlight/App Store preparation
+    is ready to start after the Goal & Pro Report inclusion decision. Because
+    this is a native SwiftUI/Xcode app, do **not** use Expo Go; install directly
+    from Xcode to a real iPhone or use TestFlight later.
   - Both targets share App Group `group.kr.justdo.app`.
   - Auto-generated `JustDoWidgetControl` (iOS 18-only) removed.
   - `JustDoWidget.swift` now reads `widget_snapshot.json` from the App Group,

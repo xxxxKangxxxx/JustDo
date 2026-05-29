@@ -3877,3 +3877,64 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `home-screen.tsx` was removed in the previous Web Just Do Mode follow-up.
   Desktop Web's active implementation is `app-shell.tsx`; mobile Web still uses
   `MobileWebGuide`.
+
+## 2026-05-29 Goal & Pro Report next-track documentation
+
+### User + Codex
+
+- 사용자가 Just Do Mode iOS/Web 보정 이후 앞으로 진행할 작업을 다시 정리했고,
+  TestFlight로 바로 넘어가기 전에 **Web Just Do Mode 마무리 + Goal & Pro
+  Report 기능 추가 후 TestFlight 준비**가 더 맞는 순서라고 확인.
+- Web Just Do Mode smoke와 UI polish가 완료된 뒤, 다음 작업 트랙을
+  **Goal & Pro Report MVP**로 전환하기로 문서화.
+
+### Decisions Recorded
+
+- Just Do Mode는 Home task 표시 방식이고, Goal & Pro Report는 월간/연간 목표와
+  Pro-gated 리포트 기능으로 별도 운영한다는 기존 결정을 유지.
+- Goal & Pro Report는 다음 제품 구현 트랙으로 둔다. iOS TestFlight/App Store
+  준비는 여전히 중요하지만, 첫 TestFlight 빌드에 Goal & Pro Report MVP를 포함할지
+  결정한 뒤 archive/TestFlight 작업으로 이동한다.
+- 권장 구현 순서:
+  1. Supabase schema migration.
+  2. Web MVP.
+  3. iOS MVP.
+  4. iOS TestFlight/App Store 준비.
+  5. Toss 외부 심사와 Pro Checkout 외부 의존 검증은 병행.
+- Schema 구현 시 business data FK는 기존 backend strategy와 맞춰
+  `public.users(id)`를 참조한다. `auth.users(id)` 직접 참조는 피한다.
+- 최대 5개 목표 제한은 MVP에서 app/service layer에서 먼저 enforce한다. DB trigger
+  기반 hard limit은 추후 필요 시 추가한다.
+- 리포트 MVP는 실시간 계산 + 템플릿 narrative로 시작한다. AI narrative, saved
+  report snapshots, push reminder, numeric goal progress, goal-task/habit 직접
+  연결은 후속 범위로 둔다.
+
+### Docs Updated
+
+- `docs/next_steps.md`
+  - `Active Next Track (2026-05-29)` 섹션 추가.
+  - Goal & Pro Report를 다음 구현 트랙으로 명시.
+  - schema migration, Web MVP, iOS MVP, Toss 병행, TestFlight 순서 정리.
+  - Claude Code가 먼저 열어볼 Web/iOS 파일 목록과 구현 범위를 추가.
+- `docs/claude_handoff.md`
+  - "다음 작업자가 픽업할 우선순위"를 TestFlight-first에서 Goal & Pro
+    Report-first로 갱신.
+  - Supabase migration 주의점, Web/iOS 시작 파일, Toss/TestFlight 병행 조건을
+    handoff 상단에 배치.
+- `docs/just_do_db_schema.md`
+  - Goal & Pro Report schema를 "future"에서 "next implementation"으로 갱신.
+  - `goals`와 `goal_prompt_dismissals`의 FK를 `public.users(id)` 기준으로 명시.
+  - RLS, `set_updated_at()`, index, period_key format, MVP out-of-scope 항목을
+    구체화.
+- `docs/just_do_prd.md`
+  - Goal & Pro Report를 다음 제품 구현 트랙으로 진행한다는 결정과 MVP 구현 범위를
+    추가.
+
+### Handoff Notes
+
+- 다음 세션이 Claude Code로 전환되면 먼저 `docs/next_steps.md`의 Active Next
+  Track, `docs/just_do_db_schema.md` 7~8장, `docs/just_do_prd.md` Goal & Pro
+  Report 섹션을 읽고 schema migration부터 시작하면 된다.
+- 현재 Web Just Do Mode 최종 보정은 `apps/web/src/features/just-do/app-shell.tsx`,
+  `store.tsx`, `app-shell.test.tsx`에 반영된 상태이며, 다음 Goal & Pro Report
+  작업은 이 파일들을 이어서 확장하는 방향이 가장 자연스럽다.

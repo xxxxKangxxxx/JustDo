@@ -262,6 +262,9 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 #### Goal & Pro Report
 - Just Do Mode와 별도 기능으로 운영한다. Just Do Mode는 Home의 todo 표시
   방식이고, Goal & Pro Report는 월간/연간 목표와 회고 리포트 기능이다.
+- 2026-05-29 결정: Just Do Mode iOS/Web smoke 후 다음 제품 구현 트랙으로
+  진행한다. TestFlight/App Store 준비는 이 MVP를 첫 TestFlight에 포함할지
+  결정한 뒤 진행한다.
 - 목표 입력은 Free / Trial / Pro 모두 가능하다.
 - 목표 기반 월간/연간 리포트 상세 열람은 Trial / Pro 전용이다.
 - 첫 가입 또는 첫 실행 사용자는 목표 설정 모달을 본다. 모달은 강제 입력이
@@ -291,6 +294,13 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
     있어요.`
   - 영구 수정 불가가 아니라 사용자의 의도 확인을 강화하는 UX로 둔다.
 - 초기 알림은 앱/웹 진입 시 모달만 사용한다. 푸시 알림은 후속 범위로 둔다.
+- MVP 구현 범위:
+  - Web MVP를 먼저 구현하고, behavior가 안정되면 iOS에 반영한다.
+  - 목표와 프롬프트 dismiss 상태는 Supabase에 저장한다.
+  - 리포트는 기존 task/habit/habit log 데이터를 실시간 집계해 템플릿 문장으로
+    렌더링한다.
+  - saved report snapshot, AI narrative, 목표-Task/Habit 직접 연결, 수치형
+    목표 progress는 후속 범위다.
 
 ---
 

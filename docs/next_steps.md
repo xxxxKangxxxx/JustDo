@@ -12,6 +12,61 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
+## Active Next Track (2026-05-29)
+
+> Just Do Mode iOS/Web implementation and smoke follow-up are complete enough to
+> move on. The next product implementation track is **Goal & Pro Report**. iOS
+> TestFlight/App Store preparation remains important, but it should start after
+> the team decides whether the first TestFlight build must include Goal & Pro
+> Report MVP.
+
+Recommended order for the next coding session:
+
+1. **Goal & Pro Report schema migration**
+   - Convert the next-implementation schema in `docs/just_do_db_schema.md` into
+     a Supabase migration.
+   - Keep ownership consistent with the current backend strategy: business data
+     should reference `public.users(id)`, not `auth.users(id)` directly.
+   - Add RLS policies matching the existing owner-only pattern.
+   - Add `set_updated_at()` trigger coverage for mutable goal rows.
+   - Add indexes for `user_id + period_type + period_key + sort_order`.
+   - Enforce the "maximum 5 goals per period" rule in application code first.
+     A DB trigger can be added later if abuse/consistency risk becomes real.
+
+2. **Web MVP first**
+   - Add domain types/selectors/storage adapter methods for goals and prompt
+     dismissals.
+   - Add a Goal setup modal that can handle onboarding, monthly, and yearly
+     prompts without blocking app entry.
+   - Add goal CRUD with max 5 goals per monthly/yearly period.
+   - Add locked-goal edit confirmation (`이번 기간 동안 목표를 고정할게요` /
+     `고정한 목표를 수정할까요? 처음 세운 목표와 달라질 수 있어요.`).
+   - Add report preview/detail UI:
+     - Free: preview + Pro CTA.
+     - Trial/Pro: full monthly/yearly report detail.
+   - Use real-time calculation plus template narrative for MVP. Do not add AI
+     generation or persisted report snapshots yet.
+
+3. **iOS MVP after Web behavior settles**
+   - Mirror the same data policy and prompt windows.
+   - Keep iOS UX native: modal/sheet entry, non-blocking skip action, and
+     settings/report entry points consistent with current SwiftUI patterns.
+   - Run `swift test` from `apps/ios` and app build from
+     `apps/ios/JustDoApp`.
+
+4. **Toss external track in parallel**
+   - Continue owner-side business registration / mail-order sales report /
+     Toss Payments merchant review.
+   - Code-side remaining billing work is still Toss test-key E2E, webhook
+     signature verification after dashboard details are available, and DLQ
+     shortly before live billing.
+
+5. **TestFlight/App Store preparation**
+   - Start archive/TestFlight work after the Goal & Pro Report inclusion
+     decision.
+   - Current iOS Home/Add/Edit/Stats/Settings/Widget/Just Do Mode smoke is
+     already documented as passing on iPhone 14 Pro / iOS 26.5.
+
 ## Implemented Product Track: Just Do Mode
 
 > 2026-05-28 implemented on iOS and web. 2026-05-29 iOS/Web follow-up separated
@@ -61,7 +116,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 > 2026-05-28 decision: this is separate from Just Do Mode. Just Do Mode changes
 > Home's task display behavior; Goal & Pro Report captures monthly/yearly goals
-> and turns them into Pro-gated reports.
+> and turns them into Pro-gated reports. 2026-05-29 decision: this becomes the
+> next implementation track before TestFlight unless the owner explicitly decides
+> to ship a TestFlight build without it.
 
 - Goal input is available to Free / Trial / Pro users.
 - Monthly/yearly goal report detail is Trial / Pro only. Free users see a report
@@ -94,6 +151,26 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   AI narrative and saved report snapshots are future work.
 - Initial prompt delivery is in-app/web modal on entry. Push notifications are
   future work.
+- MVP implementation shape:
+  - Store goals in Supabase and local app state, not as static client-only
+    sample data.
+  - Use one `goals` model for both monthly and yearly goals with
+    `period_type` and `period_key`.
+  - Use `goal_prompt_dismissals` for per-period `다시 보지 않기`.
+  - Do not require monthly goals to belong to yearly goals.
+  - Do not directly link goals to task/habit rows in MVP.
+  - Report calculations can derive from existing tasks, habits, and habit logs
+    at render time.
+  - Saved report snapshots, AI narrative, push notification reminders, numeric
+    goal progress fields, and goal-task linking are future work.
+- First implementation files to inspect:
+  - Web app shell/UI: `apps/web/src/features/just-do/app-shell.tsx`.
+  - Web state/persistence: `apps/web/src/features/just-do/store.tsx`,
+    `persistence.ts`, `supabase-storage.ts`, `supabase-mapping.ts`.
+  - Web domain/selectors/tests: `domain.ts`, `selectors.ts`,
+    `app-shell.test.tsx`, `persistence.test.ts`, `selectors.test.ts`.
+  - iOS app shell/state: `apps/ios/JustDoApp/JustDoApp/ContentView.swift` and
+    shared Swift package sources under `apps/ios/Sources`.
 - Documentation anchors:
   - Product spec: `docs/just_do_prd.md` Goal & Pro Report.
   - Future schema: `docs/just_do_db_schema.md` Goal & Pro Report schema.
@@ -169,9 +246,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     경로로 일원화하는 작업이 따로 필요.
 - **웹 세션 영속화는 변경 없음**. `@supabase/ssr` 기본값(쿠키 + 자동 refresh)을
   그대로 사용하고 있어 별도 손댈 곳 없음. 본 fix는 iOS 한정.
-- 다음 우선순위: **iOS TestFlight 준비** +
-  **Toss 가맹점 심사 외부 트랙 병행**. Toss 가맹점 심사가 가장 긴 외부
-  차단(~2–3주)이라 사용자 외부 트랙 먼저 시작 권장.
+- 다음 우선순위: **Goal & Pro Report 구현 트랙**. Just Do Mode iOS/Web 보정과
+  smoke가 끝났으므로, TestFlight로 바로 넘어가기 전에 월간/연간 목표와 Pro
+  리포트 MVP 포함 여부를 결정하고 구현하는 흐름으로 전환한다. Toss 가맹점
+  심사는 가장 긴 외부 차단(~2–3주)이므로 사용자 외부 트랙에서 병행 유지.
 
 ## Where We Are (2026-05-22)
 
@@ -230,8 +308,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     (single light variant, dark/tinted 추후).
   - Web: `apps/web/public/`에 SVG primary + 16/32/48 PNG fallback +
     apple-touch-icon. `layout.tsx`의 `metadata.icons`에 등록.
-- 다음 우선순위: **iOS TestFlight 준비 및 Toss 외부 의존 트랙**. Toss 가맹점
-  심사는 외부 트랙 유지.
+- 당시 다음 우선순위는 **iOS TestFlight 준비 및 Toss 외부 의존 트랙**이었음.
+  2026-05-29 이후에는 상단 Active Next Track 기준으로 Goal & Pro Report MVP가
+  TestFlight 전 제품 구현 후보로 올라왔다. Toss 가맹점 심사는 외부 트랙 유지.
 
 ## Where We Are (2026-05-21)
 
