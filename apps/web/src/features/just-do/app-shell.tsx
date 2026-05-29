@@ -232,7 +232,7 @@ function JustDoViewport() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const tag = target?.tagName.toLowerCase();
+      const tag = target?.tagName?.toLowerCase();
       const isInput = tag === "input" || tag === "textarea" || tag === "select";
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -1014,7 +1014,7 @@ function MonthGrid({
                           event.stopPropagation();
                           onOpenTask(task.id);
                         }}
-                        className="pointer-events-auto absolute h-[18px] overflow-hidden rounded px-1.5 text-left text-[11px] font-semibold leading-[18px]"
+                        className="pointer-events-auto absolute flex h-[18px] items-center gap-1 overflow-hidden rounded px-1.5 text-left text-[11px] font-semibold leading-[18px]"
                         style={{
                           left: `calc(${(startCol / 7) * 100}% + 4px)`,
                           width: `calc(${((endCol - startCol + 1) / 7) * 100}% - 8px)`,
@@ -1026,8 +1026,8 @@ function MonthGrid({
                         }}
                         title={task.title}
                       >
-                        {task.scheduledTime ? <span className="mr-1 font-medium opacity-70">{task.scheduledTime}</span> : null}
-                        {task.title}
+                        <span className="min-w-0 flex-1 truncate">{task.title}</span>
+                        {task.scheduledTime ? <span className="shrink-0 pr-1 font-medium opacity-70">{clockTime(task.scheduledTime)}</span> : null}
                       </button>
                     );
                   })}
@@ -1172,8 +1172,9 @@ function TodayPanel({
   const t = webTokens(mode);
   const billing = useBillingSubscription();
   const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
-  const [isShowingJustDoMode, setIsShowingJustDoMode] = useState(false);
+  const [panelMode, setPanelModeState] = useState({ date: "", justDo: false });
   const date = s.state.view.selectedDate;
+  const isShowingJustDoMode = panelMode.date === date ? panelMode.justDo : false;
   const parsed = parseISO(date);
   const canUseJustDoMode = hasProEntitlement(billing.subscription);
   const isJustDoModeEnabled = canUseJustDoMode && s.state.settings.justDoMode;
@@ -1186,7 +1187,7 @@ function TodayPanel({
   const habits = s.state.habits.filter((habit) => habitActiveOn(habit, date));
   const setPanelMode = (value: boolean) => {
     if (!value) {
-      setIsShowingJustDoMode(false);
+      setPanelModeState({ date, justDo: false });
       return;
     }
     if (isCheckingEntitlement) {
@@ -1199,7 +1200,7 @@ function TodayPanel({
     if (!s.state.settings.justDoMode) {
       return;
     }
-    setIsShowingJustDoMode(true);
+    setPanelModeState({ date, justDo: true });
   };
   const openAdd = () => {
     if (isShowingJustDoMode && isJustDoModeEnabled) {
@@ -2601,12 +2602,15 @@ function TodayCard({ mode, task, onOpen, showDueDate = false }: { mode: ThemeMod
   const c = categoryStyle(category, mode);
   return (
     <div className="mb-1.5 flex w-full items-center gap-2 rounded-[7px] border p-2 text-left" style={{ background: t.surface, borderColor: t.divider }}>
-      <button type="button" onClick={() => onOpen(task.id)} className="min-w-0 flex-1 text-left">
-        <div className="truncate text-[12.5px] font-semibold" style={{ textDecoration: task.isCompleted ? "line-through" : "none", opacity: task.isCompleted ? 0.55 : 1 }}>{task.title}</div>
-        <div className="mt-1 text-[10.5px]" style={{ color: t.textTertiary }}>
-          {showDueDate ? dueDateLabel(task) : task.scheduledTime ? formatTime(task.scheduledTime) : dateRangeLabel(task.startDate, task.endDate)}
-        </div>
-      </button>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <button type="button" onClick={() => onOpen(task.id)} className="min-w-0 flex-1 text-left">
+          <div className="truncate text-[12.5px] font-semibold" style={{ textDecoration: task.isCompleted ? "line-through" : "none", opacity: task.isCompleted ? 0.55 : 1 }}>{task.title}</div>
+          <div className="mt-1 text-[10.5px]" style={{ color: t.textTertiary }}>
+            {showDueDate ? dueDateLabel(task) : dateRangeLabel(task.startDate, task.endDate)}
+          </div>
+        </button>
+        {task.scheduledTime ? <span className="shrink-0 pr-2 text-[10.5px] font-semibold" style={{ color: t.textTertiary }}>{clockTime(task.scheduledTime)}</span> : null}
+      </div>
       <button
         type="button"
         onClick={() => s.toggleTask(task.id)}
@@ -2623,7 +2627,12 @@ function TodayCard({ mode, task, onOpen, showDueDate = false }: { mode: ThemeMod
 
 function dueDateLabel(task: Task) {
   const end = parseISO(task.endDate);
-  return `${end.month}/${end.day}${task.scheduledTime ? ` ${formatTime(task.scheduledTime)}` : ""}`;
+  return `${end.month}/${end.day}`;
+}
+
+function clockTime(time: string) {
+  const [hour = "00", minute = "00"] = time.split(":");
+  return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
 }
 
 function HabitMiniRow({ mode, habit, iso }: { mode: ThemeMode; habit: Habit; iso: string }) {

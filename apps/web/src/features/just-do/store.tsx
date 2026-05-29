@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { addMonths, todayISO } from "@/lib/date";
+import { addMonths, parseISO, todayISO } from "@/lib/date";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   AppState,
@@ -395,7 +395,11 @@ export function JustDoProvider({
           const next = addMonths(view.year, view.month, offset);
           return { ...view, year: next.year, month: next.month };
         }),
-      selectDate: (iso) => updateView((view) => ({ ...view, selectedDate: iso })),
+      selectDate: (iso) =>
+        updateView((view) => {
+          const parsed = parseISO(iso);
+          return { ...view, year: parsed.year, month: parsed.month, selectedDate: iso };
+        }),
       // Sheet/detail are session-local and intentionally excluded from persistence.
       openAddSheet: (payload) =>
         updateView((view) => ({ ...view, sheet: { kind: "add", ...(payload ?? {}) } }), {

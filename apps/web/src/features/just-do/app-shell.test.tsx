@@ -229,6 +229,12 @@ const keyDown = (element: Element, key: string) => {
   });
 };
 
+const keyDownWindow = (key: string) => {
+  act(() => {
+    fireEvent.keyDown(window, { key });
+  });
+};
+
 describe("desktop app shell interactions", () => {
   it("keeps signed-out users on the login screen", async () => {
     authMock.value = signedOutAuth();
@@ -302,7 +308,7 @@ describe("desktop app shell interactions", () => {
     click(addForToday.parentElement as HTMLElement);
     expect(screen.queryByPlaceholderText("무엇을 할까요?")).not.toBeInTheDocument();
 
-    click(addForToday);
+    click(screen.getAllByLabelText(`${selected.day}일에 항목 추가`)[0]);
     expect(await screen.findByPlaceholderText("무엇을 할까요?")).toBeInTheDocument();
   });
 
@@ -384,6 +390,33 @@ describe("desktop app shell interactions", () => {
     click(dueByButton);
 
     expect(await screen.findByText(/지난일/)).toBeInTheDocument();
+
+    keyDownWindow("j");
+
+    await waitFor(() => {
+      expect(screen.queryByText(/지난일/)).not.toBeInTheDocument();
+    });
+  });
+
+  it("moves the desktop calendar back to the current month from the Today button", async () => {
+    const previousDate = addDays(selectedDate, -40);
+    const previous = parseISO(previousDate);
+    renderApp(
+      persistedState({
+        view: {
+          ...persistedState().view,
+          year: previous.year,
+          month: previous.month,
+          selectedDate: previousDate,
+        },
+      }),
+    );
+
+    expect(await screen.findByText(`${previous.year}년 ${previous.month}월`)).toBeInTheDocument();
+
+    click(screen.getByRole("button", { name: "오늘" }));
+
+    expect(await screen.findByText(`${selected.year}년 ${selected.month}월`)).toBeInTheDocument();
   });
 
   it("locks desktop due-by mode for Pro users when the setting is off", async () => {

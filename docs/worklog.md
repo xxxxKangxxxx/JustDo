@@ -3806,3 +3806,74 @@ This document records coordination notes for work done with Codex and Claude Cod
   - sandbox run failed because Turbopack worker tried to bind to a port
     (`Operation not permitted`).
   - rerun with elevated permission -> passed.
+
+## 2026-05-29 Web Just Do Mode smoke fixes
+
+### User + Codex
+
+- 사용자가 Web smoke를 진행하며 대부분 정상 동작을 확인했고, 추가로 두 가지
+  동작 문제와 task time UI polish를 요청.
+
+### Issues / Fixes
+
+- **Header `오늘` button did not always move the month view to today's month.**
+  - 증상: 캘린더 좌상단 `오늘` 버튼으로 selected date는 오늘로 이동해야 하고,
+    월 캘린더도 오늘 날짜가 포함된 월로 이동해야 하는데 Web에서 월이 그대로
+    남는 경우가 있었음.
+  - 원인: `onToday`가 `s.setMonth(todayYear, todayMonth)`와 `s.selectDate(today)`를
+    연속 호출했다. Store의 `updateView`가 현재 `state.view` closure를 기준으로
+    next view를 계산하기 때문에 두 호출이 같은 render state에서 출발할 수 있고,
+    뒤의 `selectDate`가 앞의 `setMonth` 결과를 덮을 수 있었음.
+  - Fix: `store.tsx`의 `selectDate(iso)`가 `parseISO(iso)`로 year/month를 함께
+    갱신하도록 변경. 이제 날짜 선택 자체가 해당 날짜가 속한 month/year를 보장.
+
+- **Changing selected date should always reset the Today panel to `오늘만`.**
+  - 증상: `이 날까지`를 켠 뒤 다른 날짜를 선택해도 due-by 표시 모드가 유지됨.
+  - 제품 결정: 날짜가 바뀌면 항상 `오늘만` 상태로 돌아간다.
+  - Fix: `TodayPanel`의 local mode state를 `{ date, justDo }` 형태로 저장하고,
+    현재 selected date와 state date가 다르면 `isShowingJustDoMode = false`로
+    계산. React lint가 금지하는 "effect 안에서 즉시 setState" 패턴 없이 날짜
+    변경 reset을 구현.
+
+- **Desktop task time display polish.**
+  - 요청: calendar month task bar와 우측 Today panel task card에서 task 시간이
+    초 단위 없이 `HH:mm`만 보이고, task title의 우측에 위치해야 함.
+  - Fix:
+    - `clockTime(time)` helper 추가. `"09:00:00"`처럼 초가 들어와도 `09:00`만
+      표시.
+    - Month calendar task bar는 title left / time right 구조로 렌더링하고, time에
+      `pr-1`을 적용해 bar 우측 끝에 너무 붙지 않게 조정.
+    - Today panel task card는 title area left / time right / checkbox right
+      구조로 정리. time은 checkbox와 같은 세로 중앙 높이에 있고 `pr-2`로
+      checkbox와 간격을 둔다.
+    - Just Do Mode due-by card의 보조 텍스트는 due date만 표시하고 time 중복
+      표시 제거.
+  - UI tuning 과정:
+    - title/time 간격을 몇 차례 조정했으나, 최종 결정은 "시간은 우측 끝에 두되
+      우측 끝/checkbox에서 약간 안쪽으로 들어오게" 하는 방식.
+
+- **Keyboard handler robustness.**
+  - 테스트 중 `window` keydown event에서 `event.target.tagName`이 없으면
+    `toLowerCase()`가 터질 수 있는 경로 확인.
+  - Fix: `target?.tagName?.toLowerCase()`로 방어.
+
+### Verification
+
+- `npm --prefix apps/web test -- --run src/features/just-do/app-shell.test.tsx`
+  -> 1 file / 17 tests passed.
+- `npm --prefix apps/web test -- --run` -> 8 files / 107 tests passed.
+- `npm --prefix apps/web run lint` -> passed.
+- `npm --prefix apps/web run build` -> passed with elevated permission
+  (Turbopack worker port binding is blocked in sandbox).
+- `git diff --check` -> passed.
+
+### Handoff Notes
+
+- Dev server during smoke: `npm --prefix apps/web run dev`, URL
+  `http://localhost:3000`.
+- If `curl localhost:3000` fails from sandbox while the server was started with
+  elevated permission, rerun curl with elevated permission. The server itself
+  can still be reachable in the browser.
+- `home-screen.tsx` was removed in the previous Web Just Do Mode follow-up.
+  Desktop Web's active implementation is `app-shell.tsx`; mobile Web still uses
+  `MobileWebGuide`.

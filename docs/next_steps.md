@@ -43,11 +43,19 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Desktop Web Today panel follows the same policy with panel-local display
     state. Free users clicking `이 날까지` open the Pro upgrade modal; Pro users
     with Settings Just Do Mode off see `이 날까지` locked/disabled.
+  - Desktop Web date selection resets the Today panel display mode to `오늘만`.
+    The header `오늘` button must update both selectedDate and calendar
+    year/month to today's date.
   - iOS sheet `+` receives the current local sheet mode so creating a task from
     `오늘만` still creates a selected-date task, while creating from `이 날까지`
     defaults to today through selectedDate.
   - Desktop Web Today panel `+` uses the current panel-local mode with the same
     date defaults.
+- Desktop Web task time display:
+  - Month calendar task bars show title on the left and `HH:mm` on the right.
+  - Today panel task cards show title on the left, `HH:mm` near the right, and
+    checkbox at the far right with the time vertically aligned to the checkbox.
+  - Time text never includes seconds.
 
 ## Planned Product Track: Goal & Pro Report
 

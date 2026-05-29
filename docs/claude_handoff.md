@@ -506,7 +506,8 @@ Watch items (not active tasks):
 - Left sidebar: Calendar / Stats / Settings, filters, priority filter, tags, quick search.
 - Header: date navigation, view switcher (month/week/list), search, command palette, Today panel toggle, `새 Task` entry.
 - Calendar workspace: month/week/list views, selected date, Task drag date 이동.
-- Today panel: selected-date Task list and active Habit list; Task/Habit check toggles live on the right side. Task completion stays in the same list with checkbox/strikethrough, not a separate completed section.
+- Today panel: selected-date Task list and active Habit list; Task/Habit check toggles live on the right side. Task completion stays in the same list with checkbox/strikethrough, not a separate completed section. Just Do Mode uses panel-local `오늘만` / `이 날까지` state; date changes reset the panel to `오늘만`.
+- Desktop Web task time polish: month calendar task bars and Today panel task cards show task time as `HH:mm` only. Calendar bars keep title left / time right. Today panel cards keep title left / time near the right, aligned vertically with the checkbox.
 - Add modal: Task/Habit tabs. Task supports title, date range, time, category, priority, tag chips. Habit supports title, emoji, daily/weekly recurrence, weekday picker, reminder time.
 - Settings: left settings menu with one selected section rendered at a time. Sections include account, notifications, display, categories, habits, subscription, sync, and data.
 - Category management: add, rename, color edit, delete, up/down reorder.
@@ -668,7 +669,6 @@ apps/web/src/features/just-do/store.tsx
 apps/web/src/features/just-do/persistence.ts
 apps/web/src/features/just-do/supabase-storage.ts
 apps/web/src/features/just-do/supabase-mapping.ts
-apps/web/src/features/just-do/home-screen.tsx
 apps/web/src/features/just-do/habit-screen.tsx
 apps/web/src/features/just-do/settings-screen.tsx
 apps/web/src/features/just-do/stats-screen.tsx
