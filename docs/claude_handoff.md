@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-25
+Date: 2026-05-29
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -56,12 +56,37 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > API를 호출할 수 있어 포그라운드 진입 시 refresh-token rotation 충돌 가능성 —
 > 실사용 증상이 나오면 sessionStore 접근 직렬화 또는 한쪽 경로 일원화 follow-up.
 
-> **다음 작업자가 픽업할 우선순위 (2026-05-25 갱신)**:
+> **2026-05-29 iOS Just Do Mode / Pro sync / edit sheet cleanup** — Just Do
+> Mode와 iOS 편집 흐름의 후속 피드백을 반영. iOS Supabase read-sync가
+> `user_subscriptions`를 읽지 않아 Web에서는 Pro인데 앱 Settings는 Free로
+> 남던 문제를 fix했다. `plan_name='pro'` + `status in ('trial','active')`를
+> local `settings.plan = "pro"`로 매핑하고 Core Data mirror에도 raw `plan`을
+> 저장한다. Home selected-day sheet는 Task row tap 시 같은 sheet 안에서
+> `TaskDetailEditor`를 열고 Task 삭제도 지원한다. Habit row tap은 아무 동작도
+> 하지 않고 check control만 유지한다. `TaskDetailScreen` /
+> `HabitDetailScreen` 등 pushed detail page 코드는 제거했지만,
+> `justdo://task/<id>` / `justdo://habit/<id>`는 Home으로 들어와 editor sheet를
+> 여는 방식으로 유지된다. Just Do Mode 설정은 availability만 결정하고, sheet의
+> `오늘만` / `이 날까지` 선택은 local state로 분리했다. 설정 ON인 Pro 사용자는
+> 두 모드를 모두 사용할 수 있고, 설정 OFF면 `이 날까지`가 lock icon과 함께
+> disabled 된다. 검증: `swift test` 43개, simulator `xcodebuild` build,
+> `git diff --check` 통과. 자세한 경위는 `worklog.md` 2026-05-29 엔트리.
+>
+> **주의: hosted DB에서 수동 Pro 전환** — `user_subscriptions.trial_end_at`은
+> NOT NULL이다. `trial_end_at = null`을 넣는 upsert는 PostgreSQL `ERROR 23502`
+> 로 실패한다. 테스트 계정을 Pro로 만들 때는 기존 non-null `trial_end_at`을
+> 유지하거나 far-future 값을 넣는다.
+>
+> **주의: iOS 명령 위치** — `swift test`는 `apps/ios`에서 실행. 앱 빌드는
+> `.xcodeproj`가 있는 `apps/ios/JustDoApp`에서
+> `xcodebuild -project JustDoApp.xcodeproj ...`로 실행한다.
+
+> **다음 작업자가 픽업할 우선순위 (2026-05-29 갱신)**:
 > 1. **iOS 잔여 실기기 smoke / TestFlight 준비**. Auth landing, Home,
->    Add Sheet, Task Detail edit, Stats, Settings, Widget 보정은 iPhone 14 Pro
->    iOS 26.5 실기기 피드백을 반영했고 simulator build/shared tests 통과.
->    세션 자동 refresh도 1시간+ 종료 후 재진입 smoke 통과. 남은 것은 현재
->    UI를 한 번 더 실제 기기에서 훑는 smoke와 배포 준비.
+>    Add Sheet, editor-sheet routing, Just Do Mode, Stats, Settings, Widget
+>    보정은 iPhone 14 Pro iOS 26.5 실기기 피드백을 반영했고 simulator
+>    build/shared tests 통과. 세션 자동 refresh도 1시간+ 종료 후 재진입 smoke
+>    통과. 남은 것은 현재 UI를 한 번 더 실제 기기에서 훑는 smoke와 배포 준비.
 > 2. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서. 코드
 >    트랙은 이와 병렬로 진행 가능. 체크리스트:
@@ -83,18 +108,19 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > - **iOS 실기기 검증 환경**: iPhone 14 Pro iOS 26.5, Xcode 26.3, macOS
 >   Tahoe 26.3.1. Developer Team 활성. Wireless debugging 자동 (USB 분리 시
 >   🌐 아이콘으로 전환).
-> - **iOS 홈 화면 디자인 변경 (2026-05-22)**: Bottom sheet 모달 패턴
->   (`.height(420)` 단일 detent). Inline drag-resize 패턴 폐기. Sheet 안
+> - **iOS 홈 화면 디자인 변경 (2026-05-29 갱신)**: Bottom sheet 모달 패턴
+>   (`.height(500)` + `.large` detent). Inline drag-resize 패턴 폐기. Sheet 안
 >   좌우 swipe로 ±1 day, calendar 좌우 swipe로 ±1 month. Cell tap area는
 >   row 전체. Task bar는 `.allowsHitTesting(false)`로 tap pass-through.
 >   실기기 피드백 후 home header와 calendar를 함께 아래로 내려 중앙감 보정.
 > - **iOS Add Sheet 검증 완료 (2026-05-22)**: 입력 영역 상단 고정,
 >   시작/종료 날짜 wheel `DatePicker` sheet, `시간 포함` 소형 토글,
->   날짜-only 저장 지원, selected-day sheet에서 Detail 진입 시 dismiss 처리.
-> - **iOS Detail / Stats 검증 완료 (2026-05-22)**: Task Detail 편집 UI를
->   Add Sheet 스타일로 정렬하고 완료 토글 제거. Home selected-day sheet에서
->   다른 날짜 항목을 체크해도 날짜 유지. Stats 연월 포맷, 카테고리 0-count,
->   최근 7일 Habit 셀 요일 표시 수정.
+>   날짜-only 저장 지원, selected-day sheet의 `+`에서도 task/habit 추가 가능.
+> - **iOS Edit Sheet / Stats 검증 완료 (2026-05-29 갱신)**: Task edit UI를
+>   Add Sheet 스타일로 정렬하고 완료 토글 제거. pushed detail page는 제거했고
+>   Home/deep link는 editor sheet로 연결. Home selected-day sheet에서 다른 날짜
+>   항목을 체크해도 날짜 유지. Stats 연월 포맷, 카테고리 0-count, 최근 7일
+>   Habit 셀 요일 표시 수정.
 > - **iOS Settings / Widget 보정 완료 (2026-05-22)**: Settings 계정 프로필,
 >   계정 상세, 알림/표시 picker, Pro-gated CSV export, reset, legal sheets
 >   보정. Home-screen widget은 row 전체 탭으로 완료 토글, Task/Habit mode별
@@ -338,7 +364,7 @@ iOS build/test commands below before doing the next real-device smoke pass.
     `https://www.justdo.co.kr`. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
-- Phase 6 iOS / Widget — current state (2026-05-25):
+- Phase 6 iOS / Widget — current state (2026-05-29):
   - `JustDoShared` includes Swift domain models, mutation queue schema, drift
     fixtures, Core Data model/mappers, App Group snapshot/mutation stores,
     Supabase REST read/flush sync, and WidgetKit display models.
@@ -355,20 +381,28 @@ iOS build/test commands below before doing the next real-device smoke pass.
   - Settings includes sync status/error UI.
   - Home calendar task bars/no-dot rendering and the selected-day bottom sheet
     modal were implemented and verified.
-  - Detail edit/delete from pushed task/habit detail screens is implemented.
+  - Pushed task/habit detail screens were removed. Home and app deep links open
+    editor sheets instead. Task rows in the selected-day sheet edit inline and
+    support delete; Habit rows in that sheet no-op except for the check control.
+  - iOS Supabase read-sync now reads `user_subscriptions` and maps Pro
+    entitlement into local `settings.plan`, so hosted Pro state can unlock
+    native Pro-gated features after sync.
+  - Just Do Mode is implemented with local sheet selection state: Settings
+    enables availability, while `오늘만` / `이 날까지` remains switchable in the
+    selected-day sheet for eligible users.
   - Widget Task/Habit mode toggle is implemented for small/medium/large widgets.
   - Home-screen widget row text no longer deep-links; tapping the row toggles
     completion/check state. App deep links still support `justdo://task/<id>`
-    and `justdo://habit/<id>` for launched routes/tests.
-  - UI automation covers app deep-link detail opening with DEBUG-only seeded
-    Core Data data.
+    and `justdo://habit/<id>` for launched editor sheets/tests.
+  - UI automation covers app deep-link editor-sheet opening with DEBUG-only
+    seeded Core Data data.
   - App and widget task completion toggles now use compact
     `task_completion_set` mutations instead of full task upsert.
   - Last verified:
-    - `cd apps/ios && swift test` -> pass, 40 tests.
-    - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` -> pass, 2 UI tests.
-    - `cd apps/ios && xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
-  - Auth landing, Home, Add Sheet, Task Detail edit, Stats, Settings, Widget,
+    - `cd apps/ios && swift test` -> pass, 43 tests.
+    - `cd apps/ios/JustDoApp && xcodebuild -quiet -project JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+    - `git diff --check` -> pass.
+  - Auth landing, Home, Add Sheet, editor-sheet routing, Stats, Settings, Widget,
     and 1-hour+ auth session refresh smoke passed on the configured real
     device. Remaining iOS work is final whole-app smoke and TestFlight/App
     Store preparation. Because this is a native SwiftUI/Xcode app, do **not**
@@ -444,7 +478,7 @@ Watch items (not active tasks):
 ### App Shape — iOS (current native root, proto-aligned)
 
 - Bottom tabs are `홈 / 통계 / 설정` (proto = `reference/proto/tabbar.jsx` 기준).
-- Home (2026-05-22 갱신):
+- Home (2026-05-29 갱신):
   - Header에 `Just Do` wordmark (24pt) + 년/월 + nav 화살표 + 우상단 add (+) 버튼.
   - Calendar (월간 6 weeks) full-bleed, task bar overlay 유지. 빈 날짜
     셀도 row height 일관성 위해 lane 2개 강제.
@@ -452,8 +486,12 @@ Watch items (not active tasks):
   - Calendar 좌우 swipe → 이전/다음 달, cell tap → 해당 날짜 sheet 자동
     open.
   - Selected-day 정보는 inline panel이 아니라 **bottom sheet modal**
-    (`.height(420)` 단일 detent). Sheet 안 좌우 swipe → ±1 day.
+    (`.height(500)` + `.large` detent). Sheet 안 좌우 swipe → ±1 day.
     background tap / drag-down → dismiss.
+  - Selected-day sheet는 `오늘만` / `이 날까지` 전환을 제공한다. Pro +
+    Settings ON이면 둘 다 사용 가능하고, Settings OFF면 `이 날까지`는 lock.
+  - Task row tap은 같은 sheet 안에서 editor로 전환하고 삭제도 가능. Habit row
+    tap은 no-op이며 check control만 동작.
 - Stats has its own tab.
 - Settings owns dark mode and habit/category management entry points.
 - Add 플로우는 partial-height bottom sheet (`.height(500)` detent).
@@ -888,8 +926,10 @@ Recommended immediate next steps:
        gesture + cell tap area 확장 후).
      - Add Sheet 검증 통과 (wheel DatePicker, optional time toggle,
        top-aligned input layout, selected-day sheet dismiss fix 후).
-     - Task Detail edit / Stats 검증 통과 (Add Sheet-style editor,
-       selected-date preserve, Stats formatting/count fixes 후).
+     - Edit Sheet / Stats 검증 통과 (Add Sheet-style editor,
+       selected-date preserve, Stats formatting/count fixes 후). 2026-05-29
+       follow-up에서 pushed detail page는 제거되고 Home/deep link가 editor
+       sheet로 연결됨.
      - Settings / Widget 보정 통과 (계정/profile, 알림/표시 picker,
        data/legal, home/lock widget layout, row tap completion, mode-scoped
        counts 후).
@@ -926,7 +966,7 @@ Recommended immediate next steps:
    환경변수 + CLI로 platform `WEB_COMPUTE` + framework `Next.js - SSR` 명시).
    새 Amplify 앱을 다시 만들 일이 생기면 이 세 가지 모두 적용해야 SSR로 배포됨.
 
-### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-25 갱신)
+### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-29 갱신)
 
 - **2026-05-25 신규 fix 인지부터**: 운영 도메인의 신규 가입자가 로그인 루트로
   되돌아오던 DB 에러는 categories `(user_id, name)` unique index 부재로
@@ -938,6 +978,10 @@ Recommended immediate next steps:
   `apps/ios/JustDoApp/JustDoApp/ContentView.swift`). 두 변경 모두 커밋 완료,
   iOS 세션 fix는 iPhone 14 Pro / iOS 26.5 실기기에서 1시간+ 종료 후 재진입
   smoke 통과. `worklog.md` 2026-05-25 두 엔트리를 먼저 읽기.
+- **2026-05-29 iOS follow-up 인지**: iOS Pro entitlement sync, selected-day
+  task inline edit/delete, Habit date-sheet no-op, pushed detail page 제거,
+  Just Do Mode local mode 분리까지 반영됨. 이어받는 세션은 `worklog.md`
+  2026-05-29 엔트리와 `next_steps.md` 상단 Where We Are를 먼저 읽기.
 
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5, `next_steps.md` Phase 7 + Deployment
@@ -958,10 +1002,10 @@ Recommended immediate next steps:
   B3 cron은 첫 자동 실행 두 번 확인까지 완료됐고, live billing 직전 DLQ만
   남음. B6은 Toss test-key E2E smoke와 webhook signature 검증만 남음.
   자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
-- iOS는 Phase 7과 독립 트랙. Auth landing, Home, Add Sheet, Task Detail
-  edit, Stats, Settings, Widget 보정은 iPhone 14 Pro iOS 26.5 피드백 기준으로
-  반영됨. 현재 남은 것은 실제 기기에서 현재 UI를 한 번 더 훑는 smoke와
-  TestFlight 준비이며, Expo Go로 검증하지 않음.
+- iOS는 Phase 7과 독립 트랙. Auth landing, Home, Add Sheet, editor-sheet
+  routing, Just Do Mode, Stats, Settings, Widget 보정은 iPhone 14 Pro iOS 26.5
+  피드백 기준으로 반영됨. 현재 남은 것은 실제 기기에서 현재 UI를 한 번 더
+  훑는 smoke와 TestFlight 준비이며, Expo Go로 검증하지 않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
   주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
   monorepo platform/framework 설정 유지.

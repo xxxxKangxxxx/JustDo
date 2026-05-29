@@ -211,9 +211,13 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 ### 3-8. 통계
 
 #### Just Do Mode
-- Trial/Pro 전용 Home 표시 모드다.
+- Trial/Pro 전용 Home 표시 모드다. Settings의 Just Do Mode toggle은 기능
+  availability를 켜는 설정이며, Home sheet/panel의 현재 선택 상태와는 분리한다.
 - Home UI와 날짜 선택 흐름은 유지하되, 날짜를 선택했을 때 sheet/panel에서
   `오늘만`과 `이 날까지`를 전환한다.
+- Trial/Pro 사용자가 Settings에서 Just Do Mode를 켜면 sheet/panel 안에서
+  `오늘만`과 `이 날까지`를 둘 다 사용할 수 있어야 한다. Settings가 꺼져 있거나
+  entitlement가 없으면 `이 날까지`는 lock 상태로 표시하고 전환하지 않는다.
 - `오늘만`: 기존처럼 selectedDate에 해당하는 Task/Habit을 표시한다.
 - `이 날까지`: `endDate <= selectedDate && isCompleted == false`인 Task를
   표시한다. Habit은 누적하지 않고 selectedDate 기준을 유지한다.
@@ -230,7 +234,8 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 - Free 사용자가 `이 날까지` 또는 Settings toggle을 누르면 Pro upgrade/paywall로
   유도하고 설정값은 변경하지 않는다.
 - 실제 적용은 항상 `effectiveJustDoMode = hasProEntitlement && settings.justDoMode`
-  로 계산한다.
+  로 계산한다. 단, 이 값은 `이 날까지` 사용 가능 여부이고 sheet/panel의 local
+  선택값은 별도 state로 둔다.
 
 #### 기간 전환
 - 주간 / 월간 / 전체

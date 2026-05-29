@@ -20,8 +20,10 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
   live billing 직전 DLQ 추가. 자세한 punch list:
   `docs/next_steps.md` Phase 7.
 - iOS Phase 6 실기기 시각 검증은 iPhone 14 Pro iOS 26.5 기준으로
-  Auth landing, Home, Add Sheet, Task Detail, Stats, Settings, Widget까지
-  통과. 남은 iOS 트랙은 출시 전 전체 smoke와 TestFlight/App Store 준비.
+  Auth landing, Home, Add Sheet, edit-sheet routing, Stats, Settings,
+  Widget까지 통과. Task/Habit pushed detail page는 제거했고, Home과 app
+  deep link는 기존 add UI와 같은 editor sheet를 연다. 남은 iOS 트랙은 출시
+  전 전체 smoke와 TestFlight/App Store 준비.
 - 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
   기존 구현을 유지함. 결제 모달은 v1에서 Toss만 활성화하고 네이버페이 /
   카카오페이 / PortOne 경유 다중 PG는 추후 확장 트랙으로 남겨둠.
@@ -117,7 +119,8 @@ Current status:
   before read-sync.
 - The signed-in iOS root now renders the native calendar home, stats, and
   settings tabs based on `reference/proto/`, including task/habit add flows,
-  habit/category management entry points, and pushed task/habit detail routes.
+  habit/category management entry points, Just Do Mode, and task/habit editor
+  sheets opened from Home or app deep links.
 - The settings tab owns the dark-mode toggle. The home header keeps only the
   add button, matching the current native interaction model.
 - Core Data mirror writes are serialized through the managed object context,
@@ -141,11 +144,11 @@ Widget App Intents support task complete/uncomplete and habit check/uncheck
 through an App Group mutation queue, and the app drains that queue into Core
 Data on refresh. Queued Core Data mutations flush to Supabase when a valid
 session is available. Home-screen widget rows toggle completion from the whole
-row; app deep links still route `justdo://task/<id>` and
-`justdo://habit/<id>` into native detail screens. Detail edit/delete,
-app-facing sync status UI, hosted OAuth/offline sync, Home/Add/Stats/Settings/
-Widget visual checks, deep-link UI tests, and 1-hour+ auth session refresh
-smoke are complete. The active iOS work is final real-device smoke and
-TestFlight/App Store preparation. 자세한 내용:
+row; app deep links route `justdo://task/<id>` and `justdo://habit/<id>` into
+native editor sheets rather than pushed detail pages. Detail edit/delete,
+app-facing sync status UI, hosted OAuth/offline sync, Supabase subscription
+plan read-sync, Home/Add/Stats/Settings/Widget visual checks, deep-link UI
+tests, and 1-hour+ auth session refresh smoke are complete. The active iOS work
+is final real-device smoke and TestFlight/App Store preparation. 자세한 내용:
 `docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`,
 `docs/claude_handoff.md`.

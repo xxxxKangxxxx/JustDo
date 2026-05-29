@@ -2118,7 +2118,7 @@ function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
           <SettingRow
             mode={mode}
             label="Just Do Mode"
-            value={isPro ? "선택 날짜까지" : "Pro"}
+            value={isPro ? undefined : "Pro"}
             right={
               <Switch
                 mode={mode}

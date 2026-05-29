@@ -303,6 +303,7 @@ public final class SupabaseSnapshotClient {
         let taskRows = try await fetchTasks()
         let habitRows = try await fetchHabits()
         let habitLogRows = try await fetchHabitLogs()
+        let subscriptionRows = try await fetchSubscriptions()
 
         let tagsByID = Dictionary(uniqueKeysWithValues: resolvedTags.map { ($0.id, $0.name) })
         let tagNamesByTaskID = Dictionary(
@@ -320,13 +321,15 @@ public final class SupabaseSnapshotClient {
         let resolvedHabits = habitRows.map { row in
             row.domain(logs: logsByHabitID[row.id] ?? [])
         }
+        var resolvedSettings = settings
+        resolvedSettings.plan = subscriptionRows.contains(where: \.hasProEntitlement) ? "pro" : "free"
 
         return AppSnapshot(
             view: view,
             categories: resolvedCategories.map(\.domain),
             tasks: resolvedTasks,
             habits: resolvedHabits,
-            settings: settings
+            settings: resolvedSettings
         )
     }
 
@@ -366,6 +369,14 @@ public final class SupabaseSnapshotClient {
         try await fetch(
             "habit_logs",
             select: "habit_id,log_date,is_completed",
+            filteredByUser: true
+        )
+    }
+
+    private func fetchSubscriptions() async throws -> [SupabaseSubscriptionRow] {
+        try await fetch(
+            "user_subscriptions",
+            select: "plan_name,status",
             filteredByUser: true
         )
     }
@@ -654,6 +665,20 @@ struct SupabaseHabitLogRow: Decodable, Equatable {
         case habitID = "habit_id"
         case logDate = "log_date"
         case isCompleted = "is_completed"
+    }
+}
+
+struct SupabaseSubscriptionRow: Decodable, Equatable {
+    var planName: String
+    var status: String
+
+    var hasProEntitlement: Bool {
+        planName == "pro" && ["trial", "active"].contains(status)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case planName = "plan_name"
+        case status
     }
 }
 

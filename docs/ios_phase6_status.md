@@ -43,7 +43,9 @@ implementation gaps, and checks to run before testing or shipping.
 - When a valid Supabase session exists, the app flushes `CDQueuedMutation` to
   Supabase and removes rows only after successful remote writes.
 - Supabase read-sync refreshes the Core Data mirror from categories, tasks,
-  tags/task_tags, habits, and habit logs.
+  tags/task_tags, habits, habit logs, and `user_subscriptions`. Subscription
+  rows map `plan_name='pro'` plus `status in ('trial', 'active')` to the local
+  settings plan `pro`; inactive/cancelled/free states map to `free`.
 - Native Supabase PKCE OAuth is implemented with Keychain-backed session
   storage and refresh-token handling.
 - `AuthViewModel.reload()` (UI status binding) is `async` and, when it finds
@@ -57,18 +59,17 @@ implementation gaps, and checks to run before testing or shipping.
   `auth.reload()` whenever the scene transitions to `.active`, so a
   background → foreground return refreshes the token automatically instead of
   surfacing the auth landing for users who never explicitly signed out.
-- App deep links still route pushed detail screens for:
+- App deep links open the matching task/habit edit sheet for:
   - `justdo://task/<task-id>`
   - `justdo://habit/<habit-id>`
-- The app registers the `justdo` URL scheme and renders native task/habit detail
-  screens from the Core Data mirror.
-- Deep-linked task/habit screens are pushed with a SwiftUI `NavigationStack`
-  route instead of being rendered inline on the root scaffold.
-- `JustDoAppUITests` covers task and habit deep-link detail opening with a
+- The app registers the `justdo` URL scheme and resolves rows from the Core
+  Data mirror before presenting the editor sheet.
+- `JustDoAppUITests` covers task and habit deep-link editor-sheet opening with a
   DEBUG-only local mirror seed path.
-- Pushed task/habit detail screens support local edit and delete actions. Saves
-  apply to the Core Data mirror and enqueue `taskUpsert` / `habitUpsert`; deletes
-  enqueue `taskDelete` / `habitDelete` and return to the previous screen.
+- Pushed task/habit detail screens have been removed. Task/Habit app deep links
+  resolve rows from the Core Data mirror and open the same editor sheets used by
+  the native add/edit flows. Saves apply to the Core Data mirror and enqueue
+  `taskUpsert` / `habitUpsert`; task deletes enqueue `taskDelete`.
 - Settings includes an app-facing sync status row. It shows syncing, synced,
   pending mutation count, and failed states; failed syncs expose a retry action.
 - The signed-in root shell now renders native Home / Stats / Settings tabs
@@ -80,9 +81,18 @@ implementation gaps, and checks to run before testing or shipping.
   tap target is the entire cell, not just the date pill; task bars sit above
   the cell with `.allowsHitTesting(false)` so taps still reach the cell button.
 - Selected-day data is shown in a bottom sheet modal triggered by tapping a
-  date. The sheet uses a single `.height(420)` detent (no large expansion);
-  the panel content scrolls internally when it overflows. Drag-down and
-  background tap dismiss the sheet via the iOS sheet defaults.
+  date. The sheet uses `.height(500)` plus `.large` detents so the task editor
+  can fit inside the panel while still keeping the default footprint moderate.
+  Drag-down and background tap dismiss the sheet via the iOS sheet defaults.
+- In the selected-day sheet, Task row taps open `TaskDetailEditor` inline inside
+  the same sheet. Habit row taps intentionally do nothing; only the habit check
+  control mutates the selected date's habit log because full habit settings live
+  in the dedicated Habit management surface.
+- Just Do Mode in the selected-day sheet has local `오늘만` / `이 날까지` state
+  separate from Settings. `settings.justDoMode` and subscription entitlement
+  only decide whether `이 날까지` is available. Pro users with the setting enabled
+  can still switch back to `오늘만`; when the setting is off, `이 날까지` is locked
+  and disabled.
 - Horizontal swipes inside the sheet move `selectedDate` by ±1 day
   (`JDDate.addDays`). Horizontal swipes on the calendar move the displayed
   month by ±1 (`moveMonth`). Both use `simultaneousGesture` so cell taps
@@ -136,9 +146,36 @@ implementation gaps, and checks to run before testing or shipping.
   on 2026-05-25. Watch item: `AuthViewModel.reload()` and
   `AppSyncCoordinator.validAppSession()` both refresh through the same
   `KeychainSupabaseSessionStore`, so a foreground entry can fire two refresh
-  calls in quick succession; the 2026-05-25 smoke did not surface this, but
-  if Supabase refresh-token rotation later breaks one of them, serialize
-  the store access or unify the refresh path.
+	  calls in quick succession; the 2026-05-25 smoke did not surface this, but
+	  if Supabase refresh-token rotation later breaks one of them, serialize
+	  the store access or unify the refresh path.
+- **iOS Settings stayed Free after hosted subscription was Pro.** Web reflected
+  `user_subscriptions.plan_name='pro'` / `status='active'`, but iOS still showed
+  Free after reinstall because the native read-sync path only loaded preferences
+  from `public.users.preferences` and never read `user_subscriptions`. Fix:
+  `SupabaseSnapshotClient.fetchAppSnapshot()` now fetches subscription rows and
+  maps `pro + trial/active` to `settings.plan = "pro"`. Core Data snapshot
+  replacement persists that raw `plan` preference, and snapshot loading restores
+  it before Settings renders. Tests cover both Pro and inactive subscription
+  mapping.
+- **Manual Pro SQL failed on `trial_end_at`.** A direct upsert attempted to set
+  `trial_end_at = null`, but hosted `user_subscriptions.trial_end_at` is NOT
+  NULL, producing PostgreSQL `ERROR 23502`. Fix for future manual testing:
+  preserve the existing non-null `trial_end_at` or insert a far-future non-null
+  value for test accounts. Do not use `trial_end_at = null` in manual Pro
+  upserts.
+- **Just Do Mode sheet got stuck on `이 날까지`.** The first iOS implementation
+  treated the Settings toggle as the selected-day sheet's current display mode.
+  That made Pro users with Just Do Mode enabled see only due-by tasks. Fix:
+  Settings/entitlement now gate availability only, while the sheet owns local
+  `isShowingJustDoMode` state. Pro users can switch between `오늘만` and
+  `이 날까지`; if the setting is off, `이 날까지` shows a lock icon and is disabled.
+- **Task/Habit detail route mismatch.** The app still had pushed detail pages
+  after the product direction moved edit behavior to sheet UI. Fix: remove the
+  pushed detail screens and route Home/deep-link edits through existing editor
+  sheets. Home task edits happen inline inside the selected-day sheet with
+  delete support. Habit rows in the date sheet no-op except for the check
+  control; full habit settings stay in the Habit management surface.
 
 ## Remaining App Gaps
 
@@ -148,8 +185,8 @@ implementation gaps, and checks to run before testing or shipping.
     cell-tap expansion, and the calendar/sheet swipe gestures.
   - [x] Add Sheet (Task / Habit) — passed after top-aligned entry layout,
     wheel DatePicker schedule sheet, optional `시간 포함` toggle, and
-    selected-day sheet dismissal before Detail navigation.
-  - [x] Task Detail edit / Stats — passed after aligning task edit UI with
+    selected-day sheet dismissal before editor presentation.
+  - [x] Task editor sheet / Stats — passed after aligning task edit UI with
     Add Sheet, preserving selected Home date after toggles, fixing Stats year
     formatting, category zero counts, and 7-day Habit cell labels.
   - [x] Settings — passed after account/profile, notification/display picker,
@@ -283,8 +320,10 @@ swift test
 >
 > 2026-05-22: iOS 실기기 검증이 본격 시작됨. Home + Auth landing +
 > Add Sheet + Task Detail edit + Stats + Settings + Widget 보정까지 통과.
-> 2026-05-25: 세션 자동 refresh smoke까지 통과. 다음 차례는 출시 전 전체
-> smoke와 TestFlight/App Store 준비, 그리고 Toss 외부 의존 트랙.
+> 2026-05-25: 세션 자동 refresh smoke까지 통과.
+> 2026-05-29: Pro subscription sync, editor-sheet routing cleanup, Just Do Mode
+> gating follow-up까지 simulator build/shared tests 통과. 다음 차례는 출시 전
+> 전체 smoke와 TestFlight/App Store 준비, 그리고 Toss 외부 의존 트랙.
 
 - [x] **세션 자동 refresh 실기기 smoke (2026-05-25 통과)**.
   - 시나리오: 정상 로그인 → 앱 종료(또는 백그라운드 보내기) → 1시간+ 대기 →
@@ -307,12 +346,12 @@ swift test
     - Calendar selected-day sheet에서 Detail 진입 시 기존 sheet dismiss.
     - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
       -destination 'generic/platform=iOS Simulator' build` passed.
-- [x] **Task Detail edit / Stats 시각 검증**.
+- [x] **Task editor sheet / Stats 시각 검증**.
   - Reference: `reference/proto/stats-settings.jsx`.
   - 반영/검증 완료:
-    - Task Detail 편집 UI를 Add Sheet와 같은 wheel DatePicker / chip /
+    - Task editor UI를 Add Sheet와 같은 wheel DatePicker / chip /
       footer 스타일로 정렬.
-    - Task Detail 편집 화면의 완료 토글 제거. 완료 상태는 기존 값 보존.
+    - Task editor의 완료 토글 제거. 완료 상태는 기존 값 보존.
     - Calendar selected-day sheet에서 다른 날짜 항목을 체크해도 해당 날짜 유지.
     - Stats 연월 `2026`이 `2,026`처럼 보이는 포맷 문제 수정.
     - Task 카테고리 통계에서 0개 카테고리를 1개로 보정하지 않도록 수정.

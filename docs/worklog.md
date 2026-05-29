@@ -3604,3 +3604,117 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `rg`로 stale phrase 재검색: 실제 상충 표현 없음. `B3 first scheduled
   invocation`은 과거 커밋명으로만 남아 있어 유지.
 - `git diff --check` 통과.
+
+## 2026-05-29 iOS edit-sheet routing cleanup
+
+### Codex
+
+- 사용자 피드백:
+  - Home selected-day sheet에서 Task/Habit row tap이 pushed detail page로
+    이동하는 대신 기존 추가 UI와 같은 sheet editor로 수정되어야 함.
+  - Habit은 캘린더 날짜 sheet에서 편집으로 들어가지 말고, habit 설정은 기존
+    별도 관리 화면에서 수정하는 방향이 맞음.
+  - Task editor에는 삭제 액션이 필요함.
+  - Selected-day sheet 높이는 task 편집 UI가 들어갈 만큼만 키우되 너무 높지
+    않게 500pt 정도가 적당함.
+- 구현:
+  - `ContentView`의 root `NavigationStack` / `navigationDestination` 기반
+    pushed detail route를 제거하고, `pendingDetailRoute: JustDoDetailRoute?`를
+    통해 app deep link를 Home의 editor sheet로 전달.
+  - Home selected-day sheet에서 Task row tap은 같은 sheet 안의
+    `TaskDetailEditor`로 전환. 시트가 내려갔다 다시 올라오는 전환을 피하기
+    위해 `SelectedDayPanel.PanelMode`를 `list` / `task(Task)`로 두고 내부
+    view만 전환.
+  - Habit row는 더 이상 button이 아니며, check circle만 `habitLogSet` 경로로
+    동작. Habit 편집은 Settings/Habit management 또는 deep link editor sheet
+    경로에 남겨둠.
+  - `TaskDetailEditor`에 optional `onDelete`를 추가하고, destructive `삭제`
+    버튼 + 확인 alert를 표시하도록 확장. Home top-level task edit sheet와
+    selected-day inline task edit 모두 `taskDelete(id:)`를 enqueue하고 snapshot
+    reload / pending count refresh를 수행.
+  - `justdo://task/<id>` / `justdo://habit/<id>` app deep link는 Home으로
+    전환한 뒤 Core Data mirror에서 row를 찾아 top-level editor sheet를 연다.
+  - 더 이상 사용하지 않는 `TaskDetailScreen`, `HabitDetailScreen`,
+    `TaskDetailContent`, `HabitDetailContent`, detail scaffold/action/message/grid,
+    fallback view, `DeepLinkDetail`를 제거.
+  - `TaskDetailEditor`, `HabitDetailEditor`, `DetailEditorActions`는 Home/deep link
+    sheet에서 재사용하므로 유지.
+  - Deep link UI tests를 navigation bar/title 검증에서 editor text field
+    accessibility identifier(`task-editor-title`, `habit-editor-title`) 검증으로
+    갱신.
+
+### Subscription / Pro Entitlement Follow-up
+
+- 사용자 피드백:
+  - Supabase에서 테스트 계정 row를 Pro로 바꾸면 Web은 Pro로 표시되지만 iOS
+    Settings는 계속 Free로 표시됨.
+  - Settings 구독 화면의 Just Do Mode 설명 `선택한 날짜까지 할 일`이 줄바꿈을
+    만들어 UI가 어색하므로 제거하는 편이 낫다는 결론.
+- 원인:
+  - Web은 `/api/billing/subscription` 또는 Supabase subscription state를 읽지만,
+    iOS `SupabaseSnapshotClient.fetchAppSnapshot()`은 categories/tasks/tags/habits/
+    habit_logs/preferences만 읽고 `user_subscriptions`를 읽지 않았음.
+  - Core Data mirror의 settings persistence도 known `PreferenceKey`만 decode해서
+    raw `plan` 값을 유지할 경로가 없었음.
+- 구현:
+  - iOS Supabase read-sync에 `user_subscriptions?select=plan_name,status` fetch
+    추가.
+  - `SupabaseSubscriptionRow.hasProEntitlement`는 `plan_name == "pro"` &&
+    `status in ["trial", "active"]`만 true로 판단. inactive/cancelled/past_due 등은
+    Free로 매핑.
+  - `fetchAppSnapshot()`에서 resolved settings plan을 Pro/Free로 설정.
+  - `CoreDataAppSnapshotStore.replaceSnapshot(_:)`가 snapshot settings plan을
+    raw `CDUserPreference(key="plan")`로 저장하고, `fetchSettings`가 raw plan을
+    먼저 decode하도록 보강.
+  - iOS Settings `Just Do Mode` row와 Web subscription panel에서 Pro 상태일 때
+    설명 문구를 제거.
+- 발생한 오류 / 주의:
+  - 사용자가 수동 Pro 전환 SQL에서 `trial_end_at = null`을 넣자 hosted DB가
+    `ERROR 23502: null value in column "trial_end_at" violates not-null
+    constraint`를 반환. 현재 schema에서 `trial_end_at`은 NOT NULL이므로 수동
+    테스트 계정 전환 시 기존 값을 유지하거나 far-future non-null 값을 넣어야 함.
+  - `xcodebuild`를 `apps/ios`에서 실행하면 `.xcodeproj`가 없어 "실행 대상이
+    없다"는 혼동이 생김. SwiftPM test는 `apps/ios`, Xcode app build는
+    `apps/ios/JustDoApp`에서 실행해야 함.
+
+### Just Do Mode Gating Follow-up
+
+- 사용자 피드백:
+  - 설정에서 Just Do Mode를 켜지 않았는데도 selected-day sheet의 `이 날까지`
+    기능을 사용할 수 있었음.
+  - 반대로 수정 후에는 Just Do Mode를 활성화하면 `이 날까지`만 사용 가능해짐.
+    실제 기대 동작은 Pro + 설정 ON이면 `오늘만`과 `이 날까지`를 둘 다 선택할 수
+    있는 것.
+- 원인:
+  - 첫 구현은 `settings.justDoMode`를 기능 availability와 sheet selected mode에
+    동시에 사용했다. 이 때문에 settings ON이면 sheet 자체가 due-by mode로 고정됨.
+- 구현:
+  - `effectiveJustDoMode = isProPlan && settings.justDoMode`는 기능 사용 가능 여부
+    로만 사용.
+  - `SelectedDayPanel` 내부에 `@State private var isShowingJustDoMode = false`를
+    추가해 `오늘만` / `이 날까지` 선택을 sheet-local state로 분리.
+  - selected-day sheet는 `tasks`(선택 날짜 기준)와 `justDoTasks`(미완료 &&
+    `endDate <= selectedDate`)를 모두 받음.
+  - Pro + settings ON이면 두 segment 모두 동작. settings OFF이면 `이 날까지`에
+    `lock.fill` icon을 표시하고 button을 disabled 처리.
+  - Sheet 우측 하단 `+`는 현재 local mode를 `onAdd(Bool)`로 전달. `오늘만`에서
+    추가하면 selectedDate-only task, `이 날까지`에서 추가하면 today~selectedDate
+    task를 기본값으로 연다.
+
+### Verification
+
+- `cd apps/ios && swift test` -> 43 tests passed.
+- `xcodebuild -quiet -project JustDoApp.xcodeproj -scheme JustDoApp -destination
+  'generic/platform=iOS Simulator' build` -> passed from `apps/ios/JustDoApp`.
+- `git diff --check` 통과.
+
+### Claude/Codex Handoff Notes
+
+- 현재 iOS detail 화면은 의도적으로 제거된 상태다. 다시 detail page를 되살리기
+  전에는 widget/app deep link, selected-day sheet inline edit, UI tests의 기대
+  동작을 함께 재검토해야 한다.
+- iOS Pro 상태는 앱 실행/foreground sync가 `user_subscriptions`를 읽은 뒤 반영된다.
+  Hosted DB row를 바꾼 직후 이미 설치된 앱이 바로 바뀌지 않으면 앱을 foreground로
+  다시 진입시키거나 sync 상태 row에서 retry/refresh 경로를 확인한다.
+- `apps/web/tsconfig.tsbuildinfo` 삭제처럼 보였던 건 build cache 산출물 변화로
+  이해하면 된다. 현재 커밋 대상에는 해당 파일 삭제가 남아 있지 않다.

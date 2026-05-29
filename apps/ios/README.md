@@ -16,8 +16,8 @@ Current contents:
 - `JustDoApp/JustDoApp.xcodeproj` hosts the SwiftUI app, WidgetKit extension,
   and UI test targets.
 - `JustDoApp/JustDoApp` implements the native app shell, auth flow,
-  Core Data mirror sync, Home/Stats/Settings tabs, add/detail flows, and
-  widget snapshot writer.
+  Core Data mirror sync, Home/Stats/Settings tabs, add/editor-sheet flows,
+  Just Do Mode, and widget snapshot writer.
 - `JustDoApp/JustDoWidget` hosts the WidgetKit extension that reads the
   App Group snapshot and queues widget mutations.
 
@@ -69,6 +69,9 @@ swift test
 
 The latest full simulator checks are tracked in `docs/claude_handoff.md`.
 Real-device visual verification on iPhone 14 Pro / iOS 26.5 has passed for
-Auth landing, Home, Add Sheet, Task Detail, Stats, Settings, and Widget. The
-2026-05-25 1-hour+ auth session refresh smoke also passed. The remaining iOS
-track is final whole-app smoke and TestFlight/App Store preparation.
+Auth landing, Home, Add Sheet, editor-sheet routing, Stats, Settings, and
+Widget. The 2026-05-25 1-hour+ auth session refresh smoke also passed. App
+deep links open task/habit editor sheets, while Home selected-day sheet task
+taps edit inline and habit row taps no-op except for the check control. The
+remaining iOS track is final whole-app smoke and TestFlight/App Store
+preparation.

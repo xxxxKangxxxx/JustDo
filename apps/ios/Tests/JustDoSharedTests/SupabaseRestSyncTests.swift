@@ -24,6 +24,9 @@ final class SupabaseRestSyncTests: XCTestCase {
             "habit_logs": """
             [{"habit_id":"33333333-3333-3333-3333-333333333333","log_date":"2026-04-30","is_completed":true}]
             """,
+            "user_subscriptions": """
+            [{"plan_name":"pro","status":"active"}]
+            """,
         ])
         let client = SupabaseSnapshotClient(userID: userID, transport: transport)
 
@@ -38,8 +41,35 @@ final class SupabaseRestSyncTests: XCTestCase {
         XCTAssertEqual(snapshot.habits.first?.recurType, .weekly)
         XCTAssertEqual(snapshot.habits.first?.recurDays, [2, 4])
         XCTAssertEqual(snapshot.habits.first?.log["2026-04-30"], 1)
+        XCTAssertEqual(snapshot.settings.plan, "pro")
         XCTAssertTrue(transport.requestedUserFilters.allSatisfy { $0 == "eq.\(userID.uuidString.lowercased())" })
-        XCTAssertEqual(Set(transport.requestedPaths), ["categories", "tags", "task_tags", "tasks", "habits", "habit_logs"])
+        XCTAssertEqual(
+            Set(transport.requestedPaths),
+            ["categories", "tags", "task_tags", "tasks", "habits", "habit_logs", "user_subscriptions"]
+        )
+    }
+
+    func testFetchAppSnapshotMapsInactiveSubscriptionToFreePlan() async throws {
+        let userID = uuid("99999999-9999-9999-9999-999999999999")
+        let transport = FakeSupabaseRestTransport(responses: [
+            "categories": "[]",
+            "tags": "[]",
+            "task_tags": "[]",
+            "tasks": "[]",
+            "habits": "[]",
+            "habit_logs": "[]",
+            "user_subscriptions": """
+            [{"plan_name":"pro","status":"canceled"}]
+            """,
+        ])
+        let client = SupabaseSnapshotClient(userID: userID, transport: transport)
+
+        let snapshot = try await client.fetchAppSnapshot(
+            view: AppSnapshotDefaults.viewState(selectedDate: "2026-04-30"),
+            settings: AppSnapshotDefaults.settings()
+        )
+
+        XCTAssertEqual(snapshot.settings.plan, "free")
     }
 
     func testSyncReplacesCoreDataMirror() async throws {

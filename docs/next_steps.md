@@ -14,8 +14,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Implemented Product Track: Just Do Mode
 
-> 2026-05-28 implemented on iOS and web. Product spec anchor:
-> `docs/just_do_prd.md` Just Do Mode.
+> 2026-05-28 implemented on iOS and web. 2026-05-29 iOS follow-up separated
+> feature availability from the selected-day sheet's local display mode. Product
+> spec anchor: `docs/just_do_prd.md` Just Do Mode.
 
 - Pro-gated Home display mode.
 - Home UI remains the same; selected-date sheet/panel exposes `오늘만` and
@@ -31,7 +32,17 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Normal mode: selectedDate to selectedDate.
   - Just Do Mode: today to selectedDate.
   - If selectedDate is in the past, selectedDate to selectedDate.
-- Enforcement uses `effectiveJustDoMode = hasProEntitlement && settings.justDoMode`.
+- Enforcement:
+  - Web/iOS settings toggle stores user preference (`settings.justDoMode`).
+  - Runtime feature availability uses
+    `effectiveJustDoMode = hasProEntitlement && settings.justDoMode`.
+  - iOS selected-day sheet keeps a separate local `isShowingJustDoMode` state.
+    This means Pro users who enabled the feature can switch between `오늘만` and
+    `이 날까지` inside the sheet. If the setting is off, `이 날까지` shows a lock
+    icon and is disabled.
+  - iOS sheet `+` receives the current local sheet mode so creating a task from
+    `오늘만` still creates a selected-date task, while creating from `이 날까지`
+    defaults to today through selectedDate.
 
 ## Planned Product Track: Goal & Pro Report
 
@@ -74,7 +85,40 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Product spec: `docs/just_do_prd.md` Goal & Pro Report.
   - Future schema: `docs/just_do_db_schema.md` Goal & Pro Report schema.
 
-## Where We Are (2026-05-25)
+## Where We Are (2026-05-29)
+
+- **iOS Pro subscription sync 반영**. Web에서는 `user_subscriptions.plan_name =
+  'pro'`, `status = 'active'`가 반영되지만 iOS는 기존에 Supabase read-sync가
+  `user_subscriptions`를 읽지 않아 Settings 플랜이 계속 Free로 보였다. iOS
+  `SupabaseSnapshotClient.fetchAppSnapshot()`이 `user_subscriptions`의
+  `plan_name,status`를 함께 읽고, `plan_name='pro'` + `status in ('trial',
+  'active')`이면 snapshot settings plan을 `pro`로 설정하도록 수정. Core Data
+  mirror는 raw `plan` preference를 별도 저장/로드해서 다음 앱 실행 후에도 Pro
+  상태를 유지한다. 테스트는 inactive subscription이 Free로 매핑되는 케이스까지
+  추가.
+- **iOS editor-sheet routing cleanup**. Home selected-day sheet에서 Task row
+  tap은 pushed detail page가 아니라 같은 sheet 안에서 `TaskDetailEditor`를
+  표시한다. Task 편집 sheet에는 삭제 액션과 확인 alert가 포함된다. Habit row는
+  캘린더 날짜 sheet에서 편집으로 들어가지 않고, check control만 동작한다.
+  `justdo://task/<id>` / `justdo://habit/<id>` app deep link는 Home으로 들어와
+  top-level editor sheet를 연다. 더 이상 필요 없는 pushed Task/Habit detail
+  screen/scaffold/content/fallback view는 제거했다.
+- **Just Do Mode iOS gating 수정**. 이전 구현은 settings의 Just Do Mode 값을
+  selected-day sheet의 현재 모드처럼 사용해서, 기능을 켜면 `이 날까지`만
+  보이는 문제가 있었다. 현재는 settings 값은 기능 availability로만 사용하고,
+  sheet 내부 선택은 local state로 분리했다. 결과적으로 설정 ON인 Pro 사용자는
+  `오늘만`과 `이 날까지`를 둘 다 사용할 수 있고, 설정 OFF 상태에서는 `이 날까지`
+  버튼이 lock icon과 함께 disabled 상태가 된다.
+- **주의: Supabase 수동 Pro 전환 SQL**. Hosted DB의 `user_subscriptions`는
+  `trial_end_at`이 NOT NULL이므로 수동 upsert 때 `trial_end_at = null`을 넣으면
+  `ERROR 23502: null value in column "trial_end_at" violates not-null
+  constraint`가 난다. 테스트용 Pro 전환은 기존 row를 update하거나,
+  insert/upsert 시 `trial_end_at = coalesce(existing trial_end_at, now() +
+  interval '100 years')`처럼 non-null 값을 유지해야 한다.
+- **주의: iOS 빌드 위치**. `apps/ios` 아래에는 SwiftPM `Package.swift`만 있고
+  `.xcodeproj`는 `apps/ios/JustDoApp/JustDoApp.xcodeproj`에 있다. `swift test`는
+  `apps/ios`에서 실행하고, 앱 빌드는 `apps/ios/JustDoApp`에서
+  `xcodebuild -project JustDoApp.xcodeproj ...`로 실행한다.
 
 - **운영 신규 가입 차단 버그 fix**. `handle_new_auth_user()` 트리거의
   `insert into public.categories ... on conflict (user_id, name) do nothing`이
@@ -129,7 +173,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   는 기존대로 Settings 다크모드 토글 사용.
 - Home 화면 캘린더/패널 재디자인 완료:
   - Selected-day panel을 inline drag-resize 패턴에서 bottom sheet
-    modal (`.height(420)` 단일 detent)로 전환.
+    modal로 전환. 2026-05-29 follow-up에서 Task inline editor 수용을 위해
+    `.height(500)` + `.large` detent로 조정.
   - Sheet 안에서 좌우 swipe → 이전/다음 날짜 이동.
   - Calendar 영역 좌우 swipe → 이전/다음 월 이동.
   - Calendar day cell tap area를 row 전체로 확장(기존 32pt 한정 →
@@ -142,11 +187,13 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - 시작/종료 날짜는 텍스트 입력 대신 wheel `DatePicker` sheet로 선택.
   - `시간 포함` 커스텀 소형 토글을 Date Picker 우측 상단에 배치해
     날짜만 저장하거나 시작 시간을 함께 저장할 수 있음.
-  - Calendar selected-day sheet에서 Task/Habit detail로 진입할 때 기존
-    bottom sheet가 닫히도록 수정.
+  - Calendar selected-day sheet의 `+`에서 Task/Habit 추가 가능. 2026-05-29
+    follow-up 이후 Task row 편집은 같은 sheet 안에서 inline 전환하며, Habit
+    row tap은 no-op.
 - Detail / Stats 실기기 검증 보정 완료:
-  - Task Detail 편집 화면을 Add Sheet와 같은 날짜 picker / chip / footer
-    스타일로 정렬하고, 편집 화면의 완료 토글 제거.
+  - Task editor 화면을 Add Sheet와 같은 날짜 picker / chip / footer 스타일로
+    정렬하고, 편집 화면의 완료 토글 제거. 2026-05-29 follow-up에서 pushed
+    detail page는 제거되고 editor sheet routing으로 정리됨.
   - Calendar selected-day sheet에서 다른 날짜의 Task/Habit을 체크해도
     선택 날짜와 표시 월이 오늘로 되돌아가지 않도록 snapshot reload 보정.
   - Stats 상단 연월은 `Text(verbatim:)`로 표시해 `2026`이 `2,026`처럼
@@ -450,9 +497,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Implement widget App Intents for task complete/uncomplete and habit check/uncheck.
 - [x] Drain widget App Group mutation queue from the app into Core Data.
 - [x] Flush queued Core Data writes to Supabase.
-- [x] Implement widget deep-link routing for task/habit rows.
-- [x] Render native task/habit detail panels from widget deep links.
-- [x] Replace the scaffold inline detail panel with NavigationStack push-detail routes.
+- [x] Implement app deep-link routing for task/habit rows.
+- [x] Replace pushed task/habit detail pages with task/habit edit sheets.
 - [x] Implement signed-in iOS root Home / Stats / Settings tabs based on `reference/proto/`.
 - [x] Implement native task/habit add bottom sheet with proto-aligned fields.
 - [x] Add Settings entry points for habit/category management.
@@ -461,7 +507,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - [x] Manual offline sync verification on hosted Supabase (`docs/local_dev.md`).
   - Passed on 2026-05-20: offline task/habit mutations queued, online restore
     flushed to Supabase, and Settings sync status returned to synced.
-- [x] Implement edit/delete actions from pushed task/habit detail screens.
+- [x] Replace pushed task/habit detail screens with editor-sheet routing.
+  - App deep links open top-level task/habit editor sheets.
+  - Home selected-day sheet task rows edit inline and support delete.
+  - Habit rows in the date sheet no-op except for the check control; full habit
+    edits stay in the Habit management surface.
 - [x] Add app-facing sync status/error UI for failed queue flushes.
 - [x] Prepare production domain/AWS deployment work (`docs/deployment_domain_aws_plan.md`).
   - `www.justdo.co.kr` hosted on AWS Amplify, Route 53 delegation complete,
@@ -483,11 +533,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     light/dark 시스템 모드 무관하게 brand light 고정.
   - Add Sheet (2026-05-22): 실기기 검증 통과. 텍스트 날짜/시간 입력을
     wheel Date Picker sheet로 교체, `시간 포함` 소형 토글 추가,
-    Task/Habit 입력 영역 상단 고정, selected-day sheet -> Detail 진입 시
-    sheet dismiss 처리.
-  - Detail / Stats (2026-05-22): 실기기 검증 통과. Task Detail 편집 UI를
-    Add Sheet 스타일로 정렬하고 완료 토글 제거. Stats 연월 포맷, 카테고리
-    0-count 통계, 최근 7일 Habit 셀 요일 표시, Home selected-date 보존 수정.
+    Task/Habit 입력 영역 상단 고정, selected-day sheet에서 `+` 추가 지원.
+  - Edit Sheet / Stats (2026-05-29): 실기기 피드백 기반 구현 통과. Task editor
+    UI를 Add Sheet 스타일로 정렬하고 완료 토글 제거. pushed detail page는 제거,
+    Home/deep link는 editor sheet로 연결. Stats 연월 포맷, 카테고리 0-count
+    통계, 최근 7일 Habit 셀 요일 표시, Home selected-date 보존 수정.
   - Settings / Widget (2026-05-22): 실기기 피드백 기반 보정 완료. Settings
     계정/profile, 알림/표시 picker, data/legal 섹션 보강. Home-screen widget은
     row 전체 탭 완료 토글, mode별 count, font/check-dot/spacing 보정.
@@ -495,10 +545,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
   - Session refresh (2026-05-25): 1시간+ 종료 후 재진입 시 로그인 루트 없이
     홈으로 진입하는 smoke 통과.
   - Remaining: 출시 전 전체 smoke와 TestFlight/App Store 준비.
-- [x] Add route tests for widget deep-link opening.
+- [x] Add route tests for app deep-link opening.
   - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
-    `JustDoDetailRoute`, and `ContentView` uses that route in its
-    `NavigationStack`.
+    `JustDoDetailRoute`, and `ContentView` hands that route to Home so the
+    matching task/habit edit sheet opens.
 - [x] Implement dedicated iOS task-completion patch mutations.
   - App and widget task toggles now enqueue `task_completion_set` instead of a
     full `task_upsert`.
@@ -506,10 +556,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     reopening a task clears `completed_at`.
   - This prevents stale iOS/widget mirrors from overwriting task-owned fields
     such as title, category, dates, priority, or tags during completion toggles.
-- [x] Add UI automation for widget deep-link detail opening.
+- [x] Add UI automation for deep-link edit-sheet opening.
   - Added `JustDoAppUITests` with task/habit deep-link launch coverage.
-  - Tests seed a DEBUG-only local mirror and verify `Task Detail` /
-    `Habit Detail` screens render the linked row data.
+  - Tests seed a DEBUG-only local mirror and verify the matching task/habit
+    editor sheet opens with linked row data.
 
 ## Phase 7: Web Desktop Redesign
 

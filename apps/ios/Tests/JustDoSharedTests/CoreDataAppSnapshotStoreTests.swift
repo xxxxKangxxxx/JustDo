@@ -46,6 +46,28 @@ final class CoreDataAppSnapshotStoreTests: XCTestCase {
         XCTAssertEqual(loaded.tasks.map(\.title), ["Second"])
     }
 
+    func testReplaceSnapshotPersistsPlanFromSubscriptionSync() throws {
+        var snapshot = makeSnapshot(taskTitle: "First")
+        snapshot.settings.plan = "pro"
+
+        try store.replaceSnapshot(snapshot)
+
+        let loaded = try store.loadSnapshot(
+            view: snapshot.view,
+            settings: AppSnapshotDefaults.settings()
+        )
+        XCTAssertEqual(loaded.settings.plan, "pro")
+
+        snapshot.settings.plan = "free"
+        try store.replaceSnapshot(snapshot)
+
+        let downgraded = try store.loadSnapshot(
+            view: snapshot.view,
+            settings: AppSnapshotDefaults.settings()
+        )
+        XCTAssertEqual(downgraded.settings.plan, "free")
+    }
+
     func testFindsTaskAndHabitByID() throws {
         try store.replaceSnapshot(makeSnapshot(taskTitle: "First"))
 

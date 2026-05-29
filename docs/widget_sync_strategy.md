@@ -210,14 +210,14 @@ across web/app clients:
 - When a valid Supabase session is available, the app flushes `CDQueuedMutation`
   in `updatedAt` order. Successfully written rows are removed from the local
   queue after the remote write succeeds.
-- Widget task/habit row text links open `justdo://task/<id>` or
-  `justdo://habit/<id>`. The app registers the `justdo` URL scheme and parses
-  those links into native deep-link state, then renders task/habit detail from
-  the Core Data mirror.
+- Widget task/habit rows are App Intent controls: task rows toggle completion
+  and habit rows toggle the selected-date log value. The app still registers
+  `justdo://task/<id>` and `justdo://habit/<id>` for external launches, but
+  those deep links now open the matching edit sheet instead of a pushed detail
+  page.
 
 ## Next Steps
 
-- Replace the scaffold inline detail panel with NavigationStack push-detail
-  routes.
+- Keep external deep links covered by edit-sheet launch tests.
 - Run manual hosted Supabase OAuth/offline sync verification.
 - Add drift tests for Swift domain JSON and web persisted snapshot samples.

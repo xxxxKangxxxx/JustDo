@@ -28,6 +28,7 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
             try replaceCategories(snapshot.categories)
             try replaceTasks(snapshot.tasks)
             try replaceHabits(snapshot.habits)
+            try upsertPlan(snapshot.settings.plan)
             if context.hasChanges {
                 try context.save()
             }
@@ -258,14 +259,35 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
         object.setValue(Date(), forKey: "updatedAt")
     }
 
+    private func upsertPlan(_ plan: String) throws {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "CDUserPreference")
+        request.predicate = NSPredicate(format: "key == %@", "plan")
+        for object in try context.fetch(request) {
+            context.delete(object)
+        }
+
+        let object = try makeObject("CDUserPreference")
+        object.setValue("plan", forKey: "key")
+        object.setValue(try JSONEncoder().encode(plan), forKey: "valueJSON")
+        object.setValue(Date(), forKey: "updatedAt")
+    }
+
     private func fetchSettings(defaults: Settings) throws -> Settings {
         var settings = defaults
         let decoder = JSONDecoder()
         for object: NSManagedObject in try fetchObjects("CDUserPreference") {
             guard
                 let rawKey = object.value(forKey: "key") as? String,
+                let data = object.value(forKey: "valueJSON") as? Data
+            else {
+                continue
+            }
+            if rawKey == "plan" {
+                settings.plan = (try? decoder.decode(String.self, from: data)) ?? settings.plan
+                continue
+            }
+            guard
                 let key = PreferenceKey(rawValue: rawKey),
-                let data = object.value(forKey: "valueJSON") as? Data,
                 let value = try? decoder.decode(Int.self, from: data)
             else {
                 continue

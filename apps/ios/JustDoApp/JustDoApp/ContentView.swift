@@ -14,7 +14,7 @@ private typealias JDCategory = JustDoShared.Category
 struct ContentView: View {
     @StateObject private var auth = AuthViewModel()
     @ObservedObject private var syncStatus: AppSyncStatusStore
-    @State private var navigationPath = NavigationPath()
+    @State private var pendingDetailRoute: JustDoDetailRoute?
     @State private var didOpenInitialUITestURL = false
     @Environment(\.scenePhase) private var scenePhase
     var snapshotStore: CoreDataAppSnapshotStore?
@@ -32,17 +32,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
-            rootScreen
-            .navigationDestination(for: JustDoDetailRoute.self) { route in
-                switch route {
-                case .task(let id):
-                    TaskDetailScreen(id: id, snapshotStore: snapshotStore, syncStatus: syncStatus)
-                case .habit(let id):
-                    HabitDetailScreen(id: id, snapshotStore: snapshotStore, syncStatus: syncStatus)
-                }
-            }
-        }
+        rootScreen
         .task {
             await auth.reload()
             openInitialUITestURLIfNeeded()
@@ -74,8 +64,7 @@ struct ContentView: View {
                 snapshotStore: snapshotStore,
                 syncStatus: syncStatus,
                 authProfile: auth.profile,
-                onOpenTask: { navigationPath.append(JustDoDetailRoute.task($0)) },
-                onOpenHabit: { navigationPath.append(JustDoDetailRoute.habit($0)) },
+                pendingDetailRoute: $pendingDetailRoute,
                 onSignOut: {
                     auth.signOut()
                     _Concurrency.Task { await onSessionChanged() }
@@ -103,7 +92,7 @@ struct ContentView: View {
         guard let route = JustDoDetailRoute(url: url) else {
             return
         }
-        navigationPath.append(route)
+        pendingDetailRoute = route
     }
 
     private func openInitialUITestURLIfNeeded() {
@@ -432,8 +421,7 @@ private struct HomeRootView: View {
     let snapshotStore: CoreDataAppSnapshotStore?
     @ObservedObject var syncStatus: AppSyncStatusStore
     let authProfile: AuthProfile?
-    let onOpenTask: (UUID) -> Void
-    let onOpenHabit: (UUID) -> Void
+    @Binding var pendingDetailRoute: JustDoDetailRoute?
     let onSignOut: () -> Void
 
     @State private var snapshot: AppSnapshot?
@@ -444,6 +432,8 @@ private struct HomeRootView: View {
     @State private var isShowingAddTask = false
     @State private var addTaskStartDate: String?
     @State private var addTaskEndDate: String?
+    @State private var editingTask: Task?
+    @State private var editingHabit: Habit?
     @State private var isShowingHabitManager = false
     @State private var isShowingCategoryManager = false
     @State private var isShowingDayPanel = false
@@ -483,6 +473,36 @@ private struct HomeRootView: View {
             )
             .presentationDetents([.large])
         }
+        .sheet(item: $editingTask) { task in
+            TaskDetailEditor(
+                task: task,
+                categories: snapshot?.categories ?? [],
+                onCancel: { editingTask = nil },
+                onSave: saveTask(_:),
+                onDelete: deleteTask(_:)
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 30)
+            .presentationDetents([.height(560)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
+        .sheet(item: $editingHabit) { habit in
+            HabitDetailEditor(
+                habit: habit,
+                onCancel: { editingHabit = nil },
+                onSave: saveHabit(_:)
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 30)
+            .presentationDetents([.height(500)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
         .sheet(isPresented: $isShowingCategoryManager) {
             CategoryManagementSheet(
                 categories: snapshot?.categories ?? [],
@@ -501,30 +521,23 @@ private struct HomeRootView: View {
         .sheet(isPresented: $isShowingDayPanel) {
             SelectedDayPanel(
                 selectedDate: selectedDate,
-                tasks: tasksForSelectedDayPanel,
+                tasks: tasksForSelectedDate,
+                justDoTasks: tasksForJustDoMode,
                 habits: snapshot?.habits ?? [],
                 categories: snapshot?.categories ?? [],
-                isJustDoMode: effectiveJustDoMode,
-                canUseJustDoMode: isProPlan,
-                onSetJustDoMode: setJustDoModeFromHome(_:),
+                canUseJustDoMode: effectiveJustDoMode,
                 onToggleTask: toggleTask(_:),
                 onToggleHabit: toggleHabit(_:on:),
-                onOpenTask: { id in
-                    isShowingDayPanel = false
-                    onOpenTask(id)
-                },
-                onOpenHabit: { id in
-                    isShowingDayPanel = false
-                    onOpenHabit(id)
-                },
-                onAdd: {
+                onSaveTask: saveTask(_:),
+                onDeleteTask: deleteTask(_:),
+                onAdd: { useJustDoMode in
                     isShowingDayPanel = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                        presentAddSheetForSelectedDate()
+                        presentAddSheetForSelectedDate(useJustDoMode: useJustDoMode)
                     }
                 }
             )
-            .presentationDetents([.height(420)])
+            .presentationDetents([.height(500), .large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
@@ -542,6 +555,18 @@ private struct HomeRootView: View {
         }
         .task {
             loadSnapshot()
+            presentPendingDetailRouteIfNeeded()
+        }
+        .onChange(of: syncStatus.status) { _, status in
+            switch status {
+            case .synced, .pending:
+                loadSnapshot(preserveViewSelection: true)
+            case .unknown, .syncing, .failed:
+                break
+            }
+        }
+        .onChange(of: pendingDetailRoute) { _, _ in
+            presentPendingDetailRouteIfNeeded()
         }
     }
 
@@ -672,10 +697,7 @@ private struct HomeRootView: View {
         (snapshot?.tasks ?? []).filter { $0.startDate <= selectedDate && selectedDate <= $0.endDate }
     }
 
-    private var tasksForSelectedDayPanel: [Task] {
-        guard effectiveJustDoMode else {
-            return tasksForSelectedDate
-        }
+    private var tasksForJustDoMode: [Task] {
         return (snapshot?.tasks ?? [])
             .filter { !$0.isCompleted && $0.endDate <= selectedDate }
             .sorted(by: sortTasksByDueDate)
@@ -689,8 +711,8 @@ private struct HomeRootView: View {
         isProPlan && (snapshot?.settings.justDoMode ?? false)
     }
 
-    private func presentAddSheetForSelectedDate() {
-        if effectiveJustDoMode {
+    private func presentAddSheetForSelectedDate(useJustDoMode: Bool? = nil) {
+        if useJustDoMode ?? effectiveJustDoMode {
             let startDate = selectedDate < JDDate.todayISO ? selectedDate : JDDate.todayISO
             presentAddSheet(startDate: startDate, endDate: selectedDate)
         } else {
@@ -785,6 +807,109 @@ private struct HomeRootView: View {
             actionMessage = "Task added."
         } catch {
             actionMessage = "Could not add task."
+        }
+    }
+
+    private func presentEditTask(id: UUID) {
+        guard let task = snapshot?.tasks.first(where: { $0.id == id }) else {
+            actionMessage = "Task를 찾을 수 없습니다."
+            return
+        }
+        editingTask = task
+    }
+
+    private func presentPendingDetailRouteIfNeeded() {
+        guard let route = pendingDetailRoute else {
+            return
+        }
+
+        loadSnapshot(preserveViewSelection: true)
+        selectedTab = .home
+        isShowingDayPanel = false
+
+        switch route {
+        case .task(let id):
+            presentEditTask(id: id)
+        case .habit(let id):
+            presentEditHabit(id: id)
+        }
+        pendingDetailRoute = nil
+    }
+
+    private func saveTask(_ task: Task) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .taskUpsert(task)
+                )
+            )
+            editingTask = nil
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "Task updated."
+        } catch {
+            actionMessage = "Could not update task."
+        }
+    }
+
+    private func deleteTask(_ task: Task) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .taskDelete(id: task.id)
+                )
+            )
+            editingTask = nil
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "Task deleted."
+        } catch {
+            actionMessage = "Could not delete task."
+        }
+    }
+
+    private func presentEditHabit(id: UUID) {
+        guard let habit = snapshot?.habits.first(where: { $0.id == id }) else {
+            actionMessage = "Habit을 찾을 수 없습니다."
+            return
+        }
+        editingHabit = habit
+    }
+
+    private func saveHabit(_ habit: Habit) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .habitUpsert(habit)
+                )
+            )
+            editingHabit = nil
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "Habit updated."
+        } catch {
+            actionMessage = "Could not update habit."
         }
     }
 
@@ -895,14 +1020,6 @@ private struct HomeRootView: View {
 
     private func setWeekStart(_ weekStart: Int) {
         setPreference(.weekStart, value: weekStart == 1 ? 1 : 0, successMessage: "Calendar settings updated.")
-    }
-
-    private func setJustDoModeFromHome(_ isOn: Bool) {
-        guard isProPlan else {
-            actionMessage = "Just Do Mode는 Pro 기능입니다."
-            return
-        }
-        setJustDoMode(isOn)
     }
 
     private func setJustDoMode(_ isOn: Bool) {
@@ -1386,20 +1503,40 @@ private struct WeekTaskBar {
 }
 
 private struct SelectedDayPanel: View {
+    private enum PanelMode {
+        case list
+        case task(Task)
+    }
+
     let selectedDate: String
     let tasks: [Task]
+    let justDoTasks: [Task]
     let habits: [Habit]
     let categories: [JDCategory]
-    let isJustDoMode: Bool
     let canUseJustDoMode: Bool
-    let onSetJustDoMode: (Bool) -> Void
     let onToggleTask: (Task) -> Void
     let onToggleHabit: (Habit, String) -> Void
-    let onOpenTask: (UUID) -> Void
-    let onOpenHabit: (UUID) -> Void
-    let onAdd: () -> Void
+    let onSaveTask: (Task) -> Void
+    let onDeleteTask: (Task) -> Void
+    let onAdd: (Bool) -> Void
+
+    @State private var mode: PanelMode = .list
+    @State private var isShowingJustDoMode = false
 
     var body: some View {
+        Group {
+            switch mode {
+            case .list:
+                listView
+            case .task(let task):
+                editTaskView(task)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 24)
+    }
+
+    private var listView: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: 0) {
                 dragHeader
@@ -1408,14 +1545,14 @@ private struct SelectedDayPanel: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        if isJustDoMode {
+                        if isShowingJustDoMode {
                             ForEach(justDoTaskSections, id: \.title) { section in
                                 JustDoTaskSectionView(
                                     title: section.title,
                                     tasks: section.tasks,
                                     categories: categories,
                                     onToggleTask: onToggleTask,
-                                    onOpenTask: onOpenTask
+                                    onOpenTask: { task in mode = .task(task) }
                                 )
                             }
                         } else {
@@ -1424,7 +1561,7 @@ private struct SelectedDayPanel: View {
                                     category: group.category,
                                     tasks: group.tasks,
                                     onToggleTask: onToggleTask,
-                                    onOpenTask: onOpenTask
+                                    onOpenTask: { task in mode = .task(task) }
                                 )
                             }
                         }
@@ -1433,12 +1570,11 @@ private struct SelectedDayPanel: View {
                             HabitGroupSection(
                                 habits: habits,
                                 selectedDate: selectedDate,
-                                onToggleHabit: onToggleHabit,
-                                onOpenHabit: onOpenHabit
+                                onToggleHabit: onToggleHabit
                             )
                         }
 
-                        if tasks.isEmpty && habits.isEmpty {
+                        if visibleTasks.isEmpty && habits.isEmpty {
                             Text("이 날엔 할일이 없어요. + 로 추가해보세요.")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(JDTheme.tertiaryText)
@@ -1452,7 +1588,7 @@ private struct SelectedDayPanel: View {
                 }
             }
 
-            Button(action: onAdd) {
+            Button { onAdd(isShowingJustDoMode) } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
@@ -1466,8 +1602,48 @@ private struct SelectedDayPanel: View {
             .padding(.trailing, 2)
             .padding(.bottom, 2)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 24)
+    }
+
+    private func editTaskView(_ task: Task) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            editHeader(title: "Task 편집")
+            ScrollView(showsIndicators: false) {
+                TaskDetailEditor(
+                    task: task,
+                    categories: categories,
+                    onCancel: { mode = .list },
+                    onSave: { updated in
+                        onSaveTask(updated)
+                        mode = .list
+                    },
+                    onDelete: { deleted in
+                        onDeleteTask(deleted)
+                        mode = .list
+                    }
+                )
+                .padding(.top, 12)
+            }
+        }
+    }
+
+    private func editHeader(title: String) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                mode = .list
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(JDTheme.primaryText)
+
+            Text(title)
+                .font(.system(size: 18, weight: .bold))
+            Spacer()
+        }
+        .padding(.top, 18)
+        .padding(.bottom, 6)
     }
 
     private var dragHeader: some View {
@@ -1478,7 +1654,7 @@ private struct SelectedDayPanel: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(JDTheme.secondaryText)
             Spacer()
-            Text("\(tasks.count + habits.count)개")
+            Text("\(visibleTasks.count + habits.count)개")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(JDTheme.tertiaryText)
         }
@@ -1488,11 +1664,13 @@ private struct SelectedDayPanel: View {
 
     private var modePicker: some View {
         HStack(spacing: 0) {
-            modeButton(title: "오늘만", isSelected: !isJustDoMode) {
-                onSetJustDoMode(false)
+            modeButton(title: "오늘만", isSelected: !isShowingJustDoMode) {
+                isShowingJustDoMode = false
             }
-            modeButton(title: "이 날까지", isSelected: isJustDoMode) {
-                onSetJustDoMode(true)
+            modeButton(title: "이 날까지", isSelected: isShowingJustDoMode) {
+                if canUseJustDoMode {
+                    isShowingJustDoMode = true
+                }
             }
         }
         .padding(3)
@@ -1501,26 +1679,24 @@ private struct SelectedDayPanel: View {
     }
 
     private func modeButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let isLocked = title == "이 날까지" && !canUseJustDoMode
+        return Button(action: action) {
             HStack(spacing: 5) {
                 Text(title)
-                if title == "이 날까지" && !canUseJustDoMode {
-                    Text("Pro")
+                if isLocked {
+                    Image(systemName: "lock.fill")
                         .font(.system(size: 9, weight: .bold))
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(JDTheme.accent.opacity(0.14))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
             }
             .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(isSelected ? JDTheme.primaryText : JDTheme.secondaryText)
+            .foregroundStyle(isLocked ? JDTheme.tertiaryText : isSelected ? JDTheme.primaryText : JDTheme.secondaryText)
             .frame(maxWidth: .infinity)
             .frame(height: 30)
             .background(isSelected ? JDTheme.surface : .clear)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+        .disabled(isLocked)
     }
 
     private var components: (month: Int, day: Int) {
@@ -1539,11 +1715,15 @@ private struct SelectedDayPanel: View {
         }
     }
 
+    private var visibleTasks: [Task] {
+        isShowingJustDoMode ? justDoTasks : tasks
+    }
+
     private var justDoTaskSections: [(title: String, tasks: [Task])] {
         [
-            ("지난일", tasks.filter { $0.endDate < JDDate.todayISO }),
-            ("오늘", tasks.filter { $0.endDate == JDDate.todayISO }),
-            ("해야할일", tasks.filter { $0.endDate > JDDate.todayISO && $0.endDate <= selectedDate }),
+            ("지난일", justDoTasks.filter { $0.endDate < JDDate.todayISO }),
+            ("오늘", justDoTasks.filter { $0.endDate == JDDate.todayISO }),
+            ("해야할일", justDoTasks.filter { $0.endDate > JDDate.todayISO && $0.endDate <= selectedDate }),
         ]
         .filter { !$0.tasks.isEmpty }
     }
@@ -1554,7 +1734,7 @@ private struct JustDoTaskSectionView: View {
     let tasks: [Task]
     let categories: [JDCategory]
     let onToggleTask: (Task) -> Void
-    let onOpenTask: (UUID) -> Void
+    let onOpenTask: (Task) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1567,7 +1747,7 @@ private struct JustDoTaskSectionView: View {
                     isLast: index == tasks.count - 1,
                     showsDueDate: true,
                     onToggle: { onToggleTask(task) },
-                    onOpen: { onOpenTask(task.id) }
+                    onOpen: { onOpenTask(task) }
                 )
             }
         }
@@ -1579,7 +1759,7 @@ private struct TaskGroupSection: View {
     let category: JDCategory
     let tasks: [Task]
     let onToggleTask: (Task) -> Void
-    let onOpenTask: (UUID) -> Void
+    let onOpenTask: (Task) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1591,7 +1771,7 @@ private struct TaskGroupSection: View {
                     isLast: index == tasks.count - 1,
                     showsDueDate: false,
                     onToggle: { onToggleTask(task) },
-                    onOpen: { onOpenTask(task.id) }
+                    onOpen: { onOpenTask(task) }
                 )
             }
         }
@@ -1603,7 +1783,6 @@ private struct HabitGroupSection: View {
     let habits: [Habit]
     let selectedDate: String
     let onToggleHabit: (Habit, String) -> Void
-    let onOpenHabit: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1613,8 +1792,7 @@ private struct HabitGroupSection: View {
                     habit: habit,
                     selectedDate: selectedDate,
                     isLast: index == habits.count - 1,
-                    onToggle: { onToggleHabit(habit, selectedDate) },
-                    onOpen: { onOpenHabit(habit.id) }
+                    onToggle: { onToggleHabit(habit, selectedDate) }
                 )
             }
         }
@@ -1725,7 +1903,6 @@ private struct HabitRow: View {
     let selectedDate: String
     let isLast: Bool
     let onToggle: () -> Void
-    let onOpen: () -> Void
 
     private var isDone: Bool {
         habit.log[selectedDate] == 1
@@ -1739,21 +1916,18 @@ private struct HabitRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(isDone ? "Habit 완료 취소" : "Habit 완료")
 
-            Button(action: onOpen) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(habit.emoji) \(habit.title)")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(isDone ? JDTheme.tertiaryText : JDTheme.primaryText)
-                            .strikethrough(isDone)
-                        Text("🔥 \(JDDate.habitStreak(habit, selectedDate: selectedDate))일째")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(JDTheme.habit)
-                    }
-                    Spacer()
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(habit.emoji) \(habit.title)")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(isDone ? JDTheme.tertiaryText : JDTheme.primaryText)
+                        .strikethrough(isDone)
+                    Text("🔥 \(JDDate.habitStreak(habit, selectedDate: selectedDate))일째")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(JDTheme.habit)
                 }
+                Spacer()
             }
-            .buttonStyle(.plain)
         }
         .padding(.vertical, 11)
         .overlay(alignment: .bottom) {
@@ -2397,7 +2571,6 @@ private struct SettingsRootTabView: View {
                     SettingsRow(title: "현재 플랜", detail: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free", chevron: true)
                     SettingsRow(
                         title: "Just Do Mode",
-                        detail: "선택한 날짜까지 할 일",
                         pro: !isProPlan,
                         right: AnyView(ToggleSwitch(isOn: justDoModeBinding))
                     )
@@ -3698,342 +3871,6 @@ private extension String {
     }
 }
 
-private enum DeepLinkDetail: Equatable {
-    case task(Task)
-    case habit(Habit)
-    case missing(JustDoDeepLink)
-    case unavailable(JustDoDeepLink)
-
-    init(link: JustDoDeepLink, snapshotStore: CoreDataAppSnapshotStore?) {
-        guard let snapshotStore else {
-            self = .unavailable(link)
-            return
-        }
-
-        do {
-            switch link {
-            case .task(let id):
-                if let task = try snapshotStore.task(id: id) {
-                    self = .task(task)
-                } else {
-                    self = .missing(link)
-                }
-            case .habit(let id):
-                if let habit = try snapshotStore.habit(id: id) {
-                    self = .habit(habit)
-                } else {
-                    self = .missing(link)
-                }
-            }
-        } catch {
-            self = .missing(link)
-        }
-    }
-}
-
-private struct TaskDetailScreen: View {
-    let id: UUID
-    let snapshotStore: CoreDataAppSnapshotStore?
-    let syncStatus: AppSyncStatusStore
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var detail: DeepLinkDetail?
-    @State private var categories: [JDCategory] = []
-    @State private var editingTask: Task?
-    @State private var message: DetailActionMessage?
-    @State private var showingDeleteConfirmation = false
-
-    var body: some View {
-        DetailScreenScaffold(title: "Task Detail") {
-            switch detail ?? loadDetail() {
-            case .task(let task):
-                TaskDetailContent(task: task)
-                DetailActionBar(
-                    onEdit: { editingTask = task },
-                    onDelete: { showingDeleteConfirmation = true }
-                )
-            case .missing(let link):
-                FallbackDetailContent(
-                    title: "Detail not found",
-                    message: "No local mirror row exists for \(link.description). Sync may need to refresh first."
-                )
-            case .unavailable(let link):
-                FallbackDetailContent(
-                    title: "Detail unavailable",
-                    message: "The app could not access the local mirror for \(link.description)."
-                )
-            case .habit:
-                EmptyView()
-            }
-            if let message {
-                DetailMessageView(message: message)
-            }
-        }
-        .onAppear(perform: refresh)
-        .sheet(item: $editingTask) { task in
-            TaskDetailEditor(
-                task: task,
-                categories: categories,
-                onCancel: { editingTask = nil },
-                onSave: saveTask
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 30)
-            .presentationDetents([.height(560)])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.surface)
-        }
-        .alert("Task 삭제", isPresented: $showingDeleteConfirmation) {
-            Button("취소", role: .cancel) {}
-            Button("삭제", role: .destructive, action: deleteTask)
-        } message: {
-            Text("이 Task를 삭제하고 동기화 대기열에 반영합니다.")
-        }
-    }
-
-    private func loadDetail() -> DeepLinkDetail {
-        DeepLinkDetail(link: .task(id), snapshotStore: snapshotStore)
-    }
-
-    private func refresh() {
-        detail = loadDetail()
-        categories = (try? snapshotStore?.loadSnapshot().categories) ?? []
-    }
-
-    private func saveTask(_ task: Task) {
-        guard let snapshotStore else {
-            message = .error("로컬 저장소에 접근할 수 없습니다.")
-            return
-        }
-        do {
-            try snapshotStore.applyAndEnqueue(
-                QueuedMutation(
-                    id: UUID(),
-                    updatedAt: JDDate.nowISODateTime,
-                    mutation: .taskUpsert(task)
-                )
-            )
-            editingTask = nil
-            message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
-            refresh()
-            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
-        } catch {
-            message = .error("Task 저장에 실패했습니다.")
-        }
-    }
-
-    private func deleteTask() {
-        guard let snapshotStore else {
-            message = .error("로컬 저장소에 접근할 수 없습니다.")
-            return
-        }
-        do {
-            try snapshotStore.applyAndEnqueue(
-                QueuedMutation(
-                    id: UUID(),
-                    updatedAt: JDDate.nowISODateTime,
-                    mutation: .taskDelete(id: id)
-                )
-            )
-            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
-            dismiss()
-        } catch {
-            message = .error("Task 삭제에 실패했습니다.")
-        }
-    }
-}
-
-private struct HabitDetailScreen: View {
-    let id: UUID
-    let snapshotStore: CoreDataAppSnapshotStore?
-    let syncStatus: AppSyncStatusStore
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var detail: DeepLinkDetail?
-    @State private var editingHabit: Habit?
-    @State private var message: DetailActionMessage?
-    @State private var showingDeleteConfirmation = false
-
-    var body: some View {
-        DetailScreenScaffold(title: "Habit Detail") {
-            switch detail ?? loadDetail() {
-            case .habit(let habit):
-                HabitDetailContent(habit: habit)
-                DetailActionBar(
-                    onEdit: { editingHabit = habit },
-                    onDelete: { showingDeleteConfirmation = true }
-                )
-            case .missing(let link):
-                FallbackDetailContent(
-                    title: "Detail not found",
-                    message: "No local mirror row exists for \(link.description). Sync may need to refresh first."
-                )
-            case .unavailable(let link):
-                FallbackDetailContent(
-                    title: "Detail unavailable",
-                    message: "The app could not access the local mirror for \(link.description)."
-                )
-            case .task:
-                EmptyView()
-            }
-            if let message {
-                DetailMessageView(message: message)
-            }
-        }
-        .onAppear(perform: refresh)
-        .sheet(item: $editingHabit) { habit in
-            HabitDetailEditor(
-                habit: habit,
-                onCancel: { editingHabit = nil },
-                onSave: saveHabit
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 30)
-            .presentationDetents([.height(500)])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.surface)
-        }
-        .alert("Habit 삭제", isPresented: $showingDeleteConfirmation) {
-            Button("취소", role: .cancel) {}
-            Button("삭제", role: .destructive, action: deleteHabit)
-        } message: {
-            Text("이 Habit을 삭제하고 동기화 대기열에 반영합니다.")
-        }
-    }
-
-    private func loadDetail() -> DeepLinkDetail {
-        DeepLinkDetail(link: .habit(id), snapshotStore: snapshotStore)
-    }
-
-    private func refresh() {
-        detail = loadDetail()
-    }
-
-    private func saveHabit(_ habit: Habit) {
-        guard let snapshotStore else {
-            message = .error("로컬 저장소에 접근할 수 없습니다.")
-            return
-        }
-        do {
-            try snapshotStore.applyAndEnqueue(
-                QueuedMutation(
-                    id: UUID(),
-                    updatedAt: JDDate.nowISODateTime,
-                    mutation: .habitUpsert(habit)
-                )
-            )
-            editingHabit = nil
-            message = .success("변경 사항을 저장했고 동기화 대기열에 추가했습니다.")
-            refresh()
-            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
-        } catch {
-            message = .error("Habit 저장에 실패했습니다.")
-        }
-    }
-
-    private func deleteHabit() {
-        guard let snapshotStore else {
-            message = .error("로컬 저장소에 접근할 수 없습니다.")
-            return
-        }
-        do {
-            try snapshotStore.applyAndEnqueue(
-                QueuedMutation(
-                    id: UUID(),
-                    updatedAt: JDDate.nowISODateTime,
-                    mutation: .habitDelete(id: id)
-                )
-            )
-            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
-            dismiss()
-        } catch {
-            message = .error("Habit 삭제에 실패했습니다.")
-        }
-    }
-}
-
-private struct DetailScreenScaffold<Content: View>: View {
-    let title: String
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                content
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
-        }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-private struct TaskDetailContent: View {
-    let task: Task
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Task", systemImage: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(task.isCompleted ? .green : .secondary)
-            Text(task.title)
-                .font(.title3.weight(.semibold))
-                .accessibilityIdentifier("task-detail-title")
-            DetailGrid(rows: [
-                ("Status", task.isCompleted ? "Completed" : "Open"),
-                ("Date", dateRange),
-                ("Time", task.scheduledTime ?? "-"),
-                ("Priority", task.priority?.rawValue.capitalized ?? "-"),
-                ("Tags", task.tags.isEmpty ? "-" : task.tags.joined(separator: ", ")),
-            ])
-        }
-        .accessibilityIdentifier("task-detail-content")
-    }
-
-    private var dateRange: String {
-        task.startDate == task.endDate ? task.startDate : "\(task.startDate) - \(task.endDate)"
-    }
-}
-
-private struct HabitDetailContent: View {
-    let habit: Habit
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Habit", systemImage: "repeat.circle.fill")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.green)
-            Text("\(habit.emoji) \(habit.title)")
-                .font(.title3.weight(.semibold))
-                .accessibilityIdentifier("habit-detail-title")
-            DetailGrid(rows: [
-                ("Started", habit.startedAt),
-                ("Repeat", repeatDescription),
-                ("Reminder", habit.reminderTime ?? "-"),
-                ("Logged days", "\(habit.log.filter { $0.value == 1 }.count)"),
-            ])
-        }
-        .accessibilityIdentifier("habit-detail-content")
-    }
-
-    private var repeatDescription: String {
-        switch habit.recurType {
-        case .daily:
-            return "Daily"
-        case .weekly:
-            if let recurDays = habit.recurDays, !recurDays.isEmpty {
-                return "Weekly: \(recurDays.map(String.init).joined(separator: ", "))"
-            }
-            return "Weekly"
-        }
-    }
-}
-
 private struct TaskDetailEditor: View {
     private enum ScheduleField: Identifiable {
         case start
@@ -4058,6 +3895,7 @@ private struct TaskDetailEditor: View {
     let categories: [JDCategory]
     let onCancel: () -> Void
     let onSave: (Task) -> Void
+    let onDelete: ((Task) -> Void)?
 
     @State private var title: String
     @State private var startDateValue: Date
@@ -4067,14 +3905,22 @@ private struct TaskDetailEditor: View {
     @State private var selectedCategoryID: UUID?
     @State private var selectedPriority: Priority
     @State private var tagsText: String
+    @State private var isShowingDeleteConfirmation = false
 
     private let priorities: [(Priority, String)] = [(.high, "높음"), (.medium, "중간"), (.low, "낮음")]
 
-    init(task: Task, categories: [JDCategory], onCancel: @escaping () -> Void, onSave: @escaping (Task) -> Void) {
+    init(
+        task: Task,
+        categories: [JDCategory],
+        onCancel: @escaping () -> Void,
+        onSave: @escaping (Task) -> Void,
+        onDelete: ((Task) -> Void)? = nil
+    ) {
         self.task = task
         self.categories = categories
         self.onCancel = onCancel
         self.onSave = onSave
+        self.onDelete = onDelete
         _title = State(initialValue: task.title)
         _startDateValue = State(initialValue: Self.date(from: task.startDate, time: task.scheduledTime))
         _endDateValue = State(initialValue: Self.date(from: task.endDate, time: task.scheduledTime))
@@ -4089,6 +3935,7 @@ private struct TaskDetailEditor: View {
             TextField("무엇을 할까요?", text: $title)
                 .font(.system(size: 20, weight: .bold))
                 .textInputAutocapitalization(.never)
+                .accessibilityIdentifier("task-editor-title")
                 .padding(.bottom, 12)
                 .overlay(alignment: .bottom) {
                     Rectangle()
@@ -4161,6 +4008,17 @@ private struct TaskDetailEditor: View {
             }
 
             HStack(spacing: 10) {
+                if onDelete != nil {
+                    Button(role: .destructive) {
+                        isShowingDeleteConfirmation = true
+                    } label: {
+                        Label("삭제", systemImage: "trash")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 11)
+                }
                 Spacer()
                 Button("취소", action: onCancel)
                     .font(.system(size: 13, weight: .medium))
@@ -4199,6 +4057,14 @@ private struct TaskDetailEditor: View {
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
+        }
+        .alert("Task 삭제", isPresented: $isShowingDeleteConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive) {
+                onDelete?(task)
+            }
+        } message: {
+            Text("이 Task를 삭제하고 동기화 대기열에 반영합니다.")
         }
     }
 
@@ -4303,6 +4169,7 @@ private struct HabitDetailEditor: View {
                 TextField("어떤 습관인가요?", text: $title)
                     .font(.title3.weight(.semibold))
                     .textInputAutocapitalization(.never)
+                    .accessibilityIdentifier("habit-editor-title")
             }
             .padding(.bottom, 12)
             .overlay(alignment: .bottom) {
@@ -4385,26 +4252,6 @@ private struct HabitDetailEditor: View {
     }
 }
 
-private struct DetailActionBar: View {
-    let onEdit: () -> Void
-    let onDelete: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Button(action: onEdit) {
-                Label("편집", systemImage: "pencil")
-            }
-            .buttonStyle(.borderedProminent)
-            Button(role: .destructive, action: onDelete) {
-                Label("삭제", systemImage: "trash")
-            }
-            .buttonStyle(.bordered)
-        }
-        .font(.system(size: 13, weight: .semibold))
-        .padding(.top, 4)
-    }
-}
-
 private struct DetailEditorActions: View {
     let onCancel: () -> Void
     let onSave: () -> Void
@@ -4418,85 +4265,6 @@ private struct DetailEditorActions: View {
         }
         .font(.system(size: 13, weight: .semibold))
         .padding(.top, 16)
-    }
-}
-
-private enum DetailActionMessage: Equatable {
-    case success(String)
-    case error(String)
-
-    var text: String {
-        switch self {
-        case .success(let text), .error(let text):
-            return text
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .success:
-            return .green
-        case .error:
-            return .red
-        }
-    }
-}
-
-private struct DetailMessageView: View {
-    let message: DetailActionMessage
-
-    var body: some View {
-        Text(message.text)
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(message.color)
-            .padding(.top, 2)
-    }
-}
-
-private struct DetailGrid: View {
-    let rows: [(String, String)]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(rows, id: \.0) { label, value in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(label)
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 82, alignment: .leading)
-                    Text(value)
-                        .font(.footnote)
-                        .textSelection(.enabled)
-                }
-            }
-        }
-    }
-}
-
-private struct FallbackDetailContent: View {
-    let title: String
-    let message: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.headline)
-            Text(message)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        }
-    }
-}
-
-private extension JustDoDeepLink {
-    var description: String {
-        switch self {
-        case .task(let id):
-            "task \(id.uuidString.lowercased())"
-        case .habit(let id):
-            "habit \(id.uuidString.lowercased())"
-        }
     }
 }
 
