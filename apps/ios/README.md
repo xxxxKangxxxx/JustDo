@@ -73,5 +73,5 @@ Auth landing, Home, Add Sheet, editor-sheet routing, Stats, Settings, and
 Widget. The 2026-05-25 1-hour+ auth session refresh smoke also passed. App
 deep links open task/habit editor sheets, while Home selected-day sheet task
 taps edit inline and habit row taps no-op except for the check control. The
-remaining iOS track is final whole-app smoke and TestFlight/App Store
-preparation.
+2026-05-29 final real-device smoke also passed. The remaining iOS track is
+TestFlight/App Store preparation.

@@ -82,11 +82,10 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > `xcodebuild -project JustDoApp.xcodeproj ...`로 실행한다.
 
 > **다음 작업자가 픽업할 우선순위 (2026-05-29 갱신)**:
-> 1. **iOS 잔여 실기기 smoke / TestFlight 준비**. Auth landing, Home,
->    Add Sheet, editor-sheet routing, Just Do Mode, Stats, Settings, Widget
->    보정은 iPhone 14 Pro iOS 26.5 실기기 피드백을 반영했고 simulator
->    build/shared tests 통과. 세션 자동 refresh도 1시간+ 종료 후 재진입 smoke
->    통과. 남은 것은 현재 UI를 한 번 더 실제 기기에서 훑는 smoke와 배포 준비.
+> 1. **iOS TestFlight/App Store 준비**. Auth landing, Home, Add Sheet,
+>    editor-sheet routing, Just Do Mode, Stats, Settings, Widget 보정은 iPhone
+>    14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션 자동 refresh도 1시간+
+>    종료 후 재진입 smoke 통과. 남은 것은 archive/TestFlight/App Store 준비.
 > 2. **Toss 가맹점 심사 준비** (사용자 외부 트랙, 가장 긴 차단 항목 ~2–3주).
 >    사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서. 코드
 >    트랙은 이와 병렬로 진행 가능. 체크리스트:
@@ -402,10 +401,10 @@ iOS build/test commands below before doing the next real-device smoke pass.
     - `cd apps/ios && swift test` -> pass, 43 tests.
     - `cd apps/ios/JustDoApp && xcodebuild -quiet -project JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
     - `git diff --check` -> pass.
-  - Auth landing, Home, Add Sheet, editor-sheet routing, Stats, Settings, Widget,
-    and 1-hour+ auth session refresh smoke passed on the configured real
-    device. Remaining iOS work is final whole-app smoke and TestFlight/App
-    Store preparation. Because this is a native SwiftUI/Xcode app, do **not**
+  - Auth landing, Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats,
+    Settings, Widget, 1-hour+ auth session refresh smoke, and final real-device
+    smoke passed on the configured real device. Remaining iOS work is
+    TestFlight/App Store preparation. Because this is a native SwiftUI/Xcode app, do **not**
     use Expo Go; install directly from Xcode to a real iPhone or use TestFlight
     later.
   - Both targets share App Group `group.kr.justdo.app`.
@@ -933,8 +932,8 @@ Recommended immediate next steps:
      - Settings / Widget 보정 통과 (계정/profile, 알림/표시 picker,
        data/legal, home/lock widget layout, row tap completion, mode-scoped
        counts 후).
-   - 남은 iOS 작업은 현재 UI의 잔여 실기기 smoke와 TestFlight/App Store
-     준비. 상세 체크리스트는 `docs/ios_phase6_status.md` 참고.
+   - 남은 iOS 작업은 TestFlight/App Store 준비. 상세 체크리스트는
+     `docs/ios_phase6_status.md` 참고.
    - Widget은 home-screen small/medium/large와 lock-screen accessory로 분리.
      Home-screen row text deep link는 제거했고 row 전체 탭이 완료 토글이다.
    - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 (wireless 활성 시 USB
@@ -1004,8 +1003,8 @@ Recommended immediate next steps:
   자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
 - iOS는 Phase 7과 독립 트랙. Auth landing, Home, Add Sheet, editor-sheet
   routing, Just Do Mode, Stats, Settings, Widget 보정은 iPhone 14 Pro iOS 26.5
-  피드백 기준으로 반영됨. 현재 남은 것은 실제 기기에서 현재 UI를 한 번 더
-  훑는 smoke와 TestFlight 준비이며, Expo Go로 검증하지 않음.
+  최종 smoke까지 통과. 현재 남은 것은 TestFlight 준비이며, Expo Go로 검증하지
+  않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
   주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
   monorepo platform/framework 설정 유지.

@@ -3718,3 +3718,43 @@ This document records coordination notes for work done with Codex and Claude Cod
   다시 진입시키거나 sync 상태 row에서 retry/refresh 경로를 확인한다.
 - `apps/web/tsconfig.tsbuildinfo` 삭제처럼 보였던 건 build cache 산출물 변화로
   이해하면 된다. 현재 커밋 대상에는 해당 파일 삭제가 남아 있지 않다.
+
+## 2026-05-29 iOS final real-device smoke
+
+### Codex + User
+
+- 목적:
+  - `bc71799 fix: refine ios just do mode and pro sync` 이후 iOS 최종 실기기
+    smoke를 진행해 TestFlight/App Store 준비 전에 핵심 user flow가 깨지지
+    않았는지 확인.
+- 환경:
+  - Device: `강영모의 iPhone` / iOS 26.5
+  - Bundle ID: `kr.justdo.app`
+  - Xcode project: `apps/ios/JustDoApp/JustDoApp.xcodeproj`
+- 준비/설치:
+  - `xcrun xctrace list devices`로 연결 기기 확인.
+  - `xcodebuild -quiet -project JustDoApp.xcodeproj -scheme JustDoApp
+    -destination 'id=00008120-001164982E00C01E' build` -> pass.
+  - `xcrun devicectl device install app --device 00008120-001164982E00C01E
+    .../Debug-iphoneos/JustDoApp.app` -> installed.
+  - `xcrun devicectl device process launch --device 00008120-001164982E00C01E
+    kr.justdo.app` -> launched.
+- Smoke 1~3 결과:
+  - 앱 기본 진입 / 로그인 유지 정상.
+  - Settings 구독 Pro 표시 정상.
+  - Just Do Mode OFF 상태에서 `이 날까지` lock + disabled 정상.
+  - Just Do Mode ON 상태에서 `오늘만` / `이 날까지` 둘 다 전환 정상.
+  - Task row tap 시 selected-day sheet 안에서 inline editor 표시 정상.
+  - Task 수정/삭제 정상.
+  - Habit row tap은 no-op, check control만 동작 정상.
+- Smoke 4~5 결과:
+  - `오늘만` 상태의 sheet `+` 추가 기본 날짜 정상.
+  - `이 날까지` 상태의 sheet `+` 추가 기본 날짜 정상.
+  - Home widget task/habit toggle 및 mutation/sync 정상.
+  - Lock-screen widget row tap 동작 정상.
+
+### Outcome
+
+- iOS 최종 실기기 smoke 통과.
+- iOS 남은 트랙은 final smoke가 아니라 **TestFlight/App Store 준비**로 이동.
+- Toss 가맹점 심사 / Pro Checkout 외부 의존 검증은 별도 병렬 트랙 유지.

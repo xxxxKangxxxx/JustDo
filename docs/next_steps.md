@@ -156,7 +156,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     경로로 일원화하는 작업이 따로 필요.
 - **웹 세션 영속화는 변경 없음**. `@supabase/ssr` 기본값(쿠키 + 자동 refresh)을
   그대로 사용하고 있어 별도 손댈 곳 없음. 본 fix는 iOS 한정.
-- 다음 우선순위: **iOS 잔여 실기기 smoke / TestFlight 준비** +
+- 다음 우선순위: **iOS TestFlight 준비** +
   **Toss 가맹점 심사 외부 트랙 병행**. Toss 가맹점 심사가 가장 긴 외부
   차단(~2–3주)이라 사용자 외부 트랙 먼저 시작 권장.
 
@@ -217,8 +217,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     (single light variant, dark/tinted 추후).
   - Web: `apps/web/public/`에 SVG primary + 16/32/48 PNG fallback +
     apple-touch-icon. `layout.tsx`의 `metadata.icons`에 등록.
-- 다음 우선순위: **문서/커밋 정리 후 iOS 잔여 실기기 smoke 및 Toss 외부
-  의존 트랙**. Toss 가맹점 심사는 외부 트랙 유지.
+- 다음 우선순위: **iOS TestFlight 준비 및 Toss 외부 의존 트랙**. Toss 가맹점
+  심사는 외부 트랙 유지.
 
 ## Where We Are (2026-05-21)
 
@@ -544,7 +544,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     Lock-screen widget은 Task-only accessory로 분리.
   - Session refresh (2026-05-25): 1시간+ 종료 후 재진입 시 로그인 루트 없이
     홈으로 진입하는 smoke 통과.
-  - Remaining: 출시 전 전체 smoke와 TestFlight/App Store 준비.
+  - Final smoke (2026-05-29): Pro plan display, Just Do Mode gate/mode switch,
+    task inline edit/delete, habit no-op/check, sheet `+`, widget home/lock
+    interactions all passed on iPhone 14 Pro / iOS 26.5.
+  - Remaining: TestFlight/App Store 준비.
 - [x] Add route tests for app deep-link opening.
   - `justdo://task/<id>` and `justdo://habit/<id>` now map through shared
     `JustDoDetailRoute`, and `ContentView` hands that route to Home so the

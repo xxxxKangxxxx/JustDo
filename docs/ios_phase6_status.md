@@ -322,8 +322,20 @@ swift test
 > Add Sheet + Task Detail edit + Stats + Settings + Widget 보정까지 통과.
 > 2026-05-25: 세션 자동 refresh smoke까지 통과.
 > 2026-05-29: Pro subscription sync, editor-sheet routing cleanup, Just Do Mode
-> gating follow-up까지 simulator build/shared tests 통과. 다음 차례는 출시 전
-> 전체 smoke와 TestFlight/App Store 준비, 그리고 Toss 외부 의존 트랙.
+> gating follow-up까지 simulator build/shared tests 통과. 같은 날 iPhone 14 Pro
+> iOS 26.5 최종 smoke에서 Smoke 1~5 정상 확인. 다음 차례는 TestFlight/App
+> Store 준비, 그리고 Toss 외부 의존 트랙.
+
+- [x] **iOS 최종 실기기 smoke (2026-05-29 통과)**.
+  - 환경: `강영모의 iPhone` / iOS 26.5, bundle id `kr.justdo.app`.
+  - 설치/실행: `xcodebuild` 실기기 Debug build 통과,
+    `xcrun devicectl device install app` 설치 성공,
+    `xcrun devicectl device process launch` 실행 성공.
+  - Smoke 1~3: 기본 진입, Pro 플랜 표시, Just Do Mode ON/OFF gate,
+    `오늘만`/`이 날까지` 전환, Task inline edit/delete, Habit row no-op +
+    check 동작 정상.
+  - Smoke 4~5: selected-day sheet `+`의 기본 날짜 동작, Widget task/habit
+    toggle 및 mutation/sync, lock-screen widget row tap 동작 정상.
 
 - [x] **세션 자동 refresh 실기기 smoke (2026-05-25 통과)**.
   - 시나리오: 정상 로그인 → 앱 종료(또는 백그라운드 보내기) → 1시간+ 대기 →
