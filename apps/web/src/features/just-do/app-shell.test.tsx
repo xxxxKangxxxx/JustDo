@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { fireEvent, screen, waitFor } from "@testing-library/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { parseISO, todayISO } from "@/lib/date";
+import { addDays, parseISO, todayISO } from "@/lib/date";
 import type { Persisted } from "./persistence";
 import { createMemoryStorage } from "./persistence";
 import { defaultCategories } from "./tokens";
@@ -84,7 +84,7 @@ const renderWithAppReact = (ui: React.ReactElement) => {
 const selectedDate = todayISO();
 const selected = parseISO(selectedDate);
 
-const persistedState = (): Persisted => ({
+const persistedState = (overrides: Partial<Persisted> = {}): Persisted => ({
   view: {
     tab: "home",
     year: selected.year,
@@ -125,10 +125,11 @@ const persistedState = (): Persisted => ({
     plan: "free",
     justDoMode: false,
   },
+  ...overrides,
 });
 
-const renderApp = () => {
-  const storage = createMemoryStorage(persistedState());
+const renderApp = (state: Persisted = persistedState()) => {
+  const storage = createMemoryStorage(state);
   renderWithAppReact(<JustDoApp storage={storage} />);
   return storage;
 };
@@ -172,13 +173,13 @@ afterEach(() => {
 const mockSubscriptionFetch = (subscription: {
   status: string;
   billing_provider?: string | null;
-}) => {
+} | null) => {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        subscription: {
+        subscription: subscription ? {
           id: "sub-1",
           plan_name: "pro",
           status: subscription.status,
@@ -197,7 +198,7 @@ const mockSubscriptionFetch = (subscription: {
           payment_failures: 0,
           payment_method_label: null,
           payment_method_last4: null,
-        },
+        } : null,
       }),
     }),
   );
@@ -348,6 +349,62 @@ describe("desktop app shell interactions", () => {
 
     expect(await screen.findByText("통계는 Pro 기능입니다")).toBeInTheDocument();
     expect(screen.getByText("해지됨")).toBeInTheDocument();
+  });
+
+  it("keeps desktop Just Do Mode as a local panel mode for eligible users", async () => {
+    mockSubscriptionFetch({ status: "active", billing_provider: "toss_payments" });
+    const overdueDate = addDays(selectedDate, -1);
+    renderApp(
+      persistedState({
+        tasks: [
+          ...persistedState().tasks,
+          {
+            id: "task-overdue",
+            title: "밀린 할일",
+            startDate: overdueDate,
+            endDate: overdueDate,
+            scheduledTime: "08:00",
+            categoryId: defaultCategories[0].id,
+            priority: "high",
+            isCompleted: false,
+            tags: [],
+          },
+        ],
+        settings: {
+          ...persistedState().settings,
+          justDoMode: true,
+        },
+      }),
+    );
+
+    const dueByButton = await screen.findByRole("button", { name: "이 날까지" });
+    await waitFor(() => expect(dueByButton).not.toBeDisabled());
+    expect(screen.queryByText(/지난일/)).not.toBeInTheDocument();
+
+    click(dueByButton);
+
+    expect(await screen.findByText(/지난일/)).toBeInTheDocument();
+  });
+
+  it("locks desktop due-by mode for Pro users when the setting is off", async () => {
+    mockSubscriptionFetch({ status: "active", billing_provider: "toss_payments" });
+    renderApp();
+
+    const dueByButton = await screen.findByRole("button", { name: "이 날까지" });
+    await waitFor(() => expect(dueByButton).toBeDisabled());
+
+    expect(screen.queryByText("Pro 업그레이드")).not.toBeInTheDocument();
+  });
+
+  it("opens the Pro upgrade modal when a Free user selects desktop due-by mode", async () => {
+    mockSubscriptionFetch(null);
+    renderApp();
+
+    const dueByButton = await screen.findByRole("button", { name: /이 날까지/ });
+    await waitFor(() => expect(dueByButton).not.toBeDisabled());
+    click(dueByButton);
+
+    expect(await screen.findByText("Pro 업그레이드")).toBeInTheDocument();
   });
 
   it("keeps Trial Pro access while prompting for a payment method", async () => {

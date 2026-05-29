@@ -14,9 +14,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Implemented Product Track: Just Do Mode
 
-> 2026-05-28 implemented on iOS and web. 2026-05-29 iOS follow-up separated
-> feature availability from the selected-day sheet's local display mode. Product
-> spec anchor: `docs/just_do_prd.md` Just Do Mode.
+> 2026-05-28 implemented on iOS and web. 2026-05-29 iOS/Web follow-up separated
+> feature availability from the selected-day sheet/panel's local display mode.
+> Product spec anchor: `docs/just_do_prd.md` Just Do Mode.
 
 - Pro-gated Home display mode.
 - Home UI remains the same; selected-date sheet/panel exposes `오늘만` and
@@ -40,9 +40,14 @@ This document tracks the next implementation steps for Codex and Claude Code cro
     This means Pro users who enabled the feature can switch between `오늘만` and
     `이 날까지` inside the sheet. If the setting is off, `이 날까지` shows a lock
     icon and is disabled.
+  - Desktop Web Today panel follows the same policy with panel-local display
+    state. Free users clicking `이 날까지` open the Pro upgrade modal; Pro users
+    with Settings Just Do Mode off see `이 날까지` locked/disabled.
   - iOS sheet `+` receives the current local sheet mode so creating a task from
     `오늘만` still creates a selected-date task, while creating from `이 날까지`
     defaults to today through selectedDate.
+  - Desktop Web Today panel `+` uses the current panel-local mode with the same
+    date defaults.
 
 ## Planned Product Track: Goal & Pro Report
 

@@ -1172,25 +1172,37 @@ function TodayPanel({
   const t = webTokens(mode);
   const billing = useBillingSubscription();
   const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
+  const [isShowingJustDoMode, setIsShowingJustDoMode] = useState(false);
   const date = s.state.view.selectedDate;
   const parsed = parseISO(date);
   const canUseJustDoMode = hasProEntitlement(billing.subscription);
-  const effectiveJustDoMode = canUseJustDoMode && s.state.settings.justDoMode;
-  const tasks = effectiveJustDoMode
+  const isJustDoModeEnabled = canUseJustDoMode && s.state.settings.justDoMode;
+  const isCheckingEntitlement = billing.loading && !billing.subscription;
+  const tasks = isShowingJustDoMode && isJustDoModeEnabled
     ? justDoTasksUntil(s.state.tasks, date)
     : tasksOnDate(s.state.tasks, date);
   const sections = justDoTaskSections(s.state.tasks, date, todayISO());
   const done = tasks.filter((task) => task.isCompleted);
   const habits = s.state.habits.filter((habit) => habitActiveOn(habit, date));
-  const setJustDoMode = (value: boolean) => {
-    if (value && !canUseJustDoMode) {
+  const setPanelMode = (value: boolean) => {
+    if (!value) {
+      setIsShowingJustDoMode(false);
+      return;
+    }
+    if (isCheckingEntitlement) {
+      return;
+    }
+    if (!canUseJustDoMode) {
       setUpgradePlan("monthly");
       return;
     }
-    s.updateSetting("justDoMode", value);
+    if (!s.state.settings.justDoMode) {
+      return;
+    }
+    setIsShowingJustDoMode(true);
   };
   const openAdd = () => {
-    if (effectiveJustDoMode) {
+    if (isShowingJustDoMode && isJustDoModeEnabled) {
       const start = date < todayISO() ? date : todayISO();
       onNewTask({ date, range: [start, date] });
       return;
@@ -1214,21 +1226,32 @@ function TodayPanel({
             {[
               { label: "오늘만", value: false },
               { label: "이 날까지", value: true },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => setJustDoMode(item.value)}
-                className="rounded-md px-2 py-1.5 text-[11px] font-bold"
-                style={{
-                  background: effectiveJustDoMode === item.value ? t.surface : "transparent",
-                  color: effectiveJustDoMode === item.value ? t.text : t.textSecondary,
-                }}
-              >
-                {item.label}
-                {item.value && !canUseJustDoMode ? <span className="ml-1 text-[9px]" style={{ color: t.accent }}>Pro</span> : null}
-              </button>
-            ))}
+            ].map((item) => {
+              const isActive = isShowingJustDoMode === item.value;
+              const isLocked = item.value && canUseJustDoMode && !s.state.settings.justDoMode;
+              const isUpgrade = item.value && !canUseJustDoMode && !isCheckingEntitlement;
+              const isDisabled = item.value && (isLocked || isCheckingEntitlement);
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setPanelMode(item.value)}
+                  disabled={isDisabled}
+                  aria-disabled={isDisabled}
+                  className="rounded-md px-2 py-1.5 text-[11px] font-bold disabled:cursor-not-allowed"
+                  style={{
+                    background: isActive ? t.surface : "transparent",
+                    color: isLocked || isCheckingEntitlement ? t.textTertiary : isActive ? t.text : t.textSecondary,
+                  }}
+                >
+                  <span className="inline-flex items-center justify-center gap-1">
+                    {item.label}
+                    {isLocked ? <IconLock /> : null}
+                    {isUpgrade ? <span className="text-[9px]" style={{ color: t.accent }}>Pro</span> : null}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <div className="mt-2 h-1 overflow-hidden rounded-full" style={{ background: t.surfaceAlt }}>
             <div className="h-full rounded-full" style={{ width: `${tasks.length ? Math.round((done.length / tasks.length) * 100) : 0}%`, background: t.me.solid }} />
@@ -1236,7 +1259,7 @@ function TodayPanel({
           <div className="mt-1 text-[11px]" style={{ color: t.textTertiary }}>{done.length}/{tasks.length} 완료</div>
         </div>
         <div className="px-3.5 py-3">
-          {effectiveJustDoMode ? (
+          {isShowingJustDoMode && isJustDoModeEnabled ? (
             sections.length ? sections.map((section) => (
               <div key={section.title} className="mb-3">
                 <div className="mb-1.5 flex items-center text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>
@@ -2976,5 +2999,6 @@ function IconLogout() { return <svg width="13" height="13" viewBox="0 0 13 13" f
 function IconCheck() { return <svg width="11" height="11" viewBox="0 0 9 9"><path d="M1 4.5 3.5 7 8 1.5" stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function IconTrash() { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 4h7M5 4V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M4 4l.5 7a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1L9 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function IconClose() { return <svg width="13" height="13" viewBox="0 0 13 13"><path d="M3 3l7 7M10 3l-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
+function IconLock() { return <svg width="9" height="9" viewBox="0 0 12 12" fill="none" aria-hidden="true"><rect x="2.5" y="5.2" width="7" height="5" rx="1.1" stroke="currentColor" strokeWidth="1.3" /><path d="M4 5.2V4a2 2 0 0 1 4 0v1.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>; }
 function IconDesktop() { return <svg className="h-full w-full p-1.5" viewBox="0 0 18 18" fill="none"><rect x="2.5" y="3" width="13" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" /><path d="M7 15h4M9 12v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
 function IconPhone() { return <svg className="h-full w-full p-1.5" viewBox="0 0 18 18" fill="none"><rect x="5" y="2.5" width="8" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" /><path d="M8 13.5h2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }

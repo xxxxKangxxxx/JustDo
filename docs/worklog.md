@@ -3758,3 +3758,51 @@ This document records coordination notes for work done with Codex and Claude Cod
 - iOS 최종 실기기 smoke 통과.
 - iOS 남은 트랙은 final smoke가 아니라 **TestFlight/App Store 준비**로 이동.
 - Toss 가맹점 심사 / Pro Checkout 외부 의존 검증은 별도 병렬 트랙 유지.
+
+## 2026-05-29 Web Just Do Mode follow-up
+
+### Codex
+
+- 목적:
+  - iOS 최종 smoke 후 Web Just Do Mode도 같은 제품 정책으로 맞춤.
+  - 확정 정책: Settings toggle은 기능 availability, Home sheet/panel의
+    `오늘만` / `이 날까지` 선택은 local display mode.
+- 현황 확인:
+  - 실제 desktop Web UI는 `apps/web/src/features/just-do/app-shell.tsx`의
+    `TodayPanel`.
+  - `apps/web/src/features/just-do/home-screen.tsx`는 로그인 페이지가 아니며,
+    현재 app-shell이나 route에서 import되지 않는 legacy/mobile-style Home 구현으로
+    확인. 모바일 Web은 `MobileWebGuide`를 보여주고, desktop은 `app-shell.tsx`를
+    사용하므로 실제 동작 경로가 아니었다.
+  - selector(`justDoTasksUntil`, `justDoTaskSections`)는 이미 spec과 일치:
+    미완료 + `endDate <= selectedDate`, due date/time/title 정렬,
+    `지난일 / 오늘 / 해야할일` sectioning.
+- 구현:
+  - Desktop `TodayPanel`에 `isShowingJustDoMode` local state 추가.
+  - `settings.justDoMode` + subscription entitlement는
+    `isJustDoModeEnabled` availability로만 사용.
+  - Pro + Settings ON이어도 panel 기본 표시 모드는 `오늘만`; 사용자가
+    `이 날까지`를 눌러야 due-by list로 전환.
+  - Free 사용자가 `이 날까지`를 누르면 Pro upgrade modal open.
+  - Pro 사용자지만 Settings Just Do Mode가 OFF면 `이 날까지` button은 lock icon
+    + disabled.
+  - Today panel `+` 버튼은 local panel mode 기준으로 default date를 설정:
+    `오늘만`은 selectedDate 단일 날짜, `이 날까지`는 today~selectedDate.
+- 테스트:
+  - Pro + Settings ON 사용자가 기본 `오늘만`으로 시작하고, `이 날까지` 클릭 후
+    `지난일` section이 나타나는지 검증.
+  - Pro + Settings OFF 사용자의 `이 날까지` button disabled 검증.
+  - Free 사용자의 `이 날까지` 클릭 시 Pro upgrade modal open 검증.
+  - 사용처가 없는 legacy `home-screen.tsx` 삭제. `rg "HomeScreen|home-screen"
+    apps/web/src` 결과 참조 없음 확인.
+
+### Verification
+
+- `npm --prefix apps/web test -- --run src/features/just-do/app-shell.test.tsx
+  src/features/just-do/selectors.test.ts` -> 2 files / 28 tests passed.
+- `npm --prefix apps/web test -- --run` -> 8 files / 106 tests passed.
+- `npm --prefix apps/web run lint` -> passed.
+- `npm --prefix apps/web run build`:
+  - sandbox run failed because Turbopack worker tried to bind to a port
+    (`Operation not permitted`).
+  - rerun with elevated permission -> passed.
