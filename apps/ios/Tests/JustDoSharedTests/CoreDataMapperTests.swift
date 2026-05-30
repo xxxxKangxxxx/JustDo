@@ -27,6 +27,8 @@ final class CoreDataMapperTests: XCTestCase {
                 "CDCategory",
                 "CDTask",
                 "CDHabit",
+                "CDGoal",
+                "CDGoalPromptDismissal",
                 "CDHabitLog",
                 "CDQueuedMutation",
                 "CDUserPreference",
@@ -81,6 +83,37 @@ final class CoreDataMapperTests: XCTestCase {
         let object = try CoreDataMappers.insertHabit(habit, in: context)
 
         XCTAssertEqual(try CoreDataMappers.habit(from: object), habit)
+    }
+
+    func testGoalRoundTrip() throws {
+        let goal = Goal(
+            id: uuid("44444444-4444-4444-4444-444444444444"),
+            periodType: .monthly,
+            periodKey: "2026-04",
+            title: "면접 준비",
+            note: "자료 정리",
+            sortOrder: 1,
+            locked: true,
+            lockedAt: "2026-04-01T00:00:00Z"
+        )
+
+        let object = try CoreDataMappers.insertGoal(goal, in: context)
+
+        XCTAssertEqual(try CoreDataMappers.goal(from: object), goal)
+    }
+
+    func testGoalPromptDismissalRoundTrip() throws {
+        let dismissal = GoalPromptDismissal(
+            id: uuid("55555555-5555-5555-5555-555555555555"),
+            promptType: .monthly,
+            periodKey: "2026-04",
+            dismissedPermanentlyForPeriod: true,
+            dismissedAt: "2026-04-02T00:00:00Z"
+        )
+
+        let object = try CoreDataMappers.insertGoalPromptDismissal(dismissal, in: context)
+
+        XCTAssertEqual(try CoreDataMappers.goalPromptDismissal(from: object), dismissal)
     }
 
     func testQueuedMutationRoundTrip() throws {

@@ -43,6 +43,29 @@ export type Settings = {
   justDoMode: boolean;
 };
 
+export type GoalPeriodType = "monthly" | "yearly";
+
+export type Goal = {
+  id: string;
+  periodType: GoalPeriodType;
+  periodKey: string;
+  title: string;
+  note?: string | null;
+  sortOrder: number;
+  locked: boolean;
+  lockedAt?: string | null;
+};
+
+export type GoalPromptType = "onboarding" | "monthly" | "yearly";
+
+export type GoalPromptDismissal = {
+  id: string;
+  promptType: GoalPromptType;
+  periodKey: string;
+  dismissedPermanentlyForPeriod: boolean;
+  dismissedAt: string;
+};
+
 export type ViewState = {
   tab: TabId;
   year: number;
@@ -59,6 +82,8 @@ export type AppState = {
   categories: Category[];
   tasks: Task[];
   habits: Habit[];
+  goals: Goal[];
+  goalPromptDismissals: GoalPromptDismissal[];
   settings: Settings;
 };
 

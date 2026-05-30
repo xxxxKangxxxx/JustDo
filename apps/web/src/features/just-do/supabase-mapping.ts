@@ -1,5 +1,16 @@
 import type { Database } from "@/lib/supabase/database.types";
-import type { Category, Habit, HabitCategory, HabitRecurType, Priority, Task } from "@/types/domain";
+import type {
+  Category,
+  Goal,
+  GoalPeriodType,
+  GoalPromptDismissal,
+  GoalPromptType,
+  Habit,
+  HabitCategory,
+  HabitRecurType,
+  Priority,
+  Task,
+} from "@/types/domain";
 
 type CategoryRow = Database["public"]["Tables"]["categories"]["Row"];
 type CategoryInsert = Database["public"]["Tables"]["categories"]["Insert"];
@@ -8,6 +19,10 @@ type TaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
 type HabitRow = Database["public"]["Tables"]["habits"]["Row"];
 type HabitInsert = Database["public"]["Tables"]["habits"]["Insert"];
 type HabitLogRow = Database["public"]["Tables"]["habit_logs"]["Row"];
+type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
+type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
+type GoalPromptDismissalRow = Database["public"]["Tables"]["goal_prompt_dismissals"]["Row"];
+type GoalPromptDismissalInsert = Database["public"]["Tables"]["goal_prompt_dismissals"]["Insert"];
 
 const habitCategoryName = "Habit";
 
@@ -16,6 +31,12 @@ const isPriority = (value: string | null): value is Priority =>
 
 const toHabitRecurType = (value: string | null): HabitRecurType =>
   value === "weekly" ? "weekly" : "daily";
+
+const toGoalPeriodType = (value: string): GoalPeriodType =>
+  value === "yearly" ? "yearly" : "monthly";
+
+const toGoalPromptType = (value: string): GoalPromptType =>
+  value === "yearly" || value === "onboarding" ? value : "monthly";
 
 export const categoryRowToDomain = (row: CategoryRow): Category => ({
   id: row.id,
@@ -102,3 +123,48 @@ export const mergeHabitLogs = (habits: Habit[], logs: HabitLogRow[]): Habit[] =>
   }
   return habits.map((habit) => ({ ...habit, log: byHabit.get(habit.id) ?? habit.log }));
 };
+
+export const goalRowToDomain = (row: GoalRow): Goal => ({
+  id: row.id,
+  periodType: toGoalPeriodType(row.period_type),
+  periodKey: row.period_key,
+  title: row.title,
+  note: row.note,
+  sortOrder: row.sort_order,
+  locked: row.locked,
+  lockedAt: row.locked_at,
+});
+
+export const goalDomainToInsert = (goal: Goal, userId: string): GoalInsert => ({
+  id: goal.id,
+  user_id: userId,
+  period_type: goal.periodType,
+  period_key: goal.periodKey,
+  title: goal.title,
+  note: goal.note ?? null,
+  sort_order: goal.sortOrder,
+  locked: goal.locked,
+  locked_at: goal.locked ? (goal.lockedAt ?? new Date().toISOString()) : null,
+});
+
+export const goalPromptDismissalRowToDomain = (
+  row: GoalPromptDismissalRow,
+): GoalPromptDismissal => ({
+  id: row.id,
+  promptType: toGoalPromptType(row.prompt_type),
+  periodKey: row.period_key,
+  dismissedPermanentlyForPeriod: row.dismissed_permanently_for_period,
+  dismissedAt: row.dismissed_at,
+});
+
+export const goalPromptDismissalDomainToInsert = (
+  dismissal: GoalPromptDismissal,
+  userId: string,
+): GoalPromptDismissalInsert => ({
+  id: dismissal.id,
+  user_id: userId,
+  prompt_type: dismissal.promptType,
+  period_key: dismissal.periodKey,
+  dismissed_permanently_for_period: dismissal.dismissedPermanentlyForPeriod,
+  dismissed_at: dismissal.dismissedAt,
+});

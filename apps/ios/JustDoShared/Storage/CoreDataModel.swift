@@ -10,6 +10,8 @@ public enum CoreDataModelFactory {
             categoryEntity(),
             taskEntity(),
             habitEntity(),
+            goalEntity(),
+            goalPromptDismissalEntity(),
             habitLogEntity(),
             queuedMutationEntity(),
             userPreferenceEntity(),
@@ -63,6 +65,38 @@ public enum CoreDataModelFactory {
                 attribute("reminderTime", .stringAttributeType, optional: true),
                 attribute("logJSON", .binaryDataAttributeType, optional: false),
                 attribute("updatedAt", .dateAttributeType, optional: true),
+                attribute("createdAt", .dateAttributeType, optional: true),
+            ]
+        )
+    }
+
+    private static func goalEntity() -> NSEntityDescription {
+        entity(
+            name: "CDGoal",
+            properties: [
+                attribute("id", .UUIDAttributeType, optional: false),
+                attribute("periodType", .stringAttributeType, optional: false),
+                attribute("periodKey", .stringAttributeType, optional: false),
+                attribute("title", .stringAttributeType, optional: false),
+                attribute("note", .stringAttributeType, optional: true),
+                attribute("sortOrder", .integer64AttributeType, optional: false),
+                attribute("locked", .booleanAttributeType, optional: false),
+                attribute("lockedAt", .stringAttributeType, optional: true),
+                attribute("updatedAt", .dateAttributeType, optional: true),
+                attribute("createdAt", .dateAttributeType, optional: true),
+            ]
+        )
+    }
+
+    private static func goalPromptDismissalEntity() -> NSEntityDescription {
+        entity(
+            name: "CDGoalPromptDismissal",
+            properties: [
+                attribute("id", .UUIDAttributeType, optional: false),
+                attribute("promptType", .stringAttributeType, optional: false),
+                attribute("periodKey", .stringAttributeType, optional: false),
+                attribute("dismissedPermanentlyForPeriod", .booleanAttributeType, optional: false),
+                attribute("dismissedAt", .stringAttributeType, optional: false),
                 attribute("createdAt", .dateAttributeType, optional: true),
             ]
         )

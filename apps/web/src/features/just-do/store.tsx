@@ -15,6 +15,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import type {
   AppState,
   Category,
+  Goal,
+  GoalPromptDismissal,
   Habit,
   NewHabitInput,
   NewTaskInput,
@@ -82,6 +84,12 @@ type StoreValue = {
   addHabit: (habit: NewHabitInput) => void;
   updateHabit: (id: string, patch: Partial<NewHabitInput>) => void;
   deleteHabit: (id: string) => void;
+  addGoal: (input: Omit<Goal, "id">) => void;
+  updateGoal: (id: string, patch: Partial<Omit<Goal, "id">>) => void;
+  deleteGoal: (id: string) => void;
+  dismissGoalPrompt: (
+    input: Omit<GoalPromptDismissal, "id" | "dismissedAt"> & { dismissedAt?: string },
+  ) => void;
   updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   reset: () => void;
 };
@@ -292,6 +300,21 @@ export function JustDoProvider({
                   : habit,
               ),
             };
+          case "goal_upserted":
+            return { ...current, goals: upsertById(current.goals, change.goal) };
+          case "goal_deleted":
+            return {
+              ...current,
+              goals: current.goals.filter((goal) => goal.id !== change.id),
+            };
+          case "goal_prompt_dismissal_upserted":
+            return {
+              ...current,
+              goalPromptDismissals: upsertById(
+                current.goalPromptDismissals,
+                change.dismissal,
+              ),
+            };
         }
       });
     },
@@ -358,6 +381,27 @@ export function JustDoProvider({
     (settings: Settings) => {
       if (!hydratedRef.current) return;
       persist(activeStorage.saveSettings(settings));
+    },
+    [activeStorage, persist],
+  );
+  const persistGoal = useCallback(
+    (goal: Goal) => {
+      if (!hydratedRef.current) return;
+      persist(activeStorage.upsertGoal(goal));
+    },
+    [activeStorage, persist],
+  );
+  const persistGoalDelete = useCallback(
+    (id: string) => {
+      if (!hydratedRef.current) return;
+      persist(activeStorage.deleteGoal(id));
+    },
+    [activeStorage, persist],
+  );
+  const persistGoalPromptDismissal = useCallback(
+    (dismissal: GoalPromptDismissal) => {
+      if (!hydratedRef.current) return;
+      persist(activeStorage.upsertGoalPromptDismissal(dismissal));
     },
     [activeStorage, persist],
   );
@@ -561,6 +605,57 @@ export function JustDoProvider({
         }));
         persistHabitDelete(id);
       },
+      addGoal: (input) => {
+        const goal: Goal = {
+          id: crypto.randomUUID(),
+          ...input,
+          title: input.title.trim() || "새 목표",
+          note: input.note?.trim() ? input.note.trim() : null,
+          lockedAt: input.locked ? (input.lockedAt ?? new Date().toISOString()) : null,
+        };
+        setState((s) => ({ ...s, goals: [...s.goals, goal] }));
+        persistGoal(goal);
+      },
+      updateGoal: (id, patch) => {
+        const existing = state.goals.find((goal) => goal.id === id);
+        if (!existing) return;
+        const nextLocked = patch.locked ?? existing.locked;
+        const updated: Goal = {
+          ...existing,
+          ...patch,
+          title: patch.title === undefined ? existing.title : patch.title.trim() || existing.title,
+          note: patch.note === undefined
+            ? existing.note
+            : patch.note?.trim()
+              ? patch.note.trim()
+              : null,
+          locked: nextLocked,
+          lockedAt: nextLocked
+            ? (patch.lockedAt ?? existing.lockedAt ?? new Date().toISOString())
+            : null,
+        };
+        setState((s) => ({
+          ...s,
+          goals: s.goals.map((goal) => (goal.id === id ? updated : goal)),
+        }));
+        persistGoal(updated);
+      },
+      deleteGoal: (id) => {
+        setState((s) => ({ ...s, goals: s.goals.filter((goal) => goal.id !== id) }));
+        persistGoalDelete(id);
+      },
+      dismissGoalPrompt: (input) => {
+        const dismissal: GoalPromptDismissal = {
+          id: crypto.randomUUID(),
+          dismissedAt: input.dismissedAt ?? new Date().toISOString(),
+          ...input,
+        };
+        setState((s) => ({
+          ...s,
+          goalPromptDismissals: upsertById(s.goalPromptDismissals, dismissal),
+        }));
+        persistGoalPromptDismissal(dismissal);
+      },
       updateSetting: (key, value) => {
         const settings = { ...state.settings, [key]: value };
         setState((s) => ({ ...s, settings }));
@@ -580,6 +675,9 @@ export function JustDoProvider({
       persistHabitDelete,
       persistHabitLog,
       persistSettings,
+      persistGoal,
+      persistGoalDelete,
+      persistGoalPromptDismissal,
       syncError,
       syncStatus,
       clearSyncError,

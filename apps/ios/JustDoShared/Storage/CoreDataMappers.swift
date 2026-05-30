@@ -121,6 +121,86 @@ public enum CoreDataMappers {
         )
     }
 
+    public static func insertGoal(
+        _ goal: Goal,
+        in context: NSManagedObjectContext
+    ) throws -> NSManagedObject {
+        let object = try makeObject("CDGoal", in: context)
+        updateGoal(goal, object: object)
+        return object
+    }
+
+    public static func updateGoal(_ goal: Goal, object: NSManagedObject) {
+        object.setValue(goal.id, forKey: "id")
+        object.setValue(goal.periodType.rawValue, forKey: "periodType")
+        object.setValue(goal.periodKey, forKey: "periodKey")
+        object.setValue(goal.title, forKey: "title")
+        object.setValue(goal.note, forKey: "note")
+        object.setValue(Int64(goal.sortOrder), forKey: "sortOrder")
+        object.setValue(goal.locked, forKey: "locked")
+        object.setValue(goal.lockedAt, forKey: "lockedAt")
+    }
+
+    public static func goal(from object: NSManagedObject) throws -> Goal {
+        let periodTypeRaw = object.value(forKey: "periodType") as! String
+        guard let periodType = GoalPeriodType(rawValue: periodTypeRaw) else {
+            throw CoreDataMapperError.invalidEnum(periodTypeRaw)
+        }
+
+        return Goal(
+            id: object.value(forKey: "id") as! UUID,
+            periodType: periodType,
+            periodKey: object.value(forKey: "periodKey") as! String,
+            title: object.value(forKey: "title") as! String,
+            note: object.value(forKey: "note") as? String,
+            sortOrder: Int(object.value(forKey: "sortOrder") as! Int64),
+            locked: object.value(forKey: "locked") as! Bool,
+            lockedAt: object.value(forKey: "lockedAt") as? String
+        )
+    }
+
+    public static func insertGoalPromptDismissal(
+        _ dismissal: GoalPromptDismissal,
+        in context: NSManagedObjectContext
+    ) throws -> NSManagedObject {
+        let object = try makeObject("CDGoalPromptDismissal", in: context)
+        updateGoalPromptDismissal(dismissal, object: object)
+        return object
+    }
+
+    public static func updateGoalPromptDismissal(
+        _ dismissal: GoalPromptDismissal,
+        object: NSManagedObject
+    ) {
+        object.setValue(dismissal.id, forKey: "id")
+        object.setValue(dismissal.promptType.rawValue, forKey: "promptType")
+        object.setValue(dismissal.periodKey, forKey: "periodKey")
+        object.setValue(
+            dismissal.dismissedPermanentlyForPeriod,
+            forKey: "dismissedPermanentlyForPeriod"
+        )
+        object.setValue(dismissal.dismissedAt, forKey: "dismissedAt")
+    }
+
+    public static func goalPromptDismissal(
+        from object: NSManagedObject
+    ) throws -> GoalPromptDismissal {
+        let promptTypeRaw = object.value(forKey: "promptType") as! String
+        guard let promptType = GoalPromptType(rawValue: promptTypeRaw) else {
+            throw CoreDataMapperError.invalidEnum(promptTypeRaw)
+        }
+
+        return GoalPromptDismissal(
+            id: object.value(forKey: "id") as! UUID,
+            promptType: promptType,
+            periodKey: object.value(forKey: "periodKey") as! String,
+            dismissedPermanentlyForPeriod: object.value(
+                forKey: "dismissedPermanentlyForPeriod"
+            ) as! Bool,
+            dismissedAt: object.value(forKey: "dismissedAt") as! String
+        )
+    }
+
     public static func insertQueuedMutation(
         _ queued: QueuedMutation,
         in context: NSManagedObjectContext
@@ -177,6 +257,12 @@ private extension LocalMutation {
             "habit_delete"
         case .habitLogSet:
             "habit_log_set"
+        case .goalUpsert:
+            "goal_upsert"
+        case .goalDelete:
+            "goal_delete"
+        case .goalPromptDismissalUpsert:
+            "goal_prompt_dismissal_upsert"
         }
     }
 }

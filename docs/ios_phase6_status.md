@@ -6,8 +6,8 @@ implementation gaps, and checks to run before testing or shipping.
 ## Current Implementation
 
 - `JustDoShared` mirrors the web domain model and local mutation queue schema.
-- Core Data mirror is implemented for categories, tasks, habits, and queued
-  mutations.
+- Core Data mirror is implemented for categories, tasks, habits, goals, goal
+  prompt dismissals, and queued mutations.
 - App Group storage is implemented for:
   - `widget_snapshot.json`
   - `mutation_queue.jsonl`
@@ -43,9 +43,10 @@ implementation gaps, and checks to run before testing or shipping.
 - When a valid Supabase session exists, the app flushes `CDQueuedMutation` to
   Supabase and removes rows only after successful remote writes.
 - Supabase read-sync refreshes the Core Data mirror from categories, tasks,
-  tags/task_tags, habits, habit logs, and `user_subscriptions`. Subscription
-  rows map `plan_name='pro'` plus `status in ('trial', 'active')` to the local
-  settings plan `pro`; inactive/cancelled/free states map to `free`.
+  tags/task_tags, habits, habit logs, goals, goal prompt dismissals, and
+  `user_subscriptions`. Subscription rows map `plan_name='pro'` plus
+  `status in ('trial', 'active')` to the local settings plan `pro`;
+  inactive/cancelled/free states map to `free`.
 - Native Supabase PKCE OAuth is implemented with Keychain-backed session
   storage and refresh-token handling.
 - `AuthViewModel.reload()` (UI status binding) is `async` and, when it finds
@@ -106,6 +107,18 @@ implementation gaps, and checks to run before testing or shipping.
 - Settings owns dark-mode control. The home header no longer has a separate
   dark/light button.
 - Settings exposes habit and category management entry points.
+- Settings exposes the Goal & Pro Report management entry point:
+  - Settings → 목표 opens a large native sheet with annual and current-month
+    sections.
+  - Each period supports up to five goals.
+  - Goal cards show period label, title, note, completed/related/slipped counts,
+    donut progress with centered percentage, and a `고정/열림` lock badge.
+  - The card lock badge directly toggles locked state and queues a goal save.
+  - Card tap opens editor for unlocked goals and shows a confirmation alert for
+    locked goals.
+  - Goal add/edit uses a centered dialog, not a nested bottom sheet.
+  - Goal prompt flows cover onboarding, monthly, and yearly prompts with
+    persisted dismissal state.
 - Settings account rows use the signed-in Google profile name when available,
   with account detail actions for profile review, account switch, sign-out, and
   withdrawal entry points.
@@ -176,6 +189,12 @@ implementation gaps, and checks to run before testing or shipping.
   sheets. Home task edits happen inline inside the selected-day sheet with
   delete support. Habit rows in the date sheet no-op except for the check
   control; full habit settings stay in the Habit management surface.
+- **Goal sync failed with `goals_check1`.** Hosted migration was applied, but
+  iOS goal sync failed with PostgreSQL `23514` because unlocked goal upserts
+  omitted `locked_at`, allowing a previous non-null value to remain while
+  `locked=false`. Fix: goal mutation encoding now explicitly sends
+  `locked_at: null` and `note: null` for nil optionals. Regression test added
+  in `SupabaseRestSyncTests`; user confirmed the sync error is resolved.
 
 ## Remaining App Gaps
 
@@ -193,6 +212,14 @@ implementation gaps, and checks to run before testing or shipping.
     data export/reset, and legal document fixes.
   - [x] Widget — passed enough to keep current layout after home/lock screen
     widget density, tap behavior, count, and lock-screen rectangular fixes.
+- Goal & Pro Report focused smoke:
+  - [x] Hosted migration state confirmed through `supabase migration list`.
+  - [x] Sync error after goal write fixed and user-confirmed.
+  - [x] Settings → 목표 UI latest visual iteration accepted by user.
+  - [ ] Verify lock badge tap does not also trigger card edit.
+  - [ ] Verify add/edit/delete/lock changes survive app relaunch and cloud sync.
+  - [ ] Decide and implement delete confirmation if desired.
+  - [ ] Decide report entry UX now that card tap is reserved for edit.
 - App icon: only the light (default) 1024x1024 variant is shipped. Dark
   and tinted home-screen variants are deferred until dedicated artwork
   is produced.
@@ -323,7 +350,9 @@ swift test
 > 2026-05-25: 세션 자동 refresh smoke까지 통과.
 > 2026-05-29: Pro subscription sync, editor-sheet routing cleanup, Just Do Mode
 > gating follow-up까지 simulator build/shared tests 통과. 같은 날 iPhone 14 Pro
-> iOS 26.5 최종 smoke에서 Smoke 1~5 정상 확인. 다음 차례는 TestFlight/App
+> iOS 26.5 최종 smoke에서 Smoke 1~5 정상 확인.
+> 2026-05-30: Goal & Pro Report iOS first pass와 실기기 UI 피드백 반영 완료.
+> 다음 차례는 Goal focused smoke, 삭제 확인/리포트 진입 UX 결정, TestFlight/App
 > Store 준비, 그리고 Toss 외부 의존 트랙.
 
 - [x] **iOS 최종 실기기 smoke (2026-05-29 통과)**.
@@ -336,6 +365,18 @@ swift test
     check 동작 정상.
   - Smoke 4~5: selected-day sheet `+`의 기본 날짜 동작, Widget task/habit
     toggle 및 mutation/sync, lock-screen widget row tap 동작 정상.
+
+- [x] **Goal & Pro Report iOS first pass (2026-05-30 반영)**.
+  - Settings → 목표 sheet, annual/monthly card stacks, max 5 goals per period.
+  - Goal onboarding guide + annual/monthly entry, one initial active row,
+    swipe-delete rows, memo input, keyboard dismissal.
+  - Centered goal add/edit dialog with delete left of save.
+  - Goal cards with title/note/metrics/donut progress/lock badge.
+  - Lock badge direct toggle; card tap still controls edit/locked confirmation.
+  - Supabase goal sync error (`goals_check1`) fixed and user-confirmed.
+  - `swift test --package-path apps/ios` passed with 46 tests.
+  - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme
+    JustDoApp -destination 'generic/platform=iOS' build` passed.
 
 - [x] **세션 자동 refresh 실기기 smoke (2026-05-25 통과)**.
   - 시나리오: 정상 로그인 → 앱 종료(또는 백그라운드 보내기) → 1시간+ 대기 →

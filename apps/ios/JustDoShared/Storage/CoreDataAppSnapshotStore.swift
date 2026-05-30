@@ -18,6 +18,8 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
                 categories: try fetchCategories(),
                 tasks: try fetchTasks(),
                 habits: try fetchHabits(),
+                goals: try fetchGoals(),
+                goalPromptDismissals: try fetchGoalPromptDismissals(),
                 settings: try fetchSettings(defaults: settings)
             )
         }
@@ -28,6 +30,8 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
             try replaceCategories(snapshot.categories)
             try replaceTasks(snapshot.tasks)
             try replaceHabits(snapshot.habits)
+            try replaceGoals(snapshot.goals)
+            try replaceGoalPromptDismissals(snapshot.goalPromptDismissals)
             try upsertPlan(snapshot.settings.plan)
             if context.hasChanges {
                 try context.save()
@@ -37,7 +41,7 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
 
     public func hasMirrorData() throws -> Bool {
         try performSynchronously {
-            try count("CDCategory") + count("CDTask") + count("CDHabit") > 0
+            try count("CDCategory") + count("CDTask") + count("CDHabit") + count("CDGoal") > 0
         }
     }
 
@@ -118,6 +122,34 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
             .sorted { $0.title < $1.title }
     }
 
+    private func fetchGoals() throws -> [Goal] {
+        try fetchObjects("CDGoal")
+            .map(CoreDataMappers.goal(from:))
+            .sorted { left, right in
+                if left.periodType == right.periodType {
+                    if left.periodKey == right.periodKey {
+                        if left.sortOrder == right.sortOrder {
+                            return left.title < right.title
+                        }
+                        return left.sortOrder < right.sortOrder
+                    }
+                    return left.periodKey < right.periodKey
+                }
+                return left.periodType.rawValue < right.periodType.rawValue
+            }
+    }
+
+    private func fetchGoalPromptDismissals() throws -> [GoalPromptDismissal] {
+        try fetchObjects("CDGoalPromptDismissal")
+            .map(CoreDataMappers.goalPromptDismissal(from:))
+            .sorted { left, right in
+                if left.promptType == right.promptType {
+                    return left.periodKey < right.periodKey
+                }
+                return left.promptType.rawValue < right.promptType.rawValue
+            }
+    }
+
     private func fetchObjects(_ entityName: String) throws -> [NSManagedObject] {
         let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
         return try context.fetch(request)
@@ -175,6 +207,32 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
         }
     }
 
+    private func replaceGoals(_ goals: [Goal]) throws {
+        let incomingIDs = Set(goals.map(\.id))
+        for object in try fetchObjects("CDGoal") {
+            guard let id = object.value(forKey: "id") as? UUID, incomingIDs.contains(id) else {
+                context.delete(object)
+                continue
+            }
+        }
+        for goal in goals {
+            try upsertGoal(goal)
+        }
+    }
+
+    private func replaceGoalPromptDismissals(_ dismissals: [GoalPromptDismissal]) throws {
+        let incomingIDs = Set(dismissals.map(\.id))
+        for object in try fetchObjects("CDGoalPromptDismissal") {
+            guard let id = object.value(forKey: "id") as? UUID, incomingIDs.contains(id) else {
+                context.delete(object)
+                continue
+            }
+        }
+        for dismissal in dismissals {
+            try upsertGoalPromptDismissal(dismissal)
+        }
+    }
+
     private func apply(_ mutation: LocalMutation) throws {
         switch mutation {
         case .categoryUpsert(let category):
@@ -195,6 +253,12 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
             try deleteObject("CDHabit", id: id)
         case .habitLogSet(let habitID, let iso, let value):
             try setHabitLog(habitID: habitID, iso: iso, value: value)
+        case .goalUpsert(let goal):
+            try upsertGoal(goal)
+        case .goalDelete(let id):
+            try deleteObject("CDGoal", id: id)
+        case .goalPromptDismissalUpsert(let dismissal):
+            try upsertGoalPromptDismissal(dismissal)
         }
     }
 
@@ -236,6 +300,22 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
         var habit = try CoreDataMappers.habit(from: object)
         habit.log[iso] = value
         try CoreDataMappers.updateHabit(habit, object: object)
+    }
+
+    private func upsertGoal(_ goal: Goal) throws {
+        if let object = try fetchObject("CDGoal", id: goal.id) {
+            CoreDataMappers.updateGoal(goal, object: object)
+        } else {
+            _ = try CoreDataMappers.insertGoal(goal, in: context)
+        }
+    }
+
+    private func upsertGoalPromptDismissal(_ dismissal: GoalPromptDismissal) throws {
+        if let object = try fetchObject("CDGoalPromptDismissal", id: dismissal.id) {
+            CoreDataMappers.updateGoalPromptDismissal(dismissal, object: object)
+        } else {
+            _ = try CoreDataMappers.insertGoalPromptDismissal(dismissal, in: context)
+        }
     }
 
     private func upsertQueuedMutation(_ queued: QueuedMutation) throws {

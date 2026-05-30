@@ -394,10 +394,12 @@ CREATE TABLE public.payment_events (
 
 ---
 
-## 7. Goal & Pro Report schema (next implementation)
+## 7. Goal & Pro Report schema (implemented 2026-05-29/30)
 
 > Goal 입력은 Free / Trial / Pro 모두 가능하다. 목표 기반 월간/연간 리포트 상세는
-> Trial / Pro 전용으로 gate한다. 2026-05-29 기준 다음 구현 트랙이다.
+> Trial / Pro 전용으로 gate한다. 실제 마이그레이션은
+> `supabase/migrations/20260529120000_goal_report.sql`이다. 2026-05-30 기준
+> Local과 Remote hosted Supabase 모두에 적용되어 있다.
 >
 > 중요: 이 문서의 기존 백엔드 전략과 동일하게, business data FK는
 > `auth.users`를 직접 참조하지 않고 `public.users(id)`를 참조한다.
@@ -413,21 +415,26 @@ CREATE TABLE public.goals (
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   period_type TEXT NOT NULL CHECK (period_type IN ('monthly', 'yearly')),
   period_key TEXT NOT NULL, -- monthly: '2026-06', yearly: '2026'
-  title TEXT NOT NULL,
+  title TEXT NOT NULL CHECK (length(btrim(title)) > 0),
   note TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   locked BOOLEAN NOT NULL DEFAULT FALSE,
   locked_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (
+    (period_type = 'monthly' AND period_key ~ '^[0-9]{4}-[0-9]{2}$')
+    OR (period_type = 'yearly' AND period_key ~ '^[0-9]{4}$')
+  ),
+  CHECK ((locked = false AND locked_at IS NULL) OR (locked = true))
 );
 
-CREATE INDEX goals_user_period_idx
+CREATE INDEX idx_goals_user_period
   ON public.goals (user_id, period_type, period_key, sort_order);
 ```
 
-- Add `set_updated_at()` trigger on `public.goals` in the migration.
-- Add owner-only RLS policies following existing app tables:
+- Migration includes `set_updated_at()` trigger on `public.goals`.
+- Migration includes owner-only RLS policies following existing app tables:
   - `SELECT`: `auth.uid() = user_id`
   - `INSERT`: `auth.uid() = user_id`
   - `UPDATE`: `auth.uid() = user_id`
@@ -437,10 +444,14 @@ CREATE INDEX goals_user_period_idx
   추가한다.
 - `locked = TRUE`는 영구 수정 금지가 아니라, 수정 전 확인 모달을 띄우는 UX
   플래그다.
+- DB check constraint는 `locked = false`이면 `locked_at IS NULL`이어야 함을
+  강제한다. iOS/Web sync payload는 잠금 해제 시 `locked_at: null`을 명시해야
+  한다. iOS는 2026-05-30에 이 케이스를 회귀 테스트로 보강했다.
 - 목표와 Task/Habit 직접 연결은 후속 범위로 둔다.
 - `period_key` format은 application code에서 생성한다:
   - monthly: `YYYY-MM`
   - yearly: `YYYY`
+- DB check constraint도 위 형식을 검증한다.
 - `sort_order`는 같은 기간 내 사용자가 입력한 순서를 유지하기 위한 값이다.
 
 ### 7-2. goal_prompt_dismissals
@@ -456,20 +467,43 @@ CREATE TABLE public.goal_prompt_dismissals (
   dismissed_permanently_for_period BOOLEAN NOT NULL DEFAULT TRUE,
   dismissed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (user_id, prompt_type, period_key)
+  UNIQUE (user_id, prompt_type, period_key),
+  CHECK (
+    (prompt_type = 'monthly' AND period_key ~ '^[0-9]{4}-[0-9]{2}$')
+    OR (prompt_type = 'yearly' AND period_key ~ '^[0-9]{4}$')
+    OR (prompt_type = 'onboarding' AND period_key = 'initial')
+  )
 );
 ```
 
-- Add owner-only RLS policies following existing app tables.
+- Migration includes owner-only RLS policies following existing app tables.
 - 월간 프롬프트는 매월 1~3일 사이에 표시 가능하다.
 - 연간 프롬프트는 매년 1월 1~7일 사이에 표시 가능하다.
 - 첫 가입 사용자는 위 기간이 아니더라도 onboarding flow에서 연간 목표 설정
   여부를 물을 수 있다.
 - 해당 기간의 목표가 이미 존재하면 프롬프트를 표시하지 않는다.
 - `prompt_type = 'onboarding'`은 첫 사용자 목표 설정 진입을 다시 띄우지 않기
-  위한 상태다. 월간/연간 기간 프롬프트와 별도로 취급한다.
+  위한 상태다. 월간/연간 기간 프롬프트와 별도로 취급하며, MVP의
+  `period_key`는 `initial`로 고정한다.
 - `dismissed_permanently_for_period`는 MVP에서는 항상 true로 저장해도 된다.
   향후 "이번에는 닫기"와 "다시 보지 않기"를 분리할 때 확장 여지를 남긴다.
+
+### 7-3. 구현/동기화 주의사항
+
+- Hosted Supabase migration state was verified with `supabase migration list`
+  on 2026-05-30:
+  - Local: `20260529120000`
+  - Remote: `20260529120000`
+- Web storage maps `goals` and `goal_prompt_dismissals` through the existing
+  Supabase adapter and local persistence queue.
+- iOS storage mirrors the same data in Core Data entities `CDGoal` and
+  `CDGoalPromptDismissal`, queues `goal_upsert`, `goal_delete`, and
+  `goal_prompt_dismissal_upsert`, and fetches both tables during snapshot sync.
+- `goal_prompt_dismissals` upsert uses
+  `on_conflict=user_id,prompt_type,period_key`, matching the table unique
+  constraint.
+- Maximum 5 goals per `user_id + period_type + period_key` is still enforced in
+  application code, not by a DB trigger.
 
 ## 8. 월간/연간 리포트 집계 방식
 

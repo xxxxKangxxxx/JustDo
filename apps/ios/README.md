@@ -17,7 +17,8 @@ Current contents:
   and UI test targets.
 - `JustDoApp/JustDoApp` implements the native app shell, auth flow,
   Core Data mirror sync, Home/Stats/Settings tabs, add/editor-sheet flows,
-  Just Do Mode, and widget snapshot writer.
+  Just Do Mode, Goal & Pro Report goal management/prompt/report surfaces, and
+  widget snapshot writer.
 - `JustDoApp/JustDoWidget` hosts the WidgetKit extension that reads the
   App Group snapshot and queues widget mutations.
 
@@ -73,7 +74,24 @@ Auth landing, Home, Add Sheet, editor-sheet routing, Stats, Settings, and
 Widget. The 2026-05-25 1-hour+ auth session refresh smoke also passed. App
 deep links open task/habit editor sheets, while Home selected-day sheet task
 taps edit inline and habit row taps no-op except for the check control. The
-2026-05-29 final real-device smoke also passed. The next product track is Goal
-& Pro Report MVP, starting on Web after schema migration and then mirrored to
-iOS. TestFlight/App Store preparation follows after deciding whether that MVP is
-included in the first TestFlight build.
+2026-05-29 final real-device smoke also passed.
+
+Goal & Pro Report MVP first pass is now mirrored into iOS:
+
+- `Goal` / `GoalPromptDismissal` domain models are in `JustDoShared`.
+- Core Data mirror, mutation queue, Supabase REST fetch/mutation, and sync
+  status diagnostics support goals and goal prompt dismissals.
+- Settings → 목표 opens a native sheet with annual/monthly card stacks.
+- Goal cards show title, note, completed/related/slipped counts, donut progress
+  with centered percentage, and a tappable lock badge.
+- Card tap keeps the existing edit behavior: locked goals show confirmation,
+  unlocked goals open the editor.
+- The lock badge toggles locked/unlocked directly and enqueues a sync mutation.
+- Goal add/edit uses a centered modal dialog, not a nested bottom sheet.
+- Onboarding/monthly/yearly goal prompts are implemented with skip/dismissal
+  persistence.
+
+Latest focused checks: `swift test --package-path apps/ios` passed 46 tests,
+generic iOS `xcodebuild` passed, and `git diff --check` passed. TestFlight/App
+Store preparation follows the remaining focused Goal smoke and report-entry UX
+decision.

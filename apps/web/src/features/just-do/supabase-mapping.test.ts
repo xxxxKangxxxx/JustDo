@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@/lib/supabase/database.types";
-import type { Habit, Task } from "@/types/domain";
+import type { Goal, GoalPromptDismissal, Habit, Task } from "@/types/domain";
 import {
   categoryDomainToInsert,
   categoryRowToDomain,
+  goalDomainToInsert,
+  goalPromptDismissalDomainToInsert,
+  goalPromptDismissalRowToDomain,
+  goalRowToDomain,
   habitDomainToInsert,
   habitRowToDomain,
   mergeHabitLogs,
@@ -15,6 +19,8 @@ type CategoryRow = Database["public"]["Tables"]["categories"]["Row"];
 type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
 type HabitRow = Database["public"]["Tables"]["habits"]["Row"];
 type HabitLogRow = Database["public"]["Tables"]["habit_logs"]["Row"];
+type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
+type GoalPromptDismissalRow = Database["public"]["Tables"]["goal_prompt_dismissals"]["Row"];
 
 const taskRow = (over: Partial<TaskRow> = {}): TaskRow => ({
   id: "t1",
@@ -61,6 +67,34 @@ const habitRow = (over: Partial<HabitRow> = {}): HabitRow => ({
   reminder_at: null,
   created_at: "2026-04-15T00:00:00Z",
   updated_at: "2026-04-15T00:00:00Z",
+  ...over,
+});
+
+const goalRow = (over: Partial<GoalRow> = {}): GoalRow => ({
+  id: "g1",
+  user_id: "u1",
+  period_type: "monthly",
+  period_key: "2026-04",
+  title: "면접 준비",
+  note: "자료 정리",
+  sort_order: 0,
+  locked: true,
+  locked_at: "2026-04-01T00:00:00Z",
+  created_at: "2026-04-01T00:00:00Z",
+  updated_at: "2026-04-01T00:00:00Z",
+  ...over,
+});
+
+const dismissalRow = (
+  over: Partial<GoalPromptDismissalRow> = {},
+): GoalPromptDismissalRow => ({
+  id: "d1",
+  user_id: "u1",
+  prompt_type: "monthly",
+  period_key: "2026-04",
+  dismissed_permanently_for_period: true,
+  dismissed_at: "2026-04-02T00:00:00Z",
+  created_at: "2026-04-02T00:00:00Z",
   ...over,
 });
 
@@ -206,6 +240,67 @@ describe("habitRowToDomain / habitDomainToInsert", () => {
     expect(insert.emoji).toBe("📖");
     expect(insert.recur_type).toBe("weekly");
     expect(insert.recur_days).toEqual([1, 3, 5]);
+  });
+});
+
+describe("goal mapping", () => {
+  it("maps goal rows into domain goals", () => {
+    expect(goalRowToDomain(goalRow())).toEqual<Goal>({
+      id: "g1",
+      periodType: "monthly",
+      periodKey: "2026-04",
+      title: "면접 준비",
+      note: "자료 정리",
+      sortOrder: 0,
+      locked: true,
+      lockedAt: "2026-04-01T00:00:00Z",
+    });
+  });
+
+  it("maps domain goals into insert payloads", () => {
+    const insert = goalDomainToInsert(
+      {
+        id: "g1",
+        periodType: "yearly",
+        periodKey: "2026",
+        title: "체력 만들기",
+        note: null,
+        sortOrder: 1,
+        locked: false,
+        lockedAt: null,
+      },
+      "u1",
+    );
+    expect(insert).toMatchObject({
+      id: "g1",
+      user_id: "u1",
+      period_type: "yearly",
+      period_key: "2026",
+      title: "체력 만들기",
+      note: null,
+      sort_order: 1,
+      locked: false,
+      locked_at: null,
+    });
+  });
+
+  it("maps prompt dismissal rows and insert payloads", () => {
+    const domain = goalPromptDismissalRowToDomain(dismissalRow());
+    expect(domain).toEqual<GoalPromptDismissal>({
+      id: "d1",
+      promptType: "monthly",
+      periodKey: "2026-04",
+      dismissedPermanentlyForPeriod: true,
+      dismissedAt: "2026-04-02T00:00:00Z",
+    });
+    expect(goalPromptDismissalDomainToInsert(domain, "u1")).toMatchObject({
+      id: "d1",
+      user_id: "u1",
+      prompt_type: "monthly",
+      period_key: "2026-04",
+      dismissed_permanently_for_period: true,
+      dismissed_at: "2026-04-02T00:00:00Z",
+    });
   });
 });
 

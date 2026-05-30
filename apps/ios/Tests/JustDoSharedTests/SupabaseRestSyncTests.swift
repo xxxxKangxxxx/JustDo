@@ -24,6 +24,12 @@ final class SupabaseRestSyncTests: XCTestCase {
             "habit_logs": """
             [{"habit_id":"33333333-3333-3333-3333-333333333333","log_date":"2026-04-30","is_completed":true}]
             """,
+            "goals": """
+            [{"id":"44444444-4444-4444-4444-444444444444","period_type":"monthly","period_key":"2026-04","title":"Interview","note":"prep","sort_order":0,"locked":true,"locked_at":"2026-04-01T00:00:00Z"}]
+            """,
+            "goal_prompt_dismissals": """
+            [{"id":"55555555-5555-5555-5555-555555555555","prompt_type":"monthly","period_key":"2026-04","dismissed_permanently_for_period":true,"dismissed_at":"2026-04-02T00:00:00Z"}]
+            """,
             "user_subscriptions": """
             [{"plan_name":"pro","status":"active"}]
             """,
@@ -41,11 +47,24 @@ final class SupabaseRestSyncTests: XCTestCase {
         XCTAssertEqual(snapshot.habits.first?.recurType, .weekly)
         XCTAssertEqual(snapshot.habits.first?.recurDays, [2, 4])
         XCTAssertEqual(snapshot.habits.first?.log["2026-04-30"], 1)
+        XCTAssertEqual(snapshot.goals.map(\.title), ["Interview"])
+        XCTAssertEqual(snapshot.goals.first?.periodType, .monthly)
+        XCTAssertEqual(snapshot.goalPromptDismissals.first?.promptType, .monthly)
         XCTAssertEqual(snapshot.settings.plan, "pro")
         XCTAssertTrue(transport.requestedUserFilters.allSatisfy { $0 == "eq.\(userID.uuidString.lowercased())" })
         XCTAssertEqual(
             Set(transport.requestedPaths),
-            ["categories", "tags", "task_tags", "tasks", "habits", "habit_logs", "user_subscriptions"]
+            [
+                "categories",
+                "tags",
+                "task_tags",
+                "tasks",
+                "habits",
+                "habit_logs",
+                "goals",
+                "goal_prompt_dismissals",
+                "user_subscriptions",
+            ]
         )
     }
 
@@ -58,6 +77,8 @@ final class SupabaseRestSyncTests: XCTestCase {
             "tasks": "[]",
             "habits": "[]",
             "habit_logs": "[]",
+            "goals": "[]",
+            "goal_prompt_dismissals": "[]",
             "user_subscriptions": """
             [{"plan_name":"pro","status":"canceled"}]
             """,
@@ -86,6 +107,10 @@ final class SupabaseRestSyncTests: XCTestCase {
             """,
             "habits": "[]",
             "habit_logs": "[]",
+            "goals": """
+            [{"id":"44444444-4444-4444-4444-444444444444","period_type":"yearly","period_key":"2026","title":"Year goal","note":null,"sort_order":0,"locked":false,"locked_at":null}]
+            """,
+            "goal_prompt_dismissals": "[]",
         ])
         let client = SupabaseSnapshotClient(
             userID: uuid("99999999-9999-9999-9999-999999999999"),
@@ -104,6 +129,7 @@ final class SupabaseRestSyncTests: XCTestCase {
         )
         XCTAssertEqual(loaded.tasks.map(\.title), ["Synced task"])
         XCTAssertEqual(loaded.tasks.first?.isCompleted, true)
+        XCTAssertEqual(loaded.goals.map(\.title), ["Year goal"])
     }
 
     func testQueuedMutationFlusherWritesTaskAndHabitLogThenRemovesQueueRows() async throws {
@@ -282,6 +308,42 @@ final class SupabaseRestSyncTests: XCTestCase {
         let patchBody = try XCTUnwrap(transport.patches.first?.json)
         XCTAssertEqual(patchBody["is_completed"] as? Bool, false)
         XCTAssertTrue(patchBody["completed_at"] is NSNull)
+    }
+
+    func testQueuedMutationFlusherClearsGoalNullableFieldsWhenUnlocked() async throws {
+        let userID = uuid("99999999-9999-9999-9999-999999999999")
+        let stack = CoreDataStack(inMemory: true)
+        let store = CoreDataAppSnapshotStore(context: stack.container.viewContext)
+        let mutation = QueuedMutation(
+            id: uuid("90000000-0000-0000-0000-000000000007"),
+            updatedAt: "2026-05-21T00:00:00Z",
+            mutation: .goalUpsert(
+                Goal(
+                    id: uuid("44444444-4444-4444-4444-444444444444"),
+                    periodType: .yearly,
+                    periodKey: "2026",
+                    title: "Year goal",
+                    note: nil,
+                    sortOrder: 0,
+                    locked: false,
+                    lockedAt: "2026-05-20T00:00:00Z"
+                )
+            )
+        )
+        try store.applyAndEnqueue(mutation)
+        let transport = FakeSupabaseRestTransport(responses: [:])
+
+        _ = try await SupabaseQueuedMutationFlusher(
+            mutationClient: SupabaseMutationClient(userID: userID, transport: transport),
+            snapshotStore: store
+        ).flush()
+
+        let body = try XCTUnwrap(transport.upserts.first?.json)
+        XCTAssertEqual(body["period_type"] as? String, "yearly")
+        XCTAssertEqual(body["period_key"] as? String, "2026")
+        XCTAssertEqual(body["locked"] as? Bool, false)
+        XCTAssertTrue(body["locked_at"] is NSNull)
+        XCTAssertTrue(body["note"] is NSNull)
     }
 
     private func uuid(_ raw: String) -> UUID {

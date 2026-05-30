@@ -1,4 +1,12 @@
-import type { AppState, Category, Habit, Settings, Task } from "@/types/domain";
+import type {
+  AppState,
+  Category,
+  Goal,
+  GoalPromptDismissal,
+  Habit,
+  Settings,
+  Task,
+} from "@/types/domain";
 import { defaultCategories } from "./tokens";
 
 export type PersistedView = Pick<
@@ -11,6 +19,8 @@ export type Persisted = {
   categories: AppState["categories"];
   tasks: AppState["tasks"];
   habits: AppState["habits"];
+  goals: AppState["goals"];
+  goalPromptDismissals: AppState["goalPromptDismissals"];
   settings: AppState["settings"];
 };
 
@@ -23,7 +33,10 @@ export type LocalMutation =
   | { type: "task_delete"; id: string }
   | { type: "habit_upsert"; habit: Habit }
   | { type: "habit_delete"; id: string }
-  | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 };
+  | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 }
+  | { type: "goal_upsert"; goal: Goal }
+  | { type: "goal_delete"; id: string }
+  | { type: "goal_prompt_dismissal_upsert"; dismissal: GoalPromptDismissal };
 
 export type QueuedMutation = {
   id: string;
@@ -39,6 +52,9 @@ export type RemoteChange =
   | { type: "habit_upserted"; habit: Habit }
   | { type: "habit_deleted"; id: string }
   | { type: "habit_log_set"; habitId: string; iso: string; value: 0 | 1 }
+  | { type: "goal_upserted"; goal: Goal }
+  | { type: "goal_deleted"; id: string }
+  | { type: "goal_prompt_dismissal_upserted"; dismissal: GoalPromptDismissal }
   | { type: "error"; error: unknown };
 
 /**
@@ -70,6 +86,10 @@ export interface JustDoStorage {
   deleteHabit(id: string): Promise<void>;
   setHabitLog(habitId: string, iso: string, value: 0 | 1): Promise<void>;
 
+  upsertGoal(goal: Goal): Promise<void>;
+  deleteGoal(id: string): Promise<void>;
+  upsertGoalPromptDismissal(dismissal: GoalPromptDismissal): Promise<void>;
+
   listQueuedMutations?(): Promise<QueuedMutation[]>;
   removeQueuedMutation?(id: string): Promise<void>;
   clearQueuedMutations?(): Promise<void>;
@@ -88,6 +108,8 @@ export const toPersisted = (state: AppState): Persisted => ({
   categories: state.categories,
   tasks: state.tasks,
   habits: state.habits,
+  goals: state.goals,
+  goalPromptDismissals: state.goalPromptDismissals,
   settings: state.settings,
 });
 
@@ -149,6 +171,8 @@ export const mergePersisted = (initial: AppState, saved: Persisted): AppState =>
     categories: normalizeCategories(legacy),
     tasks: normalizeTasks(legacy),
     habits: normalizeHabits(saved.habits),
+    goals: saved.goals ?? [],
+    goalPromptDismissals: saved.goalPromptDismissals ?? [],
     settings: { ...initial.settings, ...saved.settings },
     view: {
       ...initial.view,
@@ -169,6 +193,8 @@ const normalizePersistedSnapshot = (saved: Persisted): Persisted => {
     categories: normalizeCategories(legacy),
     tasks: normalizeTasks(legacy),
     habits: normalizeHabits(saved.habits),
+    goals: saved.goals ?? [],
+    goalPromptDismissals: saved.goalPromptDismissals ?? [],
     settings: {
       notify: true,
       notifyTime: "09:00",
@@ -207,6 +233,8 @@ const ensureSnapshot = (ref: MemoryStateRef): Persisted => {
       categories: defaultCategories,
       tasks: [],
       habits: [],
+      goals: [],
+      goalPromptDismissals: [],
       settings: {
         notify: true,
         notifyTime: "09:00",
@@ -306,6 +334,24 @@ export const createMemoryStorage = (initial: Persisted | null = null): JustDoSto
       }));
     },
 
+    async upsertGoal(goal) {
+      applyMutation(ref, (snap) => ({ ...snap, goals: upsertById(snap.goals, goal) }));
+    },
+
+    async deleteGoal(id) {
+      applyMutation(ref, (snap) => ({
+        ...snap,
+        goals: snap.goals.filter((goal) => goal.id !== id),
+      }));
+    },
+
+    async upsertGoalPromptDismissal(dismissal) {
+      applyMutation(ref, (snap) => ({
+        ...snap,
+        goalPromptDismissals: upsertById(snap.goalPromptDismissals, dismissal),
+      }));
+    },
+
     subscribe() {
       return () => undefined;
     },
@@ -394,6 +440,15 @@ export const createLocalStorageStorage = (
             ? { ...habit, log: { ...habit.log, [iso]: value } }
             : habit,
         ),
+      })),
+    upsertGoal: (goal) =>
+      mutate((snap) => ({ ...snap, goals: upsertById(snap.goals, goal) })),
+    deleteGoal: (id) =>
+      mutate((snap) => ({ ...snap, goals: snap.goals.filter((goal) => goal.id !== id) })),
+    upsertGoalPromptDismissal: (dismissal) =>
+      mutate((snap) => ({
+        ...snap,
+        goalPromptDismissals: upsertById(snap.goalPromptDismissals, dismissal),
       })),
     subscribe: () => () => undefined,
   };
@@ -532,6 +587,21 @@ export const createSnapshotStorage = (
         ),
       }));
       await enqueue({ type: "habit_log_set", habitId, iso, value });
+    },
+    upsertGoal: async (goal) => {
+      await mutate((snap) => ({ ...snap, goals: upsertById(snap.goals, goal) }));
+      await enqueue({ type: "goal_upsert", goal });
+    },
+    deleteGoal: async (id) => {
+      await mutate((snap) => ({ ...snap, goals: snap.goals.filter((goal) => goal.id !== id) }));
+      await enqueue({ type: "goal_delete", id });
+    },
+    upsertGoalPromptDismissal: async (dismissal) => {
+      await mutate((snap) => ({
+        ...snap,
+        goalPromptDismissals: upsertById(snap.goalPromptDismissals, dismissal),
+      }));
+      await enqueue({ type: "goal_prompt_dismissal_upsert", dismissal });
     },
     listQueuedMutations: options.queue ? () => options.queue?.list() ?? Promise.resolve([]) : undefined,
     removeQueuedMutation: options.queue ? (id) => options.queue?.remove(id) ?? Promise.resolve() : undefined,
@@ -740,6 +810,15 @@ const applyQueuedMutation = async (storage: JustDoStorage, queued: QueuedMutatio
         queued.mutation.value,
       );
       return;
+    case "goal_upsert":
+      await storage.upsertGoal(queued.mutation.goal);
+      return;
+    case "goal_delete":
+      await storage.deleteGoal(queued.mutation.id);
+      return;
+    case "goal_prompt_dismissal_upsert":
+      await storage.upsertGoalPromptDismissal(queued.mutation.dismissal);
+      return;
   }
 };
 
@@ -792,6 +871,21 @@ const applyRemoteChangeToSnapshot = (snapshot: Persisted, change: RemoteChange):
           habit.id === change.habitId
             ? { ...habit, log: { ...habit.log, [change.iso]: change.value } }
             : habit,
+        ),
+      };
+    case "goal_upserted":
+      return { ...snapshot, goals: upsertById(snapshot.goals, change.goal) };
+    case "goal_deleted":
+      return {
+        ...snapshot,
+        goals: snapshot.goals.filter((goal) => goal.id !== change.id),
+      };
+    case "goal_prompt_dismissal_upserted":
+      return {
+        ...snapshot,
+        goalPromptDismissals: upsertById(
+          snapshot.goalPromptDismissals,
+          change.dismissal,
         ),
       };
     case "error":
@@ -859,6 +953,10 @@ export const createSyncedStorage = (
     deleteHabit: (id) => withFlush(localStorage.deleteHabit(id)),
     setHabitLog: (habitId, iso, value) =>
       withFlush(localStorage.setHabitLog(habitId, iso, value)),
+    upsertGoal: (goal) => withFlush(localStorage.upsertGoal(goal)),
+    deleteGoal: (id) => withFlush(localStorage.deleteGoal(id)),
+    upsertGoalPromptDismissal: (dismissal) =>
+      withFlush(localStorage.upsertGoalPromptDismissal(dismissal)),
 
     listQueuedMutations: () => localStorage.listQueuedMutations?.() ?? Promise.resolve([]),
     removeQueuedMutation: (id) => localStorage.removeQueuedMutation?.(id) ?? Promise.resolve(),

@@ -12,19 +12,28 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Active Next Track (2026-05-29)
+## Active Track (2026-05-30)
 
-> Just Do Mode iOS/Web implementation and smoke follow-up are complete enough to
-> move on. The next product implementation track is **Goal & Pro Report**. iOS
-> TestFlight/App Store preparation remains important, but it should start after
-> the team decides whether the first TestFlight build must include Goal & Pro
-> Report MVP.
+> Just Do Mode iOS/Web implementation and smoke follow-up are complete. The
+> **Goal & Pro Report** MVP first pass is now implemented across Supabase
+> schema, Web, and native iOS. The next work is not a broad new build-out; it is
+> focused smoke, UX decisions for deletion/report entry, and TestFlight/App Store
+> readiness.
 
 Recommended order for the next coding session:
 
-1. **Goal & Pro Report schema migration**
-   - Convert the next-implementation schema in `docs/just_do_db_schema.md` into
-     a Supabase migration.
+1. **Goal & Pro Report schema / sync status**
+   - 2026-05-29: initial migration file added at
+     `supabase/migrations/20260529120000_goal_report.sql`.
+   - 2026-05-29 restart follow-up: Docker/Supabase recovered.
+     `docker ps --filter name=supabase_db_justdo` shows
+     `supabase_db_justdo` up and healthy, and `supabase status` reports the
+     local development setup running.
+   - Applied locally with `supabase db push --local`.
+   - Applied to hosted Supabase on 2026-05-30. `supabase migration list`
+     confirmed `20260529120000` on both Local and Remote.
+   - Regenerated `apps/web/src/lib/supabase/database.types.ts` from the local
+     schema with `supabase gen types typescript --local`.
    - Keep ownership consistent with the current backend strategy: business data
      should reference `public.users(id)`, not `auth.users(id)` directly.
    - Add RLS policies matching the existing owner-only pattern.
@@ -33,21 +42,71 @@ Recommended order for the next coding session:
    - Enforce the "maximum 5 goals per period" rule in application code first.
      A DB trigger can be added later if abuse/consistency risk becomes real.
 
-2. **Web MVP first**
-   - Add domain types/selectors/storage adapter methods for goals and prompt
+2. **Web MVP first pass**
+   - 2026-05-29: first Web pass implemented from
+     `apps/goal-report/web` prototype decisions.
+   - Done: domain types/selectors/storage adapter methods for goals and prompt
      dismissals.
-   - Add a Goal setup modal that can handle onboarding, monthly, and yearly
-     prompts without blocking app entry.
-   - Add goal CRUD with max 5 goals per monthly/yearly period.
-   - Add locked-goal edit confirmation (`이번 기간 동안 목표를 고정할게요` /
-     `고정한 목표를 수정할까요? 처음 세운 목표와 달라질 수 있어요.`).
-   - Add report preview/detail UI:
+   - Done: Settings → 목표 card-grid management page.
+   - Done: goal CRUD with max 5 goals per monthly/yearly period enforced in
+     UI/store flow.
+   - Done: locked-goal edit confirmation (`이번 기간 동안 목표를 고정할게요` /
+     `이 약속, 정말 풀까요?`).
+   - Done: report preview/detail UI:
      - Free: preview + Pro CTA.
-     - Trial/Pro: full monthly/yearly report detail.
+     - Trial/Pro: full monthly/yearly stepped report modal.
+   - Done: automatic optional prompt delivery for onboarding, monthly, and
+     yearly prompts without blocking app entry. Onboarding skip stores
+     `onboarding/initial` dismissal; monthly/yearly prompts support per-period
+     "다시 보지 않기".
+   - Hosted/cloud goal writes are now unblocked because the migration is applied
+     remotely.
    - Use real-time calculation plus template narrative for MVP. Do not add AI
      generation or persisted report snapshots yet.
 
-3. **iOS MVP after Web behavior settles**
+3. **iOS MVP first pass and real-device iteration**
+   - 2026-05-29: iOS shared data layer first pass completed.
+     `Goal` / `GoalPromptDismissal` domain models, Core Data mirror,
+     mutation queue schema, and Supabase REST fetch/mutation support are in
+     place.
+   - 2026-05-29: native iOS Settings → 목표 UI first pass added in
+     `ContentView.swift`, based on `apps/goal-report/mobile` decisions:
+     card-stack goal management, goal CRUD, locked-goal edit confirmation,
+     full-screen stepped report, and Free preview surface.
+   - 2026-05-29: native iOS Goal Prompt UI first pass added:
+     onboarding 2-step full-screen flow, monthly/yearly centered prompt cards,
+     session suppression after close, and persisted dismissal for onboarding or
+     monthly/yearly "다시 보지 않기".
+   - 2026-05-30: iOS real-device feedback was incorporated:
+     - Onboarding guide uses preview screen imagery and smoother transition into
+       goal entry.
+     - Goal prompt starts with one active row, supports swipe-delete rows,
+       restores memo input, dismisses keyboard on outside/scroll interaction,
+       and stores the year as plain string text.
+     - Settings → 목표 sheet removes the top-left back chevron and Pro badge,
+       tightens the title-to-content spacing, and uses a centered add/edit
+       dialog instead of a nested bottom sheet.
+     - Goal cards were aligned to the reference: smaller text, note display,
+       completed/related/slipped counts, larger donut progress with centered
+       percentage, and a card-level lock badge.
+     - The card lock badge is now a direct toggle. Card tap still follows the
+       existing edit behavior: locked goals ask for confirmation, unlocked goals
+       open the editor.
+     - Delete in the editor dialog sits immediately left of Save.
+   - 2026-05-30 sync fix: hosted migration was already applied, but iOS goal
+     sync failed with `HTTP 400` / PostgreSQL `23514` /
+     `goals_check1`. Root cause was unlocked goal upsert omitting nullable
+     `locked_at`, allowing a previous non-null value to survive while
+     `locked=false`. `SupabaseGoalMutationRow` now explicitly encodes
+     `locked_at: null` and `note: null`; a regression test covers this.
+   - Verification: `swift test` from `apps/ios` passed, 46 tests. Xcode
+     real-device Run to `강영모의 iPhone` built, installed, and launched
+     successfully before UI work; after UI iterations,
+     `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
+     passed.
+   - Next: run another focused real-device smoke through Settings → 목표,
+     add/edit/delete, lock toggle, locked-goal confirmation, prompt dismissal,
+     app relaunch persistence, and cross-device/cloud sync.
    - Mirror the same data policy and prompt windows.
    - Keep iOS UX native: modal/sheet entry, non-blocking skip action, and
      settings/report entry points consistent with current SwiftUI patterns.
@@ -62,10 +121,36 @@ Recommended order for the next coding session:
      shortly before live billing.
 
 5. **TestFlight/App Store preparation**
-   - Start archive/TestFlight work after the Goal & Pro Report inclusion
-     decision.
+   - Goal & Pro Report MVP is now included in the local iOS build. Start
+     archive/TestFlight work after the focused Goal smoke and the report-entry
+     UX decision.
    - Current iOS Home/Add/Edit/Stats/Settings/Widget/Just Do Mode smoke is
      already documented as passing on iPhone 14 Pro / iOS 26.5.
+
+## Immediate Goal & Pro Report Follow-Up
+
+1. **iOS focused smoke**
+   - Settings → 목표 opens and dismisses by drag.
+   - Goal add/edit centered dialog handles keyboard, outside tap, save, and
+     delete placement.
+   - Card lock badge toggles without also opening the edit confirmation.
+   - Locked card tap shows confirmation; unlocked card tap opens editor.
+   - Add/edit/delete/lock changes sync and survive app relaunch.
+
+2. **Delete confirmation decision**
+   - Current editor delete button can remove a goal directly.
+   - Decide whether to add a lightweight destructive confirmation before
+     deletion. Because goal deletion is user-authored data loss, adding
+     `삭제 / 취소` confirmation is the recommended next UX polish.
+
+3. **Report entry UX decision**
+   - Card tap is reserved for edit/locked confirmation.
+   - Pick a separate report entry surface:
+     - Section header action for annual/monthly report.
+     - Section footer CTA.
+     - Small card-level report icon.
+   - Recommended direction: section-level annual/monthly report action, because
+     current reports are period reports rather than single-goal detail reports.
 
 ## Implemented Product Track: Just Do Mode
 
@@ -112,13 +197,13 @@ Recommended order for the next coding session:
     checkbox at the far right with the time vertically aligned to the checkbox.
   - Time text never includes seconds.
 
-## Planned Product Track: Goal & Pro Report
+## Implemented Product Track: Goal & Pro Report
 
 > 2026-05-28 decision: this is separate from Just Do Mode. Just Do Mode changes
 > Home's task display behavior; Goal & Pro Report captures monthly/yearly goals
-> and turns them into Pro-gated reports. 2026-05-29 decision: this becomes the
-> next implementation track before TestFlight unless the owner explicitly decides
-> to ship a TestFlight build without it.
+> and turns them into Pro-gated reports. 2026-05-29/30: schema, Web first pass,
+> and iOS first pass are implemented. Remaining work is focused smoke and UX
+> polish rather than first implementation.
 
 - Goal input is available to Free / Trial / Pro users.
 - Monthly/yearly goal report detail is Trial / Pro only. Free users see a report
@@ -144,6 +229,7 @@ Recommended order for the next coding session:
   lock flag.
 - Goal lock is a confirmation UX, not permanent immutability:
   - User-facing option: `이번 기간 동안 목표를 고정할게요`.
+  - iOS goal cards expose a direct `고정/열림` lock badge toggle.
   - Locked goals require a confirmation modal before editing.
   - Example confirmation: `고정한 목표를 수정할까요? 처음 세운 목표와 달라질 수
     있어요.`
@@ -170,10 +256,35 @@ Recommended order for the next coding session:
   - Web domain/selectors/tests: `domain.ts`, `selectors.ts`,
     `app-shell.test.tsx`, `persistence.test.ts`, `selectors.test.ts`.
   - iOS app shell/state: `apps/ios/JustDoApp/JustDoApp/ContentView.swift` and
-    shared Swift package sources under `apps/ios/Sources`.
+    shared Swift package sources under `apps/ios/JustDoShared`.
 - Documentation anchors:
   - Product spec: `docs/just_do_prd.md` Goal & Pro Report.
-  - Future schema: `docs/just_do_db_schema.md` Goal & Pro Report schema.
+  - Implemented schema: `docs/just_do_db_schema.md` Goal & Pro Report schema.
+
+## Where We Are (2026-05-30)
+
+- **Goal & Pro Report MVP first pass implemented**. Supabase migration
+  `20260529120000_goal_report.sql`, Web Settings → 목표/report surfaces, and
+  iOS native Settings → 목표/prompt/sync surfaces are all in the working tree.
+- **Hosted Supabase migration applied**. User ran `supabase db push` and
+  `supabase migration list`; `20260529120000` is present in both Local and
+  Remote.
+- **iOS goal sync fixed**. Device logs showed `HTTP 400` with PostgreSQL
+  `23514` / `goals_check1`. The issue was unlocked goal upsert omitting
+  `locked_at: null`. iOS now explicitly encodes nil `locked_at` and `note` as
+  JSON null in goal mutation payloads, with regression coverage.
+- **iOS goal UI latest state**:
+  - Settings → 목표 uses a native sheet dismissed by drag.
+  - Top-left back chevron and plan badge are removed.
+  - Annual/monthly sections are tighter under the `목표` nav title.
+  - Add/edit uses a centered modal dialog.
+  - Goal cards show reference-aligned title/note/metrics/progress donut/lock
+    badge.
+  - Lock badge directly toggles lock state; card tap remains edit/confirmation.
+  - Delete sits immediately left of Save in the editor dialog.
+- **Immediate next work**: focused real-device smoke, delete confirmation
+  decision, and report entry UX decision. TestFlight/App Store preparation
+  follows those items.
 
 ## Where We Are (2026-05-29)
 
@@ -246,10 +357,9 @@ Recommended order for the next coding session:
     경로로 일원화하는 작업이 따로 필요.
 - **웹 세션 영속화는 변경 없음**. `@supabase/ssr` 기본값(쿠키 + 자동 refresh)을
   그대로 사용하고 있어 별도 손댈 곳 없음. 본 fix는 iOS 한정.
-- 다음 우선순위: **Goal & Pro Report 구현 트랙**. Just Do Mode iOS/Web 보정과
-  smoke가 끝났으므로, TestFlight로 바로 넘어가기 전에 월간/연간 목표와 Pro
-  리포트 MVP 포함 여부를 결정하고 구현하는 흐름으로 전환한다. Toss 가맹점
-  심사는 가장 긴 외부 차단(~2–3주)이므로 사용자 외부 트랙에서 병행 유지.
+- 당시 다음 우선순위는 **Goal & Pro Report 구현 트랙**이었다. 2026-05-30
+  기준 first pass 구현은 완료되었고, 상단 2026-05-30 상태가 최신이다. Toss
+  가맹점 심사는 가장 긴 외부 차단(~2–3주)이므로 사용자 외부 트랙에서 병행 유지.
 
 ## Where We Are (2026-05-22)
 
@@ -309,8 +419,9 @@ Recommended order for the next coding session:
   - Web: `apps/web/public/`에 SVG primary + 16/32/48 PNG fallback +
     apple-touch-icon. `layout.tsx`의 `metadata.icons`에 등록.
 - 당시 다음 우선순위는 **iOS TestFlight 준비 및 Toss 외부 의존 트랙**이었음.
-  2026-05-29 이후에는 상단 Active Next Track 기준으로 Goal & Pro Report MVP가
-  TestFlight 전 제품 구현 후보로 올라왔다. Toss 가맹점 심사는 외부 트랙 유지.
+  2026-05-29에는 Goal & Pro Report MVP가 TestFlight 전 제품 구현 후보로
+  올라왔고, 2026-05-30 기준 first pass 구현까지 완료됐다. 최신 상태는 상단
+  Active Track을 따른다. Toss 가맹점 심사는 외부 트랙 유지.
 
 ## Where We Are (2026-05-21)
 

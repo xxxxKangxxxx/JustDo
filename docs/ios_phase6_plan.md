@@ -43,6 +43,8 @@ JustDoAppUITests          Deep-link UI tests
 | `Category` | `Category` | `id`, `name`, `color`, `isDefault`, `position` |
 | `Task` | `Task` | `categoryId` maps to `categoryID: UUID?` |
 | `Habit` | `Habit` | `recurType`, `recurDays`, `reminderTime`, `log` |
+| `Goal` | `Goal` | `periodType`, `periodKey`, `title`, optional `note`, `sortOrder`, `locked`, `lockedAt` |
+| `GoalPromptDismissal` | `GoalPromptDismissal` | onboarding/monthly/yearly prompt dismissal state |
 | `Settings` | `Settings` | `weekStart` is the only synced preference in v1 |
 | `AppState` persisted shape | `AppSnapshot` | session-only UI state is excluded |
 
@@ -65,6 +67,8 @@ Main app local mirror entities:
 | `CDTaskTag` | `taskID`, `tagID` |
 | `CDHabit` | `id`, `title`, `emoji`, `recurType`, `recurDays`, `reminderTime`, `updatedAt`, `createdAt` |
 | `CDHabitLog` | `id`, `habitID`, `logDate`, `isCompleted`, `updatedAt`, `createdAt` |
+| `CDGoal` | `id`, `periodType`, `periodKey`, `title`, `note`, `sortOrder`, `locked`, `lockedAt` |
+| `CDGoalPromptDismissal` | `id`, `promptType`, `periodKey`, `dismissedPermanentlyForPeriod`, `dismissedAt` |
 | `CDQueuedMutation` | `id`, `updatedAt`, `type`, `payloadJSON` |
 | `CDUserPreference` | `key`, `valueJSON`, `updatedAt` |
 
@@ -103,6 +107,9 @@ Shared mutation names mirror the web queue:
 - `habit_upsert`
 - `habit_delete`
 - `habit_log_set`
+- `goal_upsert`
+- `goal_delete`
+- `goal_prompt_dismissal_upsert`
 
 For Swift, the semantic cases are defined in
 `apps/ios/JustDoShared/Sync/MutationQueueSchema.swift`.
@@ -155,4 +162,9 @@ mutations, requests a timeline reload, and lets the app drain App Group
    pass.)
 8. Fix auth session persistence after access-token expiry and verify a 1-hour+
    close/reopen smoke. (Done on 2026-05-25.)
-9. Remaining: final whole-app smoke and TestFlight/App Store preparation.
+9. Implement Goal & Pro Report iOS first pass after Web behavior stabilized.
+   (Done 2026-05-29/30: shared models, Core Data mirror, Supabase sync,
+   Settings → 목표, prompt UI, centered goal editor dialog, lock toggle, and
+   report scaffolding.)
+10. Remaining: focused Goal smoke, report-entry/delete-confirm UX decisions,
+    then TestFlight/App Store preparation.

@@ -116,6 +116,70 @@ public struct Habit: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+public enum GoalPeriodType: String, Codable, Equatable, Sendable {
+    case monthly
+    case yearly
+}
+
+public enum GoalPromptType: String, Codable, Equatable, Sendable {
+    case onboarding
+    case monthly
+    case yearly
+}
+
+public struct Goal: Identifiable, Codable, Equatable, Sendable {
+    public var id: UUID
+    public var periodType: GoalPeriodType
+    public var periodKey: String
+    public var title: String
+    public var note: String?
+    public var sortOrder: Int
+    public var locked: Bool
+    public var lockedAt: String?
+
+    public init(
+        id: UUID,
+        periodType: GoalPeriodType,
+        periodKey: String,
+        title: String,
+        note: String?,
+        sortOrder: Int,
+        locked: Bool,
+        lockedAt: String?
+    ) {
+        self.id = id
+        self.periodType = periodType
+        self.periodKey = periodKey
+        self.title = title
+        self.note = note
+        self.sortOrder = sortOrder
+        self.locked = locked
+        self.lockedAt = lockedAt
+    }
+}
+
+public struct GoalPromptDismissal: Identifiable, Codable, Equatable, Sendable {
+    public var id: UUID
+    public var promptType: GoalPromptType
+    public var periodKey: String
+    public var dismissedPermanentlyForPeriod: Bool
+    public var dismissedAt: String
+
+    public init(
+        id: UUID,
+        promptType: GoalPromptType,
+        periodKey: String,
+        dismissedPermanentlyForPeriod: Bool,
+        dismissedAt: String
+    ) {
+        self.id = id
+        self.promptType = promptType
+        self.periodKey = periodKey
+        self.dismissedPermanentlyForPeriod = dismissedPermanentlyForPeriod
+        self.dismissedAt = dismissedAt
+    }
+}
+
 public struct Settings: Codable, Equatable, Sendable {
     public var notify: Bool
     public var notifyTime: String
@@ -170,6 +234,8 @@ public struct AppSnapshot: Codable, Equatable, Sendable {
     public var categories: [Category]
     public var tasks: [Task]
     public var habits: [Habit]
+    public var goals: [Goal]
+    public var goalPromptDismissals: [GoalPromptDismissal]
     public var settings: Settings
 
     public init(
@@ -177,12 +243,40 @@ public struct AppSnapshot: Codable, Equatable, Sendable {
         categories: [Category],
         tasks: [Task],
         habits: [Habit],
+        goals: [Goal] = [],
+        goalPromptDismissals: [GoalPromptDismissal] = [],
         settings: Settings
     ) {
         self.view = view
         self.categories = categories
         self.tasks = tasks
         self.habits = habits
+        self.goals = goals
+        self.goalPromptDismissals = goalPromptDismissals
         self.settings = settings
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case view
+        case categories
+        case tasks
+        case habits
+        case goals
+        case goalPromptDismissals
+        case settings
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        view = try container.decode(ViewState.self, forKey: .view)
+        categories = try container.decode([Category].self, forKey: .categories)
+        tasks = try container.decode([Task].self, forKey: .tasks)
+        habits = try container.decode([Habit].self, forKey: .habits)
+        goals = try container.decodeIfPresent([Goal].self, forKey: .goals) ?? []
+        goalPromptDismissals = try container.decodeIfPresent(
+            [GoalPromptDismissal].self,
+            forKey: .goalPromptDismissals
+        ) ?? []
+        settings = try container.decode(Settings.self, forKey: .settings)
     }
 }

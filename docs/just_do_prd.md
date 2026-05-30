@@ -263,8 +263,11 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 - Just Do Mode와 별도 기능으로 운영한다. Just Do Mode는 Home의 todo 표시
   방식이고, Goal & Pro Report는 월간/연간 목표와 회고 리포트 기능이다.
 - 2026-05-29 결정: Just Do Mode iOS/Web smoke 후 다음 제품 구현 트랙으로
-  진행한다. TestFlight/App Store 준비는 이 MVP를 첫 TestFlight에 포함할지
-  결정한 뒤 진행한다.
+  진행한다.
+- 2026-05-30 구현 상태: Supabase schema, Web MVP, iOS shared data layer, iOS
+  Settings → 목표 UI, goal prompt, goal CRUD/sync, locked-goal confirmation,
+  and lock toggle first pass are implemented. 남은 범위는 실기기 focused smoke,
+  삭제 확인 UX, 리포트 진입 위치 결정, TestFlight 준비다.
 - 목표 입력은 Free / Trial / Pro 모두 가능하다.
 - 목표 기반 월간/연간 리포트 상세 열람은 Trial / Pro 전용이다.
 - 첫 가입 또는 첫 실행 사용자는 목표 설정 모달을 본다. 모달은 강제 입력이
@@ -289,6 +292,8 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
   직접 연결은 후속 범위로 둔다.
 - 목표 수정 잠금:
   - 목표 생성 시 `이번 기간 동안 목표를 고정할게요` 옵션을 제공할 수 있다.
+  - 목표 관리 카드에서는 카드 내 `고정/열림` 자물쇠 배지로 잠금을 직접
+    토글할 수 있다.
   - 잠긴 목표는 바로 수정하지 않고 확인 모달을 거친다.
   - 확인 문구 예: `고정한 목표를 수정할까요? 처음 세운 목표와 달라질 수
     있어요.`
@@ -296,6 +301,7 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 - 초기 알림은 앱/웹 진입 시 모달만 사용한다. 푸시 알림은 후속 범위로 둔다.
 - MVP 구현 범위:
   - Web MVP를 먼저 구현하고, behavior가 안정되면 iOS에 반영한다.
+    2026-05-30 기준 두 플랫폼 모두 first pass가 반영되어 있다.
   - 목표와 프롬프트 dismiss 상태는 Supabase에 저장한다.
   - 리포트는 기존 task/habit/habit log 데이터를 실시간 집계해 템플릿 문장으로
     렌더링한다.

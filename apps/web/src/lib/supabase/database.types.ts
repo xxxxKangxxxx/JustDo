@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -65,6 +45,94 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_prompt_dismissals: {
+        Row: {
+          created_at: string
+          dismissed_at: string
+          dismissed_permanently_for_period: boolean
+          id: string
+          period_key: string
+          prompt_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dismissed_at?: string
+          dismissed_permanently_for_period?: boolean
+          id?: string
+          period_key: string
+          prompt_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dismissed_at?: string
+          dismissed_permanently_for_period?: boolean
+          id?: string
+          period_key?: string
+          prompt_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_prompt_dismissals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          created_at: string
+          id: string
+          locked: boolean
+          locked_at: string | null
+          note: string | null
+          period_key: string
+          period_type: string
+          sort_order: number
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          locked?: boolean
+          locked_at?: string | null
+          note?: string | null
+          period_key: string
+          period_type: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          locked?: boolean
+          locked_at?: string | null
+          note?: string | null
+          period_key?: string
+          period_type?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -776,9 +844,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

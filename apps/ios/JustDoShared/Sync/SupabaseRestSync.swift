@@ -4,6 +4,21 @@ import Foundation
 public enum SupabaseSyncError: Error, Equatable {
     case invalidResponse
     case httpStatus(Int, String)
+
+    public var userMessage: String {
+        switch self {
+        case .invalidResponse:
+            return "서버 응답을 해석하지 못했습니다."
+        case .httpStatus(let status, let body):
+            let compactBody = body
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !compactBody.isEmpty else {
+                return "서버가 동기화 요청을 거절했습니다. (HTTP \(status))"
+            }
+            return "서버가 동기화 요청을 거절했습니다. (HTTP \(status)) \(compactBody)"
+        }
+    }
 }
 
 public struct SupabaseCredentials: Equatable, Sendable {
@@ -191,6 +206,19 @@ public final class SupabaseMutationClient {
                     ]
                 )
             }
+        case .goalUpsert(let goal):
+            try await upsert("goals", body: SupabaseGoalMutationRow(goal: goal, userID: userID))
+        case .goalDelete(let id):
+            try await delete("goals", id: id)
+        case .goalPromptDismissalUpsert(let dismissal):
+            try await upsert(
+                "goal_prompt_dismissals",
+                queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,prompt_type,period_key")],
+                body: SupabaseGoalPromptDismissalMutationRow(
+                    dismissal: dismissal,
+                    userID: userID
+                )
+            )
         }
     }
 
@@ -303,6 +331,8 @@ public final class SupabaseSnapshotClient {
         let taskRows = try await fetchTasks()
         let habitRows = try await fetchHabits()
         let habitLogRows = try await fetchHabitLogs()
+        let goalRows = try await fetchGoals()
+        let goalPromptDismissalRows = try await fetchGoalPromptDismissals()
         let subscriptionRows = try await fetchSubscriptions()
 
         let tagsByID = Dictionary(uniqueKeysWithValues: resolvedTags.map { ($0.id, $0.name) })
@@ -329,6 +359,8 @@ public final class SupabaseSnapshotClient {
             categories: resolvedCategories.map(\.domain),
             tasks: resolvedTasks,
             habits: resolvedHabits,
+            goals: goalRows.map(\.domain),
+            goalPromptDismissals: goalPromptDismissalRows.map(\.domain),
             settings: resolvedSettings
         )
     }
@@ -377,6 +409,22 @@ public final class SupabaseSnapshotClient {
         try await fetch(
             "user_subscriptions",
             select: "plan_name,status",
+            filteredByUser: true
+        )
+    }
+
+    private func fetchGoals() async throws -> [SupabaseGoalRow] {
+        try await fetch(
+            "goals",
+            select: "id,period_type,period_key,title,note,sort_order,locked,locked_at",
+            filteredByUser: true
+        )
+    }
+
+    private func fetchGoalPromptDismissals() async throws -> [SupabaseGoalPromptDismissalRow] {
+        try await fetch(
+            "goal_prompt_dismissals",
+            select: "id,prompt_type,period_key,dismissed_permanently_for_period,dismissed_at",
             filteredByUser: true
         )
     }
@@ -679,6 +727,151 @@ struct SupabaseSubscriptionRow: Decodable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case planName = "plan_name"
         case status
+    }
+}
+
+struct SupabaseGoalRow: Decodable, Equatable {
+    var id: UUID
+    var periodType: String
+    var periodKey: String
+    var title: String
+    var note: String?
+    var sortOrder: Int
+    var locked: Bool
+    var lockedAt: String?
+
+    var domain: Goal {
+        Goal(
+            id: id,
+            periodType: GoalPeriodType(rawValue: periodType) ?? .monthly,
+            periodKey: periodKey,
+            title: title,
+            note: note,
+            sortOrder: sortOrder,
+            locked: locked,
+            lockedAt: lockedAt
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case periodType = "period_type"
+        case periodKey = "period_key"
+        case title
+        case note
+        case sortOrder = "sort_order"
+        case locked
+        case lockedAt = "locked_at"
+    }
+}
+
+private struct SupabaseGoalMutationRow: Encodable {
+    var id: UUID
+    var userID: UUID
+    var periodType: String
+    var periodKey: String
+    var title: String
+    var note: String?
+    var sortOrder: Int
+    var locked: Bool
+    var lockedAt: String?
+
+    init(goal: Goal, userID: UUID) {
+        self.id = goal.id
+        self.userID = userID
+        self.periodType = goal.periodType.rawValue
+        self.periodKey = goal.periodKey
+        self.title = goal.title
+        self.note = goal.note
+        self.sortOrder = goal.sortOrder
+        self.locked = goal.locked
+        self.lockedAt = goal.locked ? goal.lockedAt : nil
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case periodType = "period_type"
+        case periodKey = "period_key"
+        case title
+        case note
+        case sortOrder = "sort_order"
+        case locked
+        case lockedAt = "locked_at"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(periodType, forKey: .periodType)
+        try container.encode(periodKey, forKey: .periodKey)
+        try container.encode(title, forKey: .title)
+        if let note {
+            try container.encode(note, forKey: .note)
+        } else {
+            try container.encodeNil(forKey: .note)
+        }
+        try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encode(locked, forKey: .locked)
+        if let lockedAt {
+            try container.encode(lockedAt, forKey: .lockedAt)
+        } else {
+            try container.encodeNil(forKey: .lockedAt)
+        }
+    }
+}
+
+struct SupabaseGoalPromptDismissalRow: Decodable, Equatable {
+    var id: UUID
+    var promptType: String
+    var periodKey: String
+    var dismissedPermanentlyForPeriod: Bool
+    var dismissedAt: String
+
+    var domain: GoalPromptDismissal {
+        GoalPromptDismissal(
+            id: id,
+            promptType: GoalPromptType(rawValue: promptType) ?? .monthly,
+            periodKey: periodKey,
+            dismissedPermanentlyForPeriod: dismissedPermanentlyForPeriod,
+            dismissedAt: dismissedAt
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case promptType = "prompt_type"
+        case periodKey = "period_key"
+        case dismissedPermanentlyForPeriod = "dismissed_permanently_for_period"
+        case dismissedAt = "dismissed_at"
+    }
+}
+
+private struct SupabaseGoalPromptDismissalMutationRow: Encodable {
+    var id: UUID
+    var userID: UUID
+    var promptType: String
+    var periodKey: String
+    var dismissedPermanentlyForPeriod: Bool
+    var dismissedAt: String
+
+    init(dismissal: GoalPromptDismissal, userID: UUID) {
+        self.id = dismissal.id
+        self.userID = userID
+        self.promptType = dismissal.promptType.rawValue
+        self.periodKey = dismissal.periodKey
+        self.dismissedPermanentlyForPeriod = dismissal.dismissedPermanentlyForPeriod
+        self.dismissedAt = dismissal.dismissedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case promptType = "prompt_type"
+        case periodKey = "period_key"
+        case dismissedPermanentlyForPeriod = "dismissed_permanently_for_period"
+        case dismissedAt = "dismissed_at"
     }
 }
 

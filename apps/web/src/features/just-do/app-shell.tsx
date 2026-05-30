@@ -18,8 +18,18 @@ import {
   tossBillingPlans,
   type TossBillingPlanInterval,
 } from "@/lib/billing/toss-client";
-import type { Habit, HabitRecurType, Priority, Task } from "@/types/domain";
-import { habitActiveOn, habitStreak, justDoTaskSections, justDoTasksUntil, tasksOnDate } from "./selectors";
+import type { Goal, GoalPeriodType, Habit, HabitRecurType, Priority, Task } from "@/types/domain";
+import {
+  goalProgressForPeriod,
+  goalsForPeriod,
+  habitActiveOn,
+  habitStreak,
+  justDoTaskSections,
+  justDoTasksUntil,
+  periodActivityHeatmap,
+  periodKeyOf,
+  tasksOnDate,
+} from "./selectors";
 import { JustDoProvider, useJustDo } from "./store";
 import { mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
@@ -31,6 +41,7 @@ type SettingsSection =
   | "account"
   | "notifications"
   | "display"
+  | "goals"
   | "categories"
   | "habits"
   | "subscription"
@@ -39,6 +50,7 @@ type SettingsSection =
 type NewTaskDraft = { date: string; range?: [string, string]; time?: string } | null;
 type UpgradePlan = TossBillingPlanInterval;
 type PaymentMethodKey = "toss" | "card" | "bank" | "naverpay" | "kakaopay" | "other";
+type GoalPromptTarget = { kind: "onboarding" | "monthly" | "yearly"; periodKey: string };
 type BillingSubscription = {
   id: string;
   plan_name: string;
@@ -216,6 +228,7 @@ function JustDoViewport() {
   const [newTask, setNewTask] = useState<NewTaskDraft>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [goalPrompt, setGoalPrompt] = useState<GoalPromptTarget | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const flash = (message: string) => {
@@ -283,6 +296,54 @@ function JustDoViewport() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [newTask, paletteOpen, s, selectedIds.length, taskModalId, today]);
+
+  useEffect(() => {
+    if (!s.isHydrated || !auth.user || goalPrompt) return;
+    const parsed = parseISO(today);
+    const yearlyKey = periodKeyOf("yearly", today);
+    const monthlyKey = periodKeyOf("monthly", today);
+    const hasDismissal = (promptType: "onboarding" | "monthly" | "yearly", periodKey: string) =>
+      s.state.goalPromptDismissals.some(
+        (dismissal) =>
+          dismissal.promptType === promptType &&
+          dismissal.periodKey === periodKey &&
+          dismissal.dismissedPermanentlyForPeriod,
+      );
+    const hasGoals = (periodType: GoalPeriodType, periodKey: string) =>
+      goalsForPeriod(s.state.goals, periodType, periodKey).length > 0;
+
+    let nextPrompt: GoalPromptTarget | null = null;
+    if (s.state.goals.length === 0 && !hasDismissal("onboarding", "initial")) {
+      nextPrompt = { kind: "onboarding", periodKey: "initial" };
+    }
+    if (
+      !nextPrompt &&
+      parsed.month === 1 &&
+      parsed.day <= 7 &&
+      !hasGoals("yearly", yearlyKey) &&
+      !hasDismissal("yearly", yearlyKey)
+    ) {
+      nextPrompt = { kind: "yearly", periodKey: yearlyKey };
+    }
+    if (
+      !nextPrompt &&
+      parsed.day <= 3 &&
+      !hasGoals("monthly", monthlyKey) &&
+      !hasDismissal("monthly", monthlyKey)
+    ) {
+      nextPrompt = { kind: "monthly", periodKey: monthlyKey };
+    }
+    if (!nextPrompt) return;
+    const timer = window.setTimeout(() => setGoalPrompt(nextPrompt), 0);
+    return () => window.clearTimeout(timer);
+  }, [
+    auth.user,
+    goalPrompt,
+    s.isHydrated,
+    s.state.goalPromptDismissals,
+    s.state.goals,
+    today,
+  ]);
 
   if (!s.isHydrated) return <LoadingViewport mode={mode} />;
 
@@ -392,6 +453,14 @@ function JustDoViewport() {
           onView={setCalendarView}
         />
         <BulkActionBar mode={mode} selectedIds={selectedIds} onClear={() => setSelectedIds([])} onToast={flash} />
+        {goalPrompt ? (
+          <GoalPromptModal
+            mode={mode}
+            prompt={goalPrompt}
+            today={today}
+            onClose={() => setGoalPrompt(null)}
+          />
+        ) : null}
         {toast ? <Toast mode={mode}>{toast}</Toast> : null}
       </div>
     </>
@@ -1865,6 +1934,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
     ["account", "계정"],
     ["notifications", "알림"],
     ["display", "화면"],
+    ["goals", "목표"],
     ["categories", "카테고리"],
     ["habits", "습관"],
     ["subscription", "구독"],
@@ -1910,6 +1980,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
             <SettingRow mode={mode} label="주 시작" right={<select value={s.state.settings.weekStart} onChange={(event) => s.updateSetting("weekStart", Number(event.target.value) as 0 | 1)} style={dateInputStyle(t)}><option value={0}>일요일</option><option value={1}>월요일</option></select>} />
           </Panel>
           ) : null}
+          {section === "goals" ? <GoalSettingsPanel mode={mode} onUpgrade={setUpgradePlan} /> : null}
           {section === "categories" ? <CategoryManagementPanel mode={mode} /> : null}
           {section === "habits" ? (
           <Panel mode={mode} title="습관 관리" subtitle="web에서도 habit을 확인하고 수정/삭제할 수 있습니다. 새 habit은 상단 새 Task 버튼에서 Habit 탭으로 추가합니다.">
@@ -1954,6 +2025,775 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
       </div>
       {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
       <HabitEditModal mode={mode} habitId={editHabitId} onClose={() => setEditHabitId(null)} />
+    </div>
+  );
+}
+
+type GoalDraft = {
+  id: string | null;
+  periodType: GoalPeriodType;
+  periodKey: string;
+  title: string;
+  note: string;
+  locked: boolean;
+};
+
+type ReportTarget = { periodType: GoalPeriodType; periodKey: string } | null;
+
+const monthLabel = (periodKey: string) => {
+  const [, month] = periodKey.split("-");
+  return `${Number(month)}월`;
+};
+
+const periodLabel = (type: GoalPeriodType, periodKey: string) =>
+  type === "yearly" ? `${periodKey}년` : monthLabel(periodKey);
+
+const planKeyOf = (subscription: BillingSubscription | null): "free" | "trial" | "pro" => {
+  if (!subscription || subscription.plan_name !== "pro") return "free";
+  if (subscription.status === "trial") return "trial";
+  return hasProEntitlement(subscription) ? "pro" : "free";
+};
+
+function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (plan: UpgradePlan) => void }) {
+  const s = useJustDo();
+  const t = webTokens(mode);
+  const billing = useBillingSubscription();
+  const selectedDate = s.state.view.selectedDate;
+  const monthlyKey = periodKeyOf("monthly", selectedDate);
+  const yearlyKey = periodKeyOf("yearly", selectedDate);
+  const plan = planKeyOf(billing.subscription);
+  const canSeeReportDetail = plan === "trial" || plan === "pro";
+  const [editing, setEditing] = useState<GoalDraft | null>(null);
+  const [lockedGoal, setLockedGoal] = useState<Goal | null>(null);
+  const [report, setReport] = useState<ReportTarget>(null);
+
+  const startAdd = (periodType: GoalPeriodType, periodKey: string) => {
+    const current = goalsForPeriod(s.state.goals, periodType, periodKey);
+    if (current.length >= 5) return;
+    setEditing({
+      id: null,
+      periodType,
+      periodKey,
+      title: "",
+      note: "",
+      locked: false,
+    });
+  };
+
+  const startEdit = (goal: Goal) => {
+    if (goal.locked) {
+      setLockedGoal(goal);
+      return;
+    }
+    setEditing({
+      id: goal.id,
+      periodType: goal.periodType,
+      periodKey: goal.periodKey,
+      title: goal.title,
+      note: goal.note ?? "",
+      locked: goal.locked,
+    });
+  };
+
+  const openLockedGoal = () => {
+    if (!lockedGoal) return;
+    s.updateGoal(lockedGoal.id, { locked: false, lockedAt: null });
+    setEditing({
+      id: lockedGoal.id,
+      periodType: lockedGoal.periodType,
+      periodKey: lockedGoal.periodKey,
+      title: lockedGoal.title,
+      note: lockedGoal.note ?? "",
+      locked: false,
+    });
+    setLockedGoal(null);
+  };
+
+  return (
+    <>
+      <Panel
+        mode={mode}
+        title="목표"
+        subtitle="한 해와 한 달의 약속을 적고, 월말과 연말에 리포트로 돌아봅니다."
+      >
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex-1 text-[12.5px] leading-5" style={{ color: t.textSecondary }}>
+            목표 입력은 모든 플랜에서 사용할 수 있습니다. 리포트 상세는 Trial 또는 Pro에서 열립니다.
+          </div>
+          <PlanBadge mode={mode} plan={plan} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <GoalPeriodSection
+            mode={mode}
+            title={`${yearlyKey}년 연간 목표`}
+            periodType="yearly"
+            periodKey={yearlyKey}
+            goals={s.state.goals}
+            tasks={s.state.tasks}
+            onAdd={() => startAdd("yearly", yearlyKey)}
+            onEdit={startEdit}
+            onReport={() => setReport({ periodType: "yearly", periodKey: yearlyKey })}
+          />
+          <GoalPeriodSection
+            mode={mode}
+            title={`${monthLabel(monthlyKey)} 월간 목표`}
+            periodType="monthly"
+            periodKey={monthlyKey}
+            goals={s.state.goals}
+            tasks={s.state.tasks}
+            onAdd={() => startAdd("monthly", monthlyKey)}
+            onEdit={startEdit}
+            onReport={() => setReport({ periodType: "monthly", periodKey: monthlyKey })}
+          />
+        </div>
+      </Panel>
+      {editing ? (
+        <GoalEditModal
+          mode={mode}
+          draft={editing}
+          onChange={setEditing}
+          onClose={() => setEditing(null)}
+          onDelete={editing.id ? () => {
+            s.deleteGoal(editing.id as string);
+            setEditing(null);
+          } : undefined}
+          onSave={() => {
+            const title = editing.title.trim();
+            if (!title) return;
+            if (editing.id) {
+              s.updateGoal(editing.id, {
+                title,
+                note: editing.note,
+                locked: editing.locked,
+              });
+            } else {
+              const current = goalsForPeriod(s.state.goals, editing.periodType, editing.periodKey);
+              if (current.length >= 5) return;
+              s.addGoal({
+                periodType: editing.periodType,
+                periodKey: editing.periodKey,
+                title,
+                note: editing.note,
+                sortOrder: current.length,
+                locked: editing.locked,
+                lockedAt: editing.locked ? new Date().toISOString() : null,
+              });
+            }
+            setEditing(null);
+          }}
+        />
+      ) : null}
+      {lockedGoal ? (
+        <LockedGoalModal
+          mode={mode}
+          goal={lockedGoal}
+          onClose={() => setLockedGoal(null)}
+          onUnlock={openLockedGoal}
+        />
+      ) : null}
+      {report ? (
+        canSeeReportDetail ? (
+          <GoalReportModal
+            mode={mode}
+            target={report}
+            onClose={() => setReport(null)}
+          />
+        ) : (
+          <GoalReportPreviewModal
+            mode={mode}
+            target={report}
+            onClose={() => setReport(null)}
+            onUpgrade={() => onUpgrade("monthly")}
+          />
+        )
+      ) : null}
+    </>
+  );
+}
+
+function PlanBadge({ mode, plan }: { mode: ThemeMode; plan: "free" | "trial" | "pro" }) {
+  const t = webTokens(mode);
+  const cfg = {
+    free: { label: "Free", bg: t.surfaceAlt, fg: t.textSecondary },
+    trial: { label: "Trial", bg: t.me.soft, fg: t.me.ink },
+    pro: { label: "Pro", bg: t.text, fg: t.bg },
+  }[plan];
+  return (
+    <span className="rounded px-2 py-1 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ background: cfg.bg, color: cfg.fg }}>
+      {cfg.label}
+    </span>
+  );
+}
+
+type PromptGoalDraft = { title: string; note: string; locked: boolean };
+
+const emptyPromptDraft = (): PromptGoalDraft => ({ title: "", note: "", locked: false });
+
+function GoalPromptModal({
+  mode,
+  prompt,
+  today,
+  onClose,
+}: {
+  mode: ThemeMode;
+  prompt: GoalPromptTarget;
+  today: string;
+  onClose: () => void;
+}) {
+  const s = useJustDo();
+  const t = webTokens(mode);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [dismissPermanently, setDismissPermanently] = useState(false);
+  const yearlyKey = periodKeyOf("yearly", today);
+  const monthlyKey = periodKeyOf("monthly", today);
+  const currentMonthLabel = monthLabel(monthlyKey);
+  const [yearlyDrafts, setYearlyDrafts] = useState<PromptGoalDraft[]>([
+    emptyPromptDraft(),
+    emptyPromptDraft(),
+    emptyPromptDraft(),
+  ]);
+  const [monthlyDrafts, setMonthlyDrafts] = useState<PromptGoalDraft[]>([
+    emptyPromptDraft(),
+    emptyPromptDraft(),
+    emptyPromptDraft(),
+  ]);
+
+  const isOnboarding = prompt.kind === "onboarding";
+  const isYearlyStep = isOnboarding ? step === 1 : prompt.kind === "yearly";
+  const periodType: GoalPeriodType = isYearlyStep ? "yearly" : "monthly";
+  const periodKey = isYearlyStep ? yearlyKey : monthlyKey;
+  const drafts = isYearlyStep ? yearlyDrafts : monthlyDrafts;
+  const setDrafts = isYearlyStep ? setYearlyDrafts : setMonthlyDrafts;
+
+  const title = isOnboarding
+    ? isYearlyStep
+      ? `${yearlyKey}년, 한 해를 그려볼까요.`
+      : `${currentMonthLabel}, 한 달의 약속.`
+    : prompt.kind === "yearly"
+      ? "새해의 약속을 적어볼까요?"
+      : "이번 달, 한 가지만 약속한다면.";
+  const description = isYearlyStep
+    ? "먼 시점의 약속이라 처음엔 흐릿해도 괜찮아요. 마음에 걸리는 단어 한두 개부터 적어보세요."
+    : "이번 달의 작은 약속입니다. 연간 목표와 굳이 맞추지 않아도 괜찮아요.";
+
+  const updateDraft = (index: number, patch: Partial<PromptGoalDraft>) => {
+    setDrafts((items) => items.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  const addDraft = () => {
+    setDrafts((items) => (items.length >= 5 ? items : [...items, emptyPromptDraft()]));
+  };
+
+  const persistDismissal = (kind: GoalPromptTarget["kind"], key: string) => {
+    const promptType = kind === "onboarding" ? "onboarding" : kind;
+    s.dismissGoalPrompt({
+      promptType,
+      periodKey: key,
+      dismissedPermanentlyForPeriod: true,
+    });
+  };
+
+  const saveDrafts = (type: GoalPeriodType, key: string, items: PromptGoalDraft[]) => {
+    const existing = goalsForPeriod(s.state.goals, type, key);
+    const available = Math.max(0, 5 - existing.length);
+    items
+      .map((item) => ({
+        ...item,
+        title: item.title.trim(),
+        note: item.note.trim(),
+      }))
+      .filter((item) => item.title.length > 0)
+      .slice(0, available)
+      .forEach((item, index) => {
+        s.addGoal({
+          periodType: type,
+          periodKey: key,
+          title: item.title,
+          note: item.note || null,
+          sortOrder: existing.length + index,
+          locked: item.locked,
+          lockedAt: item.locked ? new Date().toISOString() : null,
+        });
+      });
+  };
+
+  const closeAndMaybeDismiss = () => {
+    if (prompt.kind === "onboarding") {
+      persistDismissal("onboarding", "initial");
+    } else if (dismissPermanently) {
+      persistDismissal(prompt.kind, prompt.periodKey);
+    }
+    onClose();
+  };
+
+  const primary = () => {
+    if (isOnboarding && step === 1) {
+      saveDrafts("yearly", yearlyKey, yearlyDrafts);
+      setStep(2);
+      return;
+    }
+    if (isOnboarding) {
+      saveDrafts("monthly", monthlyKey, monthlyDrafts);
+      persistDismissal("onboarding", "initial");
+      onClose();
+      return;
+    }
+    saveDrafts(periodType, periodKey, drafts);
+    if (dismissPermanently) persistDismissal(prompt.kind, prompt.periodKey);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={closeAndMaybeDismiss}>
+      <div className="flex max-h-[86vh] w-[640px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
+        <div className="border-b px-6 py-5" style={{ borderColor: t.divider }}>
+          {isOnboarding ? (
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>Step {step}/2</span>
+              <div className="h-1 flex-1 overflow-hidden rounded-full" style={{ background: t.surfaceAlt }}>
+                <div className="h-full rounded-full" style={{ width: step === 1 ? "50%" : "100%", background: t.accent }} />
+              </div>
+            </div>
+          ) : (
+            <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>
+              {prompt.kind === "yearly" ? "새해" : "새 달"} · {periodLabel(periodType, periodKey)}
+            </div>
+          )}
+          <div className="text-[24px] font-bold leading-tight tracking-[-0.7px]">{title}</div>
+          <div className="mt-2 text-[13px] leading-6" style={{ color: t.textSecondary }}>{description}</div>
+        </div>
+        <div className="flex min-h-0 flex-col gap-2 overflow-auto px-6 py-4">
+          {drafts.map((draft, index) => (
+            <div key={index} className="rounded-xl border p-3" style={{ borderColor: t.divider, background: t.bg2 }}>
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-[11px] font-bold" style={{ color: t.textTertiary }}>{index + 1}</span>
+                <input
+                  value={draft.title}
+                  onChange={(event) => updateDraft(index, { title: event.target.value })}
+                  placeholder={isYearlyStep ? "목표 적기" : "약속 적기"}
+                  className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold outline-none"
+                  style={{ color: t.text }}
+                />
+                <label className="flex items-center gap-1.5 text-[11px]" style={{ color: t.textTertiary }}>
+                  <input
+                    type="checkbox"
+                    checked={draft.locked}
+                    onChange={(event) => updateDraft(index, { locked: event.target.checked })}
+                  />
+                  고정
+                </label>
+              </div>
+              <input
+                value={draft.note}
+                onChange={(event) => updateDraft(index, { note: event.target.value })}
+                placeholder="메모"
+                className="mt-2 w-full bg-transparent pl-7 text-[12px] outline-none"
+                style={{ color: t.textSecondary }}
+              />
+            </div>
+          ))}
+          <button type="button" onClick={addDraft} disabled={drafts.length >= 5} className="rounded-lg border border-dashed px-3 py-2 text-[12px] font-semibold disabled:opacity-40" style={{ borderColor: t.dividerStrong, color: t.textTertiary }}>
+            + 항목 추가 <span className="font-normal">(최대 5개)</span>
+          </button>
+        </div>
+        <div className="flex items-center border-t px-6 py-4" style={{ borderColor: t.divider }}>
+          {prompt.kind !== "onboarding" ? (
+            <label className="flex items-center gap-2 text-[11.5px]" style={{ color: t.textTertiary }}>
+              <input type="checkbox" checked={dismissPermanently} onChange={(event) => setDismissPermanently(event.target.checked)} />
+              {prompt.kind === "yearly" ? "올해는 다시 보지 않기" : `${currentMonthLabel}엔 다시 보지 않기`}
+            </label>
+          ) : (
+            <button type="button" onClick={closeAndMaybeDismiss} className="text-[12px] font-medium" style={{ color: t.textTertiary }}>
+              나중에 할게요
+            </button>
+          )}
+          <div className="flex-1" />
+          {isOnboarding && step === 2 ? (
+            <button type="button" onClick={() => setStep(1)} className="mr-3 text-[12.5px]" style={{ color: t.textSecondary }}>
+              이전
+            </button>
+          ) : prompt.kind !== "onboarding" ? (
+            <button type="button" onClick={closeAndMaybeDismiss} className="mr-3 text-[12.5px]" style={{ color: t.textTertiary }}>
+              건너뛰기
+            </button>
+          ) : null}
+          <button type="button" onClick={primary} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: t.text, color: t.bg }}>
+            {isOnboarding ? (step === 1 ? `${currentMonthLabel} 약속으로` : "시작하기") : "저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoalPeriodSection({
+  mode,
+  title,
+  periodType,
+  periodKey,
+  goals,
+  tasks,
+  onAdd,
+  onEdit,
+  onReport,
+}: {
+  mode: ThemeMode;
+  title: string;
+  periodType: GoalPeriodType;
+  periodKey: string;
+  goals: Goal[];
+  tasks: Task[];
+  onAdd: () => void;
+  onEdit: (goal: Goal) => void;
+  onReport: () => void;
+}) {
+  const t = webTokens(mode);
+  const progress = goalProgressForPeriod(goals, tasks, periodType, periodKey);
+  const color = periodType === "yearly" ? t.me : t.habit;
+  return (
+    <section className="rounded-xl border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
+      <div className="mb-3 flex items-center gap-2">
+        <div className="text-[14px] font-bold tracking-[-0.3px]">{title}</div>
+        <span className="text-[11px]" style={{ color: t.textTertiary }}>{progress.length}/5</span>
+        <div className="flex-1" />
+        <button type="button" onClick={onReport} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.textSecondary }}>
+          리포트
+        </button>
+        <button type="button" onClick={onAdd} disabled={progress.length >= 5} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-40" style={{ borderColor: t.divider, color: t.text }}>
+          + 추가
+        </button>
+      </div>
+      <div className="grid gap-2">
+        {progress.length ? progress.map((item) => (
+          <button
+            key={item.goal.id}
+            type="button"
+            onClick={() => onEdit(item.goal)}
+            className="min-h-[132px] rounded-xl border p-4 text-left"
+            style={{ borderColor: t.divider, background: t.surface }}
+          >
+            <div className="mb-3 flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: color.solid }} />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.4px]" style={{ color: color.ink }}>{periodType === "yearly" ? "연간" : "월간"}</span>
+                  {item.goal.locked ? <span className="text-[10px]" style={{ color: t.textTertiary }}>고정</span> : null}
+                </div>
+                <div className="truncate text-[16px] font-bold tracking-[-0.4px]">{item.goal.title}</div>
+                {item.goal.note ? <div className="mt-1 line-clamp-2 text-[11.5px] leading-5" style={{ color: t.textSecondary }}>{item.goal.note}</div> : null}
+              </div>
+              <ProgressRing pct={item.progress} size={46} color={color.solid} bg={t.surfaceAlt} />
+            </div>
+            <ProgressBar pct={item.progress} color={color.solid} bg={t.surfaceAlt} />
+            <div className="mt-3 flex items-baseline gap-3 text-[11px]" style={{ color: t.textTertiary }}>
+              <span><b className="text-[13px]" style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b> 진행</span>
+              <span>{item.completed.length}/{item.related.length} task</span>
+              {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
+            </div>
+          </button>
+        )) : (
+          <div className="rounded-xl border border-dashed px-4 py-8 text-center text-[12.5px]" style={{ borderColor: t.dividerStrong, color: t.textTertiary }}>
+            아직 목표가 없습니다.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ProgressRing({ pct, size, color, bg }: { pct: number; size: number; color: string; bg: string }) {
+  const stroke = Math.max(3, Math.round(size * 0.09));
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      <circle cx={size / 2} cy={size / 2} r={r} stroke={bg} strokeWidth={stroke} fill="none" />
+      <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - c * pct} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+    </svg>
+  );
+}
+
+function ProgressBar({ pct, color, bg }: { pct: number; color: string; bg: string }) {
+  return (
+    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: bg }}>
+      <div className="h-full rounded-full" style={{ width: `${Math.round(pct * 100)}%`, background: color }} />
+    </div>
+  );
+}
+
+function GoalEditModal({
+  mode,
+  draft,
+  onChange,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  mode: ThemeMode;
+  draft: GoalDraft;
+  onChange: (draft: GoalDraft) => void;
+  onClose: () => void;
+  onSave: () => void;
+  onDelete?: () => void;
+}) {
+  const t = webTokens(mode);
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
+      <div className="w-[520px] max-w-[92vw] overflow-hidden rounded-2xl border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
+        <div className="border-b px-5 py-4" style={{ borderColor: t.divider }}>
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-[18px] font-bold tracking-[-0.4px]">{draft.id ? "목표 수정" : "목표 추가"}</div>
+            <IconShellButton mode={mode} title="닫기" onClick={onClose}><IconClose /></IconShellButton>
+          </div>
+          <div className="text-[12px]" style={{ color: t.textTertiary }}>{periodLabel(draft.periodType, draft.periodKey)} · 최대 5개</div>
+        </div>
+        <div className="flex flex-col gap-3 px-5 py-4">
+          <input
+            value={draft.title}
+            onChange={(event) => onChange({ ...draft, title: event.target.value })}
+            placeholder={draft.periodType === "yearly" ? "올해의 큰 방향" : "이번 달의 약속"}
+            className="w-full border-b bg-transparent pb-3 text-[19px] font-semibold tracking-[-0.3px] outline-none"
+            style={{ borderColor: t.divider, color: t.text }}
+          />
+          <textarea
+            value={draft.note}
+            onChange={(event) => onChange({ ...draft, note: event.target.value })}
+            placeholder="메모"
+            className="min-h-[88px] resize-none rounded-lg border bg-transparent px-3 py-2 text-[13px] outline-none"
+            style={{ borderColor: t.divider, color: t.text }}
+          />
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2" style={{ borderColor: t.divider, background: t.bg2 }}>
+            <Switch mode={mode} on={draft.locked} onChange={(locked) => onChange({ ...draft, locked })} />
+            <div>
+              <div className="text-[13px] font-semibold">이번 기간 동안 목표를 고정할게요</div>
+              <div className="text-[11px]" style={{ color: t.textTertiary }}>고정한 목표는 수정 전에 한 번 더 확인합니다.</div>
+            </div>
+          </label>
+        </div>
+        <div className="flex items-center border-t px-5 py-3" style={{ borderColor: t.divider }}>
+          {onDelete ? <button type="button" onClick={onDelete} className="text-[12px] font-semibold" style={{ color: t.danger }}>삭제</button> : null}
+          <div className="flex-1" />
+          <button type="button" onClick={onClose} className="px-3.5 py-2 text-[13px] font-medium" style={{ color: t.textSecondary }}>취소</button>
+          <button type="button" onClick={onSave} className="rounded-lg px-5 py-2 text-[13px] font-semibold text-white" style={{ background: t.accent }}>
+            저장
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LockedGoalModal({ mode, goal, onClose, onUnlock }: { mode: ThemeMode; goal: Goal; onClose: () => void; onUnlock: () => void }) {
+  const t = webTokens(mode);
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
+      <div className="w-[460px] max-w-[92vw] overflow-hidden rounded-2xl border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
+        <div className="px-7 pb-2 pt-7">
+          <div className="mb-4 text-[28px]" style={{ color: t.textSecondary }}>◇</div>
+          <div className="text-[22px] font-bold tracking-[-0.6px]">이 약속, 정말 풀까요?</div>
+          <div className="mt-3 text-[13px] leading-6" style={{ color: t.textSecondary }}>
+            &quot;{goal.title}&quot;은 고정한 목표입니다. 풀고 수정하면 처음 세운 목표와 달라질 수 있어요.
+          </div>
+        </div>
+        <div className="mt-5 flex items-center border-t px-7 py-5" style={{ borderColor: t.divider }}>
+          <button type="button" onClick={onClose} className="text-[12.5px]" style={{ color: t.textTertiary }}>그대로 두기</button>
+          <div className="flex-1" />
+          <button type="button" onClick={onUnlock} className="rounded-lg px-4 py-2 text-[12.5px] font-semibold" style={{ background: t.text, color: t.bg }}>
+            잠금 풀고 수정
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: NonNullable<ReportTarget>; onClose: () => void }) {
+  const s = useJustDo();
+  const t = webTokens(mode);
+  const [step, setStep] = useState(0);
+  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, target.periodType, target.periodKey);
+  const heatmap = periodActivityHeatmap(s.state.tasks, s.state.habits, target.periodType, target.periodKey);
+  const totalRelated = progress.reduce((sum, item) => sum + item.related.length, 0);
+  const totalCompleted = progress.reduce((sum, item) => sum + item.completed.length, 0);
+  const pct = totalRelated ? totalCompleted / totalRelated : 0;
+  const isYear = target.periodType === "yearly";
+  const labels = isYear
+    ? ["요약", "월별 흐름", "연간 목표", "이야기"]
+    : ["완료율", "활동", "목표별 진행", "이야기"];
+  const title = isYear ? `${target.periodKey} 리포트` : `${monthLabel(target.periodKey)} 리포트`;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
+      <div className="flex h-[600px] w-[620px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center gap-3 px-6 pt-5">
+          <div className="text-[13px] font-bold tracking-[-0.2px]">{title}</div>
+          <div className="flex-1" />
+          <IconShellButton mode={mode} title="닫기" onClick={onClose}><IconClose /></IconShellButton>
+        </div>
+        <div className="flex gap-1.5 px-6 pt-4">
+          {labels.map((label, index) => (
+            <button key={label} type="button" onClick={() => setStep(index)} className="h-1 flex-1 rounded-full" style={{ background: index <= step ? t.accent : t.surfaceAlt }} aria-label={label} />
+          ))}
+        </div>
+        <div className="min-h-0 flex-1 px-6 pt-5">
+          <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>{periodLabel(target.periodType, target.periodKey)} · {labels[step]}</div>
+          {step === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="relative">
+                <ProgressRing pct={pct} size={176} color={t.me.solid} bg={t.surfaceAlt} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <div className="text-[50px] font-bold tracking-[-2px]">{Math.round(pct * 100)}<span className="text-[24px]">%</span></div>
+                  <div className="text-[12px]" style={{ color: t.textTertiary }}>{isYear ? "평균 진행률" : "완료율"}</div>
+                </div>
+              </div>
+              <div className="mt-7 text-[16px] font-semibold">{totalCompleted} / {totalRelated} task 완료</div>
+              <div className="mt-2 text-[13px]" style={{ color: t.textSecondary }}>목표 {progress.length}개를 기준으로 계산했어요.</div>
+            </div>
+          ) : step === 1 ? (
+            <div className="flex h-full flex-col justify-center">
+              <div className="mb-6 text-[20px] font-bold tracking-[-0.5px]">{isYear ? "달마다 어떻게 움직였나요" : "이 달, 언제 활동했나요"}</div>
+              {isYear ? <YearTrend values={heatmap} mode={mode} /> : <Heatmap values={heatmap} mode={mode} />}
+              <p className="mt-6 text-[13.5px] leading-6" style={{ color: t.textSecondary }}>
+                가장 활동이 많았던 구간을 기준으로 리듬을 확인할 수 있습니다.
+              </p>
+            </div>
+          ) : step === 2 ? (
+            <div className="flex h-full flex-col justify-center gap-4">
+              <div className="text-[16px] font-bold tracking-[-0.3px]">목표별 진행</div>
+              {progress.map((item) => (
+                <div key={item.goal.id}>
+                  <div className="mb-1 flex items-baseline gap-2">
+                    <span className="text-[13.5px] font-semibold">{item.goal.title}</span>
+                    {item.goal.locked ? <span className="text-[10px]" style={{ color: t.textTertiary }}>고정</span> : null}
+                    <div className="flex-1" />
+                    <span className="text-[11.5px]" style={{ color: t.textTertiary }}>{item.completed.length}/{item.related.length} · <b style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b></span>
+                  </div>
+                  <ProgressBar pct={item.progress} color={isYear ? t.me.solid : t.habit.solid} bg={t.surfaceAlt} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-full flex-col">
+              <ReportIllustration mode={mode} tone={isYear ? "cool" : "warm"} />
+              <div className="mt-5 text-[22px] font-bold leading-tight tracking-[-0.7px]">{isYear ? "한 해의 방향이 남긴 흔적." : "이번 달의 약속이 만든 흐름."}</div>
+              <div className="mt-4 flex flex-col gap-3 text-[14px] leading-7">
+                <p>이번 기간에는 {progress.length}개의 목표를 중심으로 {totalCompleted}개의 task가 완료됐습니다.</p>
+                <p>완료된 항목과 남은 항목이 함께 보여주는 것은 속도보다 방향입니다. 다음 기간에는 가장 진행률이 낮은 목표 하나를 먼저 작게 쪼개보세요.</p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center border-t px-6 py-4" style={{ borderColor: t.divider }}>
+          <span className="text-[12px]" style={{ color: t.textTertiary }}>{step + 1} / 4</span>
+          <div className="flex-1" />
+          {step > 0 ? <button type="button" onClick={() => setStep(step - 1)} className="mr-4 text-[12.5px]" style={{ color: t.textSecondary }}>이전</button> : null}
+          <button type="button" onClick={step === 3 ? onClose : () => setStep(step + 1)} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: step === 3 ? t.text : t.accent, color: step === 3 ? t.bg : "#fff" }}>
+            {step === 3 ? "완료" : "다음"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoalReportPreviewModal({ mode, target, onClose, onUpgrade }: { mode: ThemeMode; target: NonNullable<ReportTarget>; onClose: () => void; onUpgrade: () => void }) {
+  const s = useJustDo();
+  const t = webTokens(mode);
+  const goals = goalsForPeriod(s.state.goals, target.periodType, target.periodKey);
+  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, target.periodType, target.periodKey);
+  const active = progress.filter((item) => item.related.length > 0).length;
+  const complete = progress.filter((item) => item.progress >= 1).length;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
+      <div className="w-[720px] max-w-[94vw] overflow-hidden rounded-2xl border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
+        <div className="border-b px-6 py-5" style={{ borderColor: t.divider }}>
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>{periodLabel(target.periodType, target.periodKey)} · Free 미리보기</div>
+          <div className="flex items-center gap-3">
+            <div className="text-[26px] font-bold tracking-[-0.8px]">목표 리포트 요약</div>
+            <PlanBadge mode={mode} plan="free" />
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="mb-4 grid grid-cols-3 gap-3">
+            {[
+              ["목표 개수", goals.length],
+              ["진행한 목표", active],
+              ["달성한 목표", complete],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
+                <div className="text-[10.5px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>{label}</div>
+                <div className="mt-1 text-[28px] font-bold tracking-[-0.9px]">{value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="relative min-h-[260px]">
+            <div className="flex flex-col gap-3 opacity-45 blur-sm">
+              {progress.slice(0, 3).map((item) => (
+                <div key={item.goal.id} className="rounded-xl border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
+                  <div className="mb-2 text-[13px] font-semibold">{item.goal.title}</div>
+                  <ProgressBar pct={item.progress} color={t.habit.solid} bg={t.surfaceAlt} />
+                </div>
+              ))}
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <div className="max-w-[460px] rounded-2xl border p-6 text-center shadow-xl" style={{ borderColor: t.divider, background: t.surface }}>
+                <div className="text-[22px]" style={{ color: t.textSecondary }}>◇</div>
+                <div className="mt-2 text-[17px] font-bold tracking-[-0.4px]">이 아래는 Pro에서 펼쳐져요</div>
+                <div className="mt-2 text-[12.5px] leading-5" style={{ color: t.textSecondary }}>목표별 완료율, 활동 흐름, 한 달의 이야기까지 Trial 또는 Pro에서 볼 수 있습니다.</div>
+                <button type="button" onClick={onUpgrade} className="mt-4 rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: t.text, color: t.bg }}>Pro로 펼치기</button>
+                <div className="mt-2 text-[11px]" style={{ color: t.textTertiary }}>7일 무료 체험 · 언제든 취소</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Heatmap({ values, mode }: { values: number[]; mode: ThemeMode }) {
+  const t = webTokens(mode);
+  const max = Math.max(1, ...values);
+  return (
+    <div>
+      <div className="grid grid-cols-[repeat(31,minmax(0,1fr))] gap-1">
+        {values.map((value, index) => (
+          <div key={index} className="aspect-square rounded-[3px]" style={{ background: value ? t.me.solid : t.surfaceAlt, opacity: value ? 0.25 + (value / max) * 0.75 : 1 }} title={`${index + 1}일 · ${value}`} />
+        ))}
+      </div>
+      <div className="mt-2 flex justify-between text-[10px]" style={{ color: t.textTertiary }}>
+        <span>1일</span><span>16일</span><span>31일</span>
+      </div>
+    </div>
+  );
+}
+
+function YearTrend({ values, mode }: { values: number[]; mode: ThemeMode }) {
+  const t = webTokens(mode);
+  const max = Math.max(1, ...values);
+  return (
+    <div className="flex h-[180px] items-end gap-2">
+      {values.map((value, index) => (
+        <div key={index} className="flex flex-1 flex-col items-center gap-2">
+          <div className="w-full rounded-md" style={{ height: `${Math.max(8, (value / max) * 150)}px`, background: value === max ? t.me.solid : t.me.soft }} />
+          <span className="text-[10px]" style={{ color: t.textTertiary }}>{index + 1}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReportIllustration({ mode, tone }: { mode: ThemeMode; tone: "warm" | "cool" }) {
+  const t = webTokens(mode);
+  const bg = tone === "warm" ? t.ext.soft : t.me.soft;
+  const accent = tone === "warm" ? t.ext.solid : t.me.solid;
+  return (
+    <div className="h-[120px] overflow-hidden rounded-xl" style={{ background: bg }}>
+      <div className="relative h-full">
+        <div className="absolute right-10 top-7 h-11 w-11 rounded-full opacity-80" style={{ background: accent }} />
+        <div className="absolute bottom-0 h-12 w-full opacity-70" style={{ background: t.surfaceAlt }} />
+        <div className="absolute bottom-10 h-px w-full opacity-50" style={{ background: t.dividerStrong }} />
+        <div className="absolute bottom-6 h-px w-full opacity-50" style={{ background: t.dividerStrong }} />
+      </div>
     </div>
   );
 }

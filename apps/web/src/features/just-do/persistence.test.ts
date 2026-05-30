@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AppState, Habit, Task } from "@/types/domain";
+import type { AppState, Goal, GoalPromptDismissal, Habit, Task } from "@/types/domain";
 import {
   createIndexedDBStorage,
   createMemoryStorage,
@@ -25,6 +25,8 @@ const stripVolatile = (state: AppState) => ({
   categories: state.categories,
   tasks: state.tasks,
   habits: state.habits,
+  goals: state.goals,
+  goalPromptDismissals: state.goalPromptDismissals,
   settings: state.settings,
 });
 
@@ -48,6 +50,29 @@ const sampleHabit = (over: Partial<Habit> = {}): Habit => ({
   startedAt: "2026-04-01",
   recurType: "daily",
   log: {},
+  ...over,
+});
+
+const sampleGoal = (over: Partial<Goal> = {}): Goal => ({
+  id: "g1",
+  periodType: "monthly",
+  periodKey: "2026-04",
+  title: "면접 준비",
+  note: null,
+  sortOrder: 0,
+  locked: false,
+  lockedAt: null,
+  ...over,
+});
+
+const sampleDismissal = (
+  over: Partial<GoalPromptDismissal> = {},
+): GoalPromptDismissal => ({
+  id: "d1",
+  promptType: "monthly",
+  periodKey: "2026-04",
+  dismissedPermanentlyForPeriod: true,
+  dismissedAt: "2026-04-02T00:00:00.000Z",
   ...over,
 });
 
@@ -155,6 +180,16 @@ describe("createMemoryStorage", () => {
     await storage.setHabitLog("h1", "2026-04-29", 1);
     const snap = await storage.load();
     expect(snap?.habits[0].log).toEqual({ "2026-04-28": 1, "2026-04-29": 1 });
+  });
+
+  it("persists goals and prompt dismissals", async () => {
+    const storage = createMemoryStorage();
+    await storage.upsertGoal(sampleGoal({ title: "v1" }));
+    await storage.upsertGoal(sampleGoal({ title: "v2" }));
+    await storage.upsertGoalPromptDismissal(sampleDismissal());
+    const snap = await storage.load();
+    expect(snap?.goals).toEqual([sampleGoal({ title: "v2" })]);
+    expect(snap?.goalPromptDismissals).toEqual([sampleDismissal()]);
   });
 
   it("saveSettings and saveView persist atomically", async () => {
@@ -419,7 +454,11 @@ describe("createSyncedStorage", () => {
       },
       async deleteTask() {},
       async upsertHabit() {},
+      async deleteHabit() {},
       async setHabitLog() {},
+      async upsertGoal() {},
+      async deleteGoal() {},
+      async upsertGoalPromptDismissal() {},
     };
     const synced = createSyncedStorage(local, remote);
 
@@ -475,9 +514,25 @@ describe("createSyncedStorage", () => {
         if (!remoteOnline) throw new Error("offline");
         await remoteBackend.upsertHabit(habit);
       },
+      async deleteHabit(id) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.deleteHabit(id);
+      },
       async setHabitLog(habitId, iso, value) {
         if (!remoteOnline) throw new Error("offline");
         await remoteBackend.setHabitLog(habitId, iso, value);
+      },
+      async upsertGoal(goal) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.upsertGoal(goal);
+      },
+      async deleteGoal(id) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.deleteGoal(id);
+      },
+      async upsertGoalPromptDismissal(dismissal) {
+        if (!remoteOnline) throw new Error("offline");
+        await remoteBackend.upsertGoalPromptDismissal(dismissal);
       },
     };
     const synced = createSyncedStorage(local, remote);
@@ -554,7 +609,11 @@ describe("createSyncedStorage", () => {
         calls.push(`delete:${id}`);
       },
       async upsertHabit() {},
+      async deleteHabit() {},
       async setHabitLog() {},
+      async upsertGoal() {},
+      async deleteGoal() {},
+      async upsertGoalPromptDismissal() {},
     };
 
     await local.upsertTask(sampleTask({ id: "a" }));

@@ -436,9 +436,13 @@ private struct HomeRootView: View {
     @State private var editingHabit: Habit?
     @State private var isShowingHabitManager = false
     @State private var isShowingCategoryManager = false
+    @State private var isShowingGoalManager = false
     @State private var isShowingDayPanel = false
     @AppStorage("justdo.isDarkMode") private var isDarkMode = false
     @State private var exportURL: ExportFile?
+    @State private var goalReportPresentation: GoalReportPresentation?
+    @State private var goalPromptPresentation: GoalPromptPresentation?
+    @State private var suppressedGoalPromptIDs: Set<String> = []
     @State private var loadError: String?
     @State private var actionMessage: String?
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
@@ -511,6 +515,30 @@ private struct HomeRootView: View {
             )
             .presentationDetents([.large])
         }
+        .sheet(isPresented: $isShowingGoalManager) {
+            GoalManagementSheet(
+                goals: snapshot?.goals ?? [],
+                tasks: snapshot?.tasks ?? [],
+                habits: snapshot?.habits ?? [],
+                isProPlan: isProPlan,
+                onAddGoal: addGoal(_:),
+                onSaveGoal: saveGoal(_:),
+                onDeleteGoal: deleteGoal(_:),
+                onOpenReport: { target in
+                    isShowingGoalManager = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        goalReportPresentation = GoalReportPresentation(
+                            target: target,
+                            isPreview: !isProPlan
+                        )
+                    }
+                }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.background)
+        }
         .sheet(item: $exportURL) { file in
             DataExportSheet(url: file.url)
                 .presentationDetents([.height(220)])
@@ -567,6 +595,22 @@ private struct HomeRootView: View {
         }
         .onChange(of: pendingDetailRoute) { _, _ in
             presentPendingDetailRouteIfNeeded()
+        }
+        .fullScreenCover(item: $goalReportPresentation) { presentation in
+            GoalReportFullScreen(
+                presentation: presentation,
+                goals: snapshot?.goals ?? [],
+                tasks: snapshot?.tasks ?? [],
+                habits: snapshot?.habits ?? [],
+                onClose: { goalReportPresentation = nil }
+            )
+        }
+        .fullScreenCover(item: $goalPromptPresentation) { presentation in
+            GoalPromptFullScreen(
+                presentation: presentation,
+                onSave: saveGoalPrompt(_:entries:),
+                onDismiss: dismissGoalPrompt(_:dismissedPermanentlyForPeriod:)
+            )
         }
     }
 
@@ -626,6 +670,7 @@ private struct HomeRootView: View {
                 onSetNotifyTime: setNotifyTime(_:),
                 onSetWeekStart: setWeekStart(_:),
                 onSetJustDoMode: setJustDoModeFromSettings(_:),
+                onManageGoals: { isShowingGoalManager = true },
                 onManageHabits: { isShowingHabitManager = true },
                 onManageCategories: { isShowingCategoryManager = true },
                 onExportData: exportData,
@@ -763,8 +808,69 @@ private struct HomeRootView: View {
             }
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             loadError = nil
+            presentGoalPromptIfNeeded(from: loaded)
         } catch {
             loadError = "Could not load local mirror."
+        }
+    }
+
+    private func presentGoalPromptIfNeeded(from loaded: AppSnapshot) {
+        guard goalPromptPresentation == nil,
+              goalReportPresentation == nil,
+              !isShowingGoalManager,
+              !isShowingAddTask,
+              !isShowingDayPanel
+        else {
+            return
+        }
+
+        guard let nextPrompt = nextGoalPrompt(from: loaded),
+              !suppressedGoalPromptIDs.contains(nextPrompt.id)
+        else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            guard goalPromptPresentation == nil else { return }
+            goalPromptPresentation = nextPrompt
+        }
+    }
+
+    private func nextGoalPrompt(from loaded: AppSnapshot) -> GoalPromptPresentation? {
+        let today = JDDate.todayComponents
+        let todayISO = JDDate.todayISO
+        let yearlyKey = GoalSelectors.periodKey(.yearly, iso: todayISO)
+        let monthlyKey = GoalSelectors.periodKey(.monthly, iso: todayISO)
+        let yearlyGoals = GoalSelectors.goalsForPeriod(loaded.goals, type: .yearly, periodKey: yearlyKey)
+        let monthlyGoals = GoalSelectors.goalsForPeriod(loaded.goals, type: .monthly, periodKey: monthlyKey)
+
+        if yearlyGoals.isEmpty,
+           monthlyGoals.isEmpty,
+           !hasGoalPromptDismissal(loaded, promptType: .onboarding, periodKey: GoalPromptPresentation.onboardingPeriodKey) {
+            return GoalPromptPresentation(kind: .onboarding, periodKey: GoalPromptPresentation.onboardingPeriodKey)
+        }
+
+        if today.month == 1,
+           (1...7).contains(today.day),
+           yearlyGoals.isEmpty,
+           !hasGoalPromptDismissal(loaded, promptType: .yearly, periodKey: yearlyKey) {
+            return GoalPromptPresentation(kind: .yearly, periodKey: yearlyKey)
+        }
+
+        if (1...3).contains(today.day),
+           monthlyGoals.isEmpty,
+           !hasGoalPromptDismissal(loaded, promptType: .monthly, periodKey: monthlyKey) {
+            return GoalPromptPresentation(kind: .monthly, periodKey: monthlyKey)
+        }
+
+        return nil
+    }
+
+    private func hasGoalPromptDismissal(_ snapshot: AppSnapshot, promptType: GoalPromptType, periodKey: String) -> Bool {
+        snapshot.goalPromptDismissals.contains {
+            $0.promptType == promptType &&
+            $0.periodKey == periodKey &&
+            $0.dismissedPermanentlyForPeriod
         }
     }
 
@@ -1143,6 +1249,233 @@ private struct HomeRootView: View {
         }
     }
 
+    private func addGoal(_ draft: GoalDraft) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            actionMessage = "목표 제목을 입력해주세요."
+            return
+        }
+
+        let currentGoals = GoalSelectors.goalsForPeriod(
+            snapshot?.goals ?? [],
+            type: draft.periodType,
+            periodKey: draft.periodKey
+        )
+        guard currentGoals.count < 5 else {
+            actionMessage = "목표는 기간별 최대 5개까지 만들 수 있습니다."
+            return
+        }
+
+        let goal = Goal(
+            id: UUID(),
+            periodType: draft.periodType,
+            periodKey: draft.periodKey,
+            title: trimmedTitle,
+            note: draft.note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank,
+            sortOrder: currentGoals.count,
+            locked: draft.locked,
+            lockedAt: draft.locked ? JDDate.nowISODateTime : nil
+        )
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .goalUpsert(goal)
+                )
+            )
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "목표가 추가되었습니다."
+        } catch {
+            actionMessage = "목표를 추가하지 못했습니다."
+        }
+    }
+
+    private func saveGoal(_ goal: Goal) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        let trimmedTitle = goal.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            actionMessage = "목표 제목을 입력해주세요."
+            return
+        }
+
+        var updated = goal
+        updated.title = trimmedTitle
+        updated.note = goal.note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+        updated.lockedAt = updated.locked ? (updated.lockedAt ?? JDDate.nowISODateTime) : nil
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .goalUpsert(updated)
+                )
+            )
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "목표가 수정되었습니다."
+        } catch {
+            actionMessage = "목표를 수정하지 못했습니다."
+        }
+    }
+
+    private func deleteGoal(_ goal: Goal) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .goalDelete(id: goal.id)
+                )
+            )
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "목표가 삭제되었습니다."
+        } catch {
+            actionMessage = "목표를 삭제하지 못했습니다."
+        }
+    }
+
+    private func saveGoalPrompt(_ presentation: GoalPromptPresentation, entries: [GoalPromptSaveEntry]) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        let normalizedEntries = entries.map { entry in
+            GoalPromptSaveEntry(
+                periodType: entry.periodType,
+                periodKey: entry.periodKey,
+                drafts: Array(
+                    entry.drafts
+                        .map { draft in
+                            GoalPromptDraft(
+                                title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                note: draft.note.trimmingCharacters(in: .whitespacesAndNewlines),
+                                locked: draft.locked
+                            )
+                        }
+                        .filter { !$0.title.isEmpty }
+                        .prefix(5)
+                )
+            )
+        }
+        .filter { !$0.drafts.isEmpty }
+
+        guard !normalizedEntries.isEmpty else {
+            actionMessage = "목표 제목을 입력해주세요."
+            return
+        }
+
+        let updatedAt = JDDate.nowISODateTime
+        do {
+            for entry in normalizedEntries {
+                let existing = GoalSelectors.goalsForPeriod(
+                    snapshot?.goals ?? [],
+                    type: entry.periodType,
+                    periodKey: entry.periodKey
+                )
+                for (index, draft) in entry.drafts.enumerated() where index + existing.count < 5 {
+                    let goal = Goal(
+                        id: UUID(),
+                        periodType: entry.periodType,
+                        periodKey: entry.periodKey,
+                        title: draft.title,
+                        note: draft.note.nilIfBlank,
+                        sortOrder: existing.count + index,
+                        locked: draft.locked,
+                        lockedAt: draft.locked ? updatedAt : nil
+                    )
+                    try snapshotStore.applyAndEnqueue(
+                        QueuedMutation(
+                            id: UUID(),
+                            updatedAt: updatedAt,
+                            mutation: .goalUpsert(goal)
+                        )
+                    )
+                }
+            }
+
+            suppressedGoalPromptIDs.insert(presentation.id)
+            goalPromptPresentation = nil
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "목표가 저장되었습니다."
+        } catch {
+            actionMessage = "목표를 저장하지 못했습니다."
+        }
+    }
+
+    private func dismissGoalPrompt(_ presentation: GoalPromptPresentation, dismissedPermanentlyForPeriod: Bool) {
+        suppressedGoalPromptIDs.insert(presentation.id)
+        goalPromptPresentation = nil
+
+        let shouldPersist =
+            presentation.kind == .onboarding ||
+            dismissedPermanentlyForPeriod
+        guard shouldPersist else {
+            return
+        }
+        upsertGoalPromptDismissal(
+            promptType: presentation.kind.promptType,
+            periodKey: presentation.periodKey,
+            dismissedPermanentlyForPeriod: dismissedPermanentlyForPeriod || presentation.kind == .onboarding
+        )
+    }
+
+    private func upsertGoalPromptDismissal(
+        promptType: GoalPromptType,
+        periodKey: String,
+        dismissedPermanentlyForPeriod: Bool
+    ) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        let existing = snapshot?.goalPromptDismissals.first {
+            $0.promptType == promptType && $0.periodKey == periodKey
+        }
+        let dismissal = GoalPromptDismissal(
+            id: existing?.id ?? UUID(),
+            promptType: promptType,
+            periodKey: periodKey,
+            dismissedPermanentlyForPeriod: dismissedPermanentlyForPeriod,
+            dismissedAt: JDDate.nowISODateTime
+        )
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .goalPromptDismissalUpsert(dismissal)
+                )
+            )
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+        } catch {
+            actionMessage = "목표 알림 상태를 저장하지 못했습니다."
+        }
+    }
+
     private func exportData() {
         guard let snapshot else {
             actionMessage = "Export data is unavailable."
@@ -1175,7 +1508,8 @@ private struct HomeRootView: View {
         let mutations =
             snapshot.tasks.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .taskDelete(id: $0.id)) } +
             snapshot.habits.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .habitDelete(id: $0.id)) } +
-            snapshot.categories.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .categoryDelete(id: $0.id)) }
+            snapshot.categories.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .categoryDelete(id: $0.id)) } +
+            snapshot.goals.map { QueuedMutation(id: UUID(), updatedAt: updatedAt, mutation: .goalDelete(id: $0.id)) }
 
         guard !mutations.isEmpty else {
             actionMessage = "No data to reset."
@@ -2482,6 +2816,7 @@ private struct SettingsRootTabView: View {
     let onSetNotifyTime: (String) -> Void
     let onSetWeekStart: (Int) -> Void
     let onSetJustDoMode: (Bool) -> Void
+    let onManageGoals: () -> Void
     let onManageHabits: () -> Void
     let onManageCategories: () -> Void
     let onExportData: () -> Void
@@ -2578,6 +2913,7 @@ private struct SettingsRootTabView: View {
                 }
                 SettingGroup(label: "데이터") {
                     SyncStatusRow(status: syncStatus, actionMessage: actionMessage, onRetry: onRetrySync)
+                    SettingsRow(title: "목표", chevron: true, action: onManageGoals)
                     SettingsRow(title: "습관 관리", chevron: true, action: onManageHabits)
                     SettingsRow(title: "카테고리 관리", chevron: true, action: onManageCategories)
                     SettingsRow(
@@ -2899,6 +3235,15 @@ private struct ExportFile: Identifiable {
     var id: String {
         url.absoluteString
     }
+}
+
+private func dismissKeyboard() {
+    UIApplication.shared.sendAction(
+        #selector(UIResponder.resignFirstResponder),
+        to: nil,
+        from: nil,
+        for: nil
+    )
 }
 
 private struct DataExportSheet: View {
@@ -3364,6 +3709,1705 @@ private struct HabitSevenDayRow: View {
                 .foregroundStyle(JDTheme.habit)
                 .frame(width: 30, alignment: .trailing)
         }
+    }
+}
+
+private enum GoalPromptKind: String, Equatable {
+    case onboarding
+    case monthly
+    case yearly
+
+    var promptType: GoalPromptType {
+        switch self {
+        case .onboarding:
+            .onboarding
+        case .monthly:
+            .monthly
+        case .yearly:
+            .yearly
+        }
+    }
+}
+
+private struct GoalPromptPresentation: Identifiable, Equatable {
+    static let onboardingPeriodKey = "initial"
+
+    var kind: GoalPromptKind
+    var periodKey: String
+
+    var id: String { "\(kind.rawValue)-\(periodKey)" }
+
+    var periodTargets: [(type: GoalPeriodType, key: String)] {
+        switch kind {
+        case .onboarding:
+            let today = JDDate.todayISO
+            return [
+                (.yearly, GoalSelectors.periodKey(.yearly, iso: today)),
+                (.monthly, GoalSelectors.periodKey(.monthly, iso: today))
+            ]
+        case .monthly:
+            return [(.monthly, periodKey)]
+        case .yearly:
+            return [(.yearly, periodKey)]
+        }
+    }
+}
+
+private struct GoalPromptDraft: Identifiable, Equatable {
+    var id = UUID()
+    var title: String
+    var note: String
+    var locked: Bool
+
+    static func emptyRows(_ count: Int) -> [GoalPromptDraft] {
+        (0..<count).map { _ in GoalPromptDraft(title: "", note: "", locked: true) }
+    }
+}
+
+private struct GoalPromptSaveEntry {
+    var periodType: GoalPeriodType
+    var periodKey: String
+    var drafts: [GoalPromptDraft]
+}
+
+private struct GoalPromptFullScreen: View {
+    let presentation: GoalPromptPresentation
+    let onSave: (GoalPromptPresentation, [GoalPromptSaveEntry]) -> Void
+    let onDismiss: (GoalPromptPresentation, Bool) -> Void
+
+    var body: some View {
+        ZStack {
+            JDTheme.background.ignoresSafeArea()
+            switch presentation.kind {
+            case .onboarding:
+                GoalOnboardingPrompt(
+                    presentation: presentation,
+                    onSave: onSave,
+                    onDismiss: onDismiss
+                )
+            case .monthly:
+                GoalPeriodPrompt(
+                    presentation: presentation,
+                    title: "\(GoalSelectors.periodLabel(.monthly, periodKey: presentation.periodKey))의 작은 약속, 정해볼까요?",
+                    eyebrow: "\(GoalSelectors.periodLabel(.monthly, periodKey: presentation.periodKey)) · 새 달",
+                    bodyText: "한 달의 흐름을 잡아줄 3-5개의 약속. 마지막 날에 함께 돌아봐요.",
+                    tint: JDTheme.habit,
+                    sampleDrafts: GoalPromptDraft.emptyRows(1),
+                    onSave: onSave,
+                    onDismiss: onDismiss
+                )
+            case .yearly:
+                GoalPeriodPrompt(
+                    presentation: presentation,
+                    title: "새해의 약속을 적어볼까요?",
+                    eyebrow: "\(presentation.periodKey)년 · 새해",
+                    bodyText: "한 해를 관통할 4-5개의 큰 방향. 12월에 다시 만나서 돌아볼 수 있어요.",
+                    tint: JDTheme.me,
+                    sampleDrafts: GoalPromptDraft.emptyRows(1),
+                    onSave: onSave,
+                    onDismiss: onDismiss
+                )
+            }
+        }
+    }
+}
+
+private struct GoalOnboardingGuide: View {
+    let isStarting: Bool
+    let onStart: () -> Void
+    let onSkip: () -> Void
+
+    @State private var page = 0
+
+    private let pages: [GoalOnboardingGuidePage] = [
+        GoalOnboardingGuidePage(
+            title: "목표를 한 줄로 남겨요",
+            body: "거창한 계획보다 올해와 이번 달에 지켜보고 싶은 방향을 먼저 적습니다.\n나중에 리포트에서 그 흐름을 함께 돌아볼 수 있어요.",
+            tint: JDTheme.me,
+            preview: .input
+        ),
+        GoalOnboardingGuidePage(
+            title: "고정해도 바꿀 수 있어요",
+            body: "자물쇠는 처음 마음을 기억하기 위한 표시예요.\n나중에 확인하고 수정할 수 있습니다.",
+            tint: JDTheme.habit,
+            preview: .lock
+        ),
+        GoalOnboardingGuidePage(
+            title: "리포트로 돌아봐요",
+            body: "완료한 일과 습관 흐름을 목표와 함께 묶어 정리합니다.\n한 달과 한 해가 어떻게 흘렀는지 차분히 볼 수 있어요.",
+            tint: JDTheme.external,
+            preview: .report
+        )
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 24)
+
+            VStack(spacing: 18) {
+                TabView(selection: $page) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { index, item in
+                        VStack(spacing: 0) {
+                            GoalOnboardingGuidePreview(kind: item.preview, tint: item.tint)
+                                .padding(.top, 2)
+                            Spacer()
+                                .frame(height: 48)
+                            VStack(spacing: 8) {
+                                Text(item.title)
+                                    .font(.system(size: 23, weight: .bold))
+                                    .foregroundStyle(JDTheme.primaryText)
+                                    .multilineTextAlignment(.center)
+                                Text(item.body)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(JDTheme.secondaryText)
+                                    .lineSpacing(5)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.horizontal, 4)
+                            Spacer(minLength: 0)
+                        }
+                        .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .frame(height: 385)
+
+                HStack(spacing: 6) {
+                    ForEach(0..<pages.count, id: \.self) { index in
+                        Capsule()
+                            .fill(index == page ? JDTheme.accent : JDTheme.dividerStrong)
+                            .frame(width: index == page ? 22 : 7, height: 7)
+                    }
+                }
+            }
+            .padding(22)
+            .background(JDTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(JDTheme.divider, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.1), radius: 18, y: 8)
+            .padding(.horizontal, 22)
+
+            Spacer(minLength: 20)
+
+            HStack {
+                Button("나중에 할게요", action: onSkip)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(JDTheme.tertiaryText)
+
+                Spacer()
+
+                Button {
+                    guard !isStarting else { return }
+                    if page < pages.count - 1 {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            page += 1
+                        }
+                    } else {
+                        onStart()
+                    }
+                } label: {
+                    Color.clear
+                        .frame(width: page == pages.count - 1 ? 92 : 32, height: 38)
+                }
+                .disabled(isStarting)
+                .frame(height: 38)
+                .background(JDTheme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    if isStarting {
+                        HStack(spacing: 7) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                            Text("준비 중")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                    } else {
+                        Text(page == pages.count - 1 ? "목표 설정하기" : "다음")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 28)
+        }
+    }
+}
+
+private struct GoalOnboardingGuidePage {
+    var title: String
+    var body: String
+    var tint: Color
+    var preview: GoalOnboardingGuidePreview.Kind
+}
+
+private struct GoalOnboardingGuidePreview: View {
+    enum Kind {
+        case input
+        case lock
+        case report
+    }
+
+    let kind: Kind
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(JDTheme.surfaceAlt)
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(JDTheme.divider, lineWidth: 0.5)
+            VStack(spacing: 0) {
+                previewHeader
+                Group {
+                    switch kind {
+                    case .input:
+                        inputPreview
+                    case .lock:
+                        lockPreview
+                    case .report:
+                        reportPreview
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 10)
+            }
+        }
+        .frame(height: 198)
+    }
+
+    private var previewHeader: some View {
+        HStack(spacing: 5) {
+            Capsule()
+                .fill(tint)
+                .frame(width: 18, height: 4)
+            Capsule()
+                .fill(tint.opacity(0.35))
+                .frame(width: 18, height: 4)
+            Spacer()
+            Text(headerTitle)
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundStyle(JDTheme.tertiaryText)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 3)
+    }
+
+    private var inputPreview: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("2026년 연간 목표")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(JDTheme.primaryText)
+            VStack(spacing: 5) {
+                guideGoalRow("주 3회 운동 루틴", locked: true)
+                guideGoalRow("글 50편 쓰기", locked: true)
+                guideGoalRow("영어 회화 꾸준히", locked: false)
+            }
+            Text("+ 목표 추가")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(JDTheme.tertiaryText)
+                .frame(maxWidth: .infinity)
+                .frame(height: 25)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(JDTheme.dividerStrong, style: StrokeStyle(lineWidth: 0.8, dash: [5, 4]))
+                )
+        }
+    }
+
+    private func guideGoalRow(_ title: String, locked: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(JDTheme.primaryText)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: locked ? "lock.fill" : "lock.open")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(locked ? JDTheme.primaryText : JDTheme.tertiaryText)
+                .frame(width: 26, height: 26)
+        }
+        .padding(.leading, 11)
+        .padding(.trailing, 6)
+        .frame(height: 28)
+        .background(JDTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var lockPreview: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(tint)
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("고정한 목표")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                    Text("처음 마음을 표시해둬요")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(JDTheme.secondaryText)
+                }
+                Spacer()
+            }
+            VStack(spacing: 6) {
+                Text("고정한 목표를 수정할까요?")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(JDTheme.primaryText)
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(JDTheme.surface)
+                        .frame(height: 28)
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(tint.opacity(0.18))
+                        .frame(height: 28)
+                }
+            }
+            .padding(10)
+            .background(JDTheme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private var reportPreview: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                GoalRing(progress: 0.68, tint: tint, size: 42, lineWidth: 5)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("3월 리포트")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                    Text("목표와 기록을 함께 정리")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(JDTheme.secondaryText)
+                }
+                Spacer()
+            }
+            HStack(spacing: 7) {
+                ForEach([0.82, 0.45, 0.64], id: \.self) { value in
+                    VStack(alignment: .leading, spacing: 5) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(tint.opacity(0.22))
+                            .frame(height: 8)
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(JDTheme.divider)
+                                Capsule().fill(tint).frame(width: proxy.size.width * value)
+                            }
+                        }
+                        .frame(height: 4)
+                    }
+                    .padding(8)
+                    .background(JDTheme.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                }
+            }
+        }
+    }
+
+    private var headerTitle: String {
+        switch kind {
+        case .input:
+            "GOAL SETUP"
+        case .lock:
+            "LOCK"
+        case .report:
+            "REPORT"
+        }
+    }
+}
+
+private struct GoalOnboardingPrompt: View {
+    let presentation: GoalPromptPresentation
+    let onSave: (GoalPromptPresentation, [GoalPromptSaveEntry]) -> Void
+    let onDismiss: (GoalPromptPresentation, Bool) -> Void
+
+    @State private var isShowingGuide = true
+    @State private var isPreparingGoalSetup = false
+    @State private var step = 1
+    @State private var yearlyDrafts = GoalPromptDraft.emptyRows(1)
+    @State private var monthlyDrafts = GoalPromptDraft.emptyRows(1)
+
+    private var isYearStep: Bool { step == 1 }
+    private var activeBinding: Binding<[GoalPromptDraft]> {
+        Binding(
+            get: { isYearStep ? yearlyDrafts : monthlyDrafts },
+            set: { value in
+                if isYearStep {
+                    yearlyDrafts = value
+                } else {
+                    monthlyDrafts = value
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        ZStack {
+            if isShowingGuide {
+                GoalOnboardingGuide(
+                    isStarting: isPreparingGoalSetup,
+                    onStart: beginGoalSetup,
+                    onSkip: { onDismiss(presentation, true) }
+                )
+                .transition(.asymmetric(
+                    insertion: .opacity,
+                    removal: .opacity.combined(with: .scale(scale: 0.98))
+                ))
+            } else {
+                inputView
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 1.02)),
+                        removal: .opacity
+                    ))
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: isShowingGuide)
+    }
+
+    private var inputView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                HStack(spacing: 6) {
+                    Capsule()
+                        .fill(step >= 1 ? JDTheme.accent : JDTheme.dividerStrong)
+                        .frame(width: 22, height: 4)
+                    Capsule()
+                        .fill(step >= 2 ? JDTheme.accent : JDTheme.dividerStrong)
+                        .frame(width: 22, height: 4)
+                    Text("\(step)/2")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                        .padding(.leading, 4)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(isYearStep ? "STEP 1 · 연간 목표" : "STEP 2 · 월간 목표")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                    Text(isYearStep ? "\(String(JDDate.todayComponents.year))년 연간 목표" : "\(String(JDDate.todayComponents.month))월 월간 목표")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                        .padding(.top, 4)
+                    Text(isYearStep ? "올해 이루고 싶은 목표를 설정하고 함께 지켜보아요." : "이번 달 이루고 싶은 목표를 설정하고 함께 지켜보아요.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .lineSpacing(3)
+                        .padding(.top, 8)
+                    GoalPromptDraftEditor(drafts: activeBinding, tint: isYearStep ? JDTheme.me : JDTheme.habit)
+                        .padding(.top, 22)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(
+                JDTheme.background
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissKeyboard() }
+            )
+
+            HStack {
+                Button("나중에 할게요") {
+                    dismissKeyboard()
+                    onDismiss(presentation, true)
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(JDTheme.tertiaryText)
+
+                Spacer()
+
+                Button(isYearStep ? "다음" : "시작하기") {
+                    dismissKeyboard()
+                    if isYearStep {
+                        step = 2
+                    } else {
+                        save()
+                    }
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(height: 38)
+                .background(JDTheme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 28)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+            }
+        }
+    }
+
+    private func save() {
+        let targets = presentation.periodTargets
+        guard targets.count == 2 else { return }
+        onSave(
+            presentation,
+            [
+                GoalPromptSaveEntry(periodType: targets[0].type, periodKey: targets[0].key, drafts: yearlyDrafts),
+                GoalPromptSaveEntry(periodType: targets[1].type, periodKey: targets[1].key, drafts: monthlyDrafts)
+            ]
+        )
+    }
+
+    private func beginGoalSetup() {
+        guard !isPreparingGoalSetup else { return }
+        isPreparingGoalSetup = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            withAnimation(.easeInOut(duration: 0.28)) {
+                isShowingGuide = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isPreparingGoalSetup = false
+            }
+        }
+    }
+}
+
+private struct GoalPeriodPrompt: View {
+    let presentation: GoalPromptPresentation
+    let title: String
+    let eyebrow: String
+    let bodyText: String
+    let tint: Color
+    let sampleDrafts: [GoalPromptDraft]
+    let onSave: (GoalPromptPresentation, [GoalPromptSaveEntry]) -> Void
+    let onDismiss: (GoalPromptPresentation, Bool) -> Void
+
+    @State private var drafts: [GoalPromptDraft]
+    @State private var doNotShowAgain = false
+
+    init(
+        presentation: GoalPromptPresentation,
+        title: String,
+        eyebrow: String,
+        bodyText: String,
+        tint: Color,
+        sampleDrafts: [GoalPromptDraft],
+        onSave: @escaping (GoalPromptPresentation, [GoalPromptSaveEntry]) -> Void,
+        onDismiss: @escaping (GoalPromptPresentation, Bool) -> Void
+    ) {
+        self.presentation = presentation
+        self.title = title
+        self.eyebrow = eyebrow
+        self.bodyText = bodyText
+        self.tint = tint
+        self.sampleDrafts = sampleDrafts
+        self.onSave = onSave
+        self.onDismiss = onDismiss
+        _drafts = State(initialValue: sampleDrafts)
+    }
+
+    var body: some View {
+        ZStack {
+            JDTheme.background.ignoresSafeArea()
+            Color.black.opacity(0.32)
+                .ignoresSafeArea()
+                .onTapGesture { dismissKeyboard() }
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(eyebrow)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(tint.opacity(0.13))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    Spacer()
+                    Button {
+                        dismissKeyboard()
+                        onDismiss(presentation, doNotShowAgain)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(JDTheme.tertiaryText)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(title)
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(bodyText)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .lineSpacing(4)
+                }
+
+                GoalPromptDraftEditor(drafts: $drafts, tint: tint)
+
+                Button {
+                    doNotShowAgain.toggle()
+                    dismissKeyboard()
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: doNotShowAgain ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(doNotShowAgain ? tint : JDTheme.dividerStrong)
+                        Text(presentation.kind == .yearly ? "올해는 다시 보지 않기" : "\(GoalSelectors.periodLabel(.monthly, periodKey: presentation.periodKey))엔 다시 보지 않기")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(JDTheme.tertiaryText)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                VStack(spacing: 8) {
+                    Button {
+                        dismissKeyboard()
+                        guard let target = presentation.periodTargets.first else { return }
+                        onSave(
+                            presentation,
+                            [GoalPromptSaveEntry(periodType: target.type, periodKey: target.key, drafts: drafts)]
+                        )
+                    } label: {
+                        Text("저장")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(JDTheme.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button("나중에") {
+                        dismissKeyboard()
+                        onDismiss(presentation, doNotShowAgain)
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(JDTheme.tertiaryText)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
+                }
+            }
+            .padding(22)
+            .background(JDTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(JDTheme.divider, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.2), radius: 22, y: 10)
+            .padding(.horizontal, 22)
+        }
+    }
+}
+
+private struct GoalPromptDraftEditor: View {
+    @Binding var drafts: [GoalPromptDraft]
+    let tint: Color
+    @FocusState private var focusedID: UUID?
+
+    var body: some View {
+        VStack(spacing: 9) {
+            ForEach($drafts) { $draft in
+                GoalPromptDraftRow(
+                    draft: $draft,
+                    tint: tint,
+                    canDelete: drafts.count > 1,
+                    focusedID: $focusedID,
+                    onDelete: {
+                        focusedID = nil
+                        drafts.removeAll { $0.id == draft.id }
+                    }
+                )
+            }
+
+            if drafts.count < 5 {
+                Button {
+                    focusedID = nil
+                    drafts.append(GoalPromptDraft(title: "", note: "", locked: true))
+                } label: {
+                    Text("+ 목표 추가  (최대 5개)")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(JDTheme.dividerStrong, style: StrokeStyle(lineWidth: 0.8, dash: [5, 4]))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct GoalPromptDraftRow: View {
+    @Binding var draft: GoalPromptDraft
+    let tint: Color
+    let canDelete: Bool
+    var focusedID: FocusState<UUID?>.Binding
+    let onDelete: () -> Void
+
+    @State private var offsetX: CGFloat = 0
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            if canDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 58, height: 82)
+                        .background(JDTheme.external)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .center, spacing: 10) {
+                    TextField("목표", text: $draft.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .textInputAutocapitalization(.never)
+                        .focused(focusedID, equals: draft.id)
+                        .frame(height: 28)
+
+                    Button {
+                        focusedID.wrappedValue = nil
+                        draft.locked.toggle()
+                    } label: {
+                        Image(systemName: draft.locked ? "lock.fill" : "lock.open")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(draft.locked ? JDTheme.primaryText : JDTheme.tertiaryText)
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                TextField("메모", text: $draft.note)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(JDTheme.secondaryText)
+                    .textInputAutocapitalization(.never)
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 10)
+            .frame(height: 82)
+            .background(JDTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .offset(x: offsetX)
+            .gesture(
+                DragGesture(minimumDistance: 18)
+                    .onChanged { value in
+                        guard canDelete else { return }
+                        offsetX = min(0, max(-70, value.translation.width))
+                    }
+                    .onEnded { value in
+                        guard canDelete else { return }
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+                            offsetX = value.translation.width < -42 ? -64 : 0
+                        }
+                    }
+            )
+        }
+    }
+}
+
+private struct GoalDraft {
+    var periodType: GoalPeriodType
+    var periodKey: String
+    var title: String = ""
+    var note: String = ""
+    var locked: Bool = true
+}
+
+private struct GoalReportTarget: Identifiable, Equatable {
+    var periodType: GoalPeriodType
+    var periodKey: String
+
+    var id: String { "\(periodType.rawValue)-\(periodKey)" }
+}
+
+private struct GoalReportPresentation: Identifiable, Equatable {
+    var target: GoalReportTarget
+    var isPreview: Bool
+
+    var id: String { "\(target.id)-\(isPreview ? "preview" : "report")" }
+}
+
+private struct GoalProgress: Identifiable {
+    var goal: Goal
+    var related: [Task]
+    var completed: [Task]
+    var progress: Double
+    var slipped: [Task]
+
+    var id: UUID { goal.id }
+}
+
+private enum GoalSelectors {
+    static func periodKey(_ type: GoalPeriodType, iso: String) -> String {
+        let parts = JDDate.parts(iso)
+        return type == .yearly ? "\(parts.year)" : String(format: "%04d-%02d", parts.year, parts.month)
+    }
+
+    static func periodLabel(_ type: GoalPeriodType, periodKey: String) -> String {
+        if type == .yearly {
+            return "\(periodKey)년"
+        }
+        let parts = periodKey.split(separator: "-").compactMap { Int($0) }
+        return "\(parts.dropFirst().first ?? JDDate.todayComponents.month)월"
+    }
+
+    static func goalsForPeriod(_ goals: [Goal], type: GoalPeriodType, periodKey: String) -> [Goal] {
+        goals
+            .filter { $0.periodType == type && $0.periodKey == periodKey }
+            .sorted {
+                if $0.sortOrder == $1.sortOrder {
+                    return $0.title.localizedCompare($1.title) == .orderedAscending
+                }
+                return $0.sortOrder < $1.sortOrder
+            }
+    }
+
+    static func range(type: GoalPeriodType, periodKey: String) -> (start: String, end: String) {
+        if type == .yearly {
+            return ("\(periodKey)-01-01", "\(periodKey)-12-31")
+        }
+        let parts = periodKey.split(separator: "-").compactMap { Int($0) }
+        let year = parts.first ?? JDDate.todayComponents.year
+        let month = parts.dropFirst().first ?? JDDate.todayComponents.month
+        return (
+            JDDate.iso(year: year, month: month, day: 1),
+            JDDate.iso(year: year, month: month, day: JDDate.days(year: year, month: month))
+        )
+    }
+
+    static func progress(goals: [Goal], tasks: [Task], type: GoalPeriodType, periodKey: String) -> [GoalProgress] {
+        let range = range(type: type, periodKey: periodKey)
+        let periodTasks = tasks.filter { $0.endDate >= range.start && $0.startDate <= range.end }
+        return goalsForPeriod(goals, type: type, periodKey: periodKey).map { goal in
+            let matched = periodTasks.filter { taskMatches($0, goal: goal) }
+            let related = matched.isEmpty ? periodTasks : matched
+            let completed = related.filter(\.isCompleted)
+            let slipped = related.filter { !$0.isCompleted && $0.endDate < range.end }
+            return GoalProgress(
+                goal: goal,
+                related: related,
+                completed: completed,
+                progress: related.isEmpty ? 0 : Double(completed.count) / Double(related.count),
+                slipped: slipped
+            )
+        }
+    }
+
+    static func heatmap(tasks: [Task], habits: [Habit], type: GoalPeriodType, periodKey: String) -> [Int] {
+        if type == .yearly {
+            return (1...12).map { month in
+                let prefix = "\(periodKey)-\(String(format: "%02d", month))"
+                return tasks.filter { $0.isCompleted && $0.endDate.hasPrefix(prefix) }.count
+            }
+        }
+        let range = range(type: type, periodKey: periodKey)
+        let start = JDDate.parts(range.start)
+        let days = JDDate.days(year: start.year, month: start.month)
+        return (0..<days).map { offset in
+            let iso = JDDate.addDays(range.start, offset)
+            let completedTasks = tasks.filter { $0.isCompleted && $0.endDate == iso }.count
+            let completedHabits = habits.filter { $0.log[iso] == 1 }.count
+            return completedTasks + completedHabits
+        }
+    }
+
+    private static func taskMatches(_ task: Task, goal: Goal) -> Bool {
+        let text = "\(task.title) \(task.tags.joined(separator: " "))".lowercased()
+        return goal.title
+            .split(separator: " ")
+            .filter { $0.count >= 2 }
+            .contains { text.contains($0.lowercased()) }
+    }
+}
+
+private struct GoalManagementSheet: View {
+    let goals: [Goal]
+    let tasks: [Task]
+    let habits: [Habit]
+    let isProPlan: Bool
+    let onAddGoal: (GoalDraft) -> Void
+    let onSaveGoal: (Goal) -> Void
+    let onDeleteGoal: (Goal) -> Void
+    let onOpenReport: (GoalReportTarget) -> Void
+
+    @State private var editingDraft: GoalEditorDraft?
+    @State private var lockedGoal: Goal?
+
+    private var yearlyKey: String { GoalSelectors.periodKey(.yearly, iso: JDDate.todayISO) }
+    private var monthlyKey: String { GoalSelectors.periodKey(.monthly, iso: JDDate.todayISO) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    GoalPeriodCards(
+                        title: "연간 · \(yearlyKey)",
+                        tint: JDTheme.me,
+                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, type: .yearly, periodKey: yearlyKey),
+                        onAdd: { startAdd(.yearly, yearlyKey) },
+                        onEdit: startEdit(_:),
+                        onToggleLock: toggleGoalLock(_:)
+                    )
+                    GoalPeriodCards(
+                        title: "월간 · \(GoalSelectors.periodLabel(.monthly, periodKey: monthlyKey))",
+                        tint: JDTheme.habit,
+                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, type: .monthly, periodKey: monthlyKey),
+                        onAdd: { startAdd(.monthly, monthlyKey) },
+                        onEdit: startEdit(_:),
+                        onToggleLock: toggleGoalLock(_:)
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 28)
+            }
+            .background(JDTheme.background)
+            .navigationTitle("목표")
+            .navigationBarTitleDisplayMode(.inline)
+            .overlay { goalEditorOverlay }
+            .alert("고정한 목표를 수정할까요?", isPresented: lockedGoalBinding) {
+                Button("유지하기", role: .cancel) {
+                    lockedGoal = nil
+                }
+                Button("수정하기") {
+                    guard var goal = lockedGoal else { return }
+                    goal.locked = false
+                    goal.lockedAt = nil
+                    onSaveGoal(goal)
+                    editingDraft = GoalEditorDraft(goal: goal)
+                    lockedGoal = nil
+                }
+            } message: {
+                Text("처음 세운 약속과 달라질 수 있어요.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var goalEditorOverlay: some View {
+        if let editingDraft {
+            ZStack {
+                Color.black.opacity(0.24)
+                    .ignoresSafeArea()
+                    .onTapGesture { self.editingDraft = nil }
+
+                GoalEditorDialog(
+                    draft: editingDraft,
+                    onCancel: { self.editingDraft = nil },
+                    onSave: saveEditorDraft(_:),
+                    onDelete: deleteEditorDraft(_:)
+                )
+                .padding(.horizontal, 24)
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+            .animation(.easeOut(duration: 0.18), value: editingDraft.id)
+        }
+    }
+
+    private var lockedGoalBinding: Binding<Bool> {
+        Binding(
+            get: { lockedGoal != nil },
+            set: { if !$0 { lockedGoal = nil } }
+        )
+    }
+
+    private func startAdd(_ type: GoalPeriodType, _ key: String) {
+        guard GoalSelectors.goalsForPeriod(goals, type: type, periodKey: key).count < 5 else { return }
+        editingDraft = GoalEditorDraft(draft: GoalDraft(periodType: type, periodKey: key))
+    }
+
+    private func startEdit(_ goal: Goal) {
+        if goal.locked {
+            lockedGoal = goal
+        } else {
+            editingDraft = GoalEditorDraft(goal: goal)
+        }
+    }
+
+    private func toggleGoalLock(_ goal: Goal) {
+        var updated = goal
+        updated.locked.toggle()
+        updated.lockedAt = updated.locked ? (updated.lockedAt ?? JDDate.nowISODateTime) : nil
+        onSaveGoal(updated)
+    }
+
+    private func saveEditorDraft(_ draft: GoalEditorDraft) {
+        if var goal = draft.goal {
+            goal.title = draft.title
+            goal.note = draft.note
+            goal.locked = draft.locked
+            onSaveGoal(goal)
+        } else {
+            onAddGoal(
+                GoalDraft(
+                    periodType: draft.periodType,
+                    periodKey: draft.periodKey,
+                    title: draft.title,
+                    note: draft.note ?? "",
+                    locked: draft.locked
+                )
+            )
+        }
+        editingDraft = nil
+    }
+
+    private func deleteEditorDraft(_ draft: GoalEditorDraft) {
+        if let goal = draft.goal {
+            onDeleteGoal(goal)
+        }
+        editingDraft = nil
+    }
+}
+
+private struct GoalPeriodCards: View {
+    let title: String
+    let tint: Color
+    let progress: [GoalProgress]
+    let onAdd: () -> Void
+    let onEdit: (Goal) -> Void
+    let onToggleLock: (Goal) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(JDTheme.tertiaryText)
+                Rectangle()
+                    .fill(JDTheme.divider)
+                    .frame(height: 0.5)
+                Text("\(progress.count)/5")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(JDTheme.tertiaryText)
+            }
+
+            if progress.isEmpty {
+                Button(action: onAdd) {
+                    GoalAddButtonLabel()
+                }
+                .buttonStyle(.plain)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(progress) { item in
+                        GoalCard(
+                            progress: item,
+                            tint: tint,
+                            onTap: { onEdit(item.goal) },
+                            onToggleLock: { onToggleLock(item.goal) }
+                        )
+                    }
+                }
+
+                Button(action: onAdd) {
+                    GoalAddButtonLabel()
+                }
+                .buttonStyle(.plain)
+                .disabled(progress.count >= 5)
+                .opacity(progress.count >= 5 ? 0.45 : 1)
+            }
+
+        }
+    }
+}
+
+private struct GoalAddButtonLabel: View {
+    var body: some View {
+        Text("+ 목표 추가  (최대 5개)")
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(JDTheme.tertiaryText)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(JDTheme.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(JDTheme.dividerStrong, style: StrokeStyle(lineWidth: 0.8, dash: [5, 4]))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct GoalCard: View {
+    let progress: GoalProgress
+    let tint: Color
+    let onTap: () -> Void
+    let onToggleLock: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(tint)
+                            .frame(width: 5, height: 5)
+                        Text(progress.goal.periodType == .yearly ? "연간" : "월간")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .foregroundStyle(tint)
+                    }
+                    Text(progress.goal.title)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                        .lineLimit(2)
+                    if let note = progress.goal.note, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(JDTheme.secondaryText)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer(minLength: 16)
+
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("\(Int((progress.progress * 100).rounded()))%")
+                        .font(.system(size: 14.5, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                        .monospacedDigit()
+                    Text("\(progress.completed.count)/\(progress.related.count)")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                        .monospacedDigit()
+                    if !progress.slipped.isEmpty {
+                        Text("\(progress.slipped.count) 밀림")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(JDTheme.external)
+                            .monospacedDigit()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 92, alignment: .topLeading)
+
+            VStack(alignment: .trailing, spacing: 0) {
+                GoalRingWithText(progress: progress.progress, tint: tint, size: 52, lineWidth: 5)
+
+                Spacer(minLength: 22)
+
+                GoalLockBadge(locked: progress.goal.locked, action: onToggleLock)
+            }
+            .frame(minWidth: 64, maxWidth: 64, minHeight: 92, alignment: .topTrailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(JDTheme.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(JDTheme.divider, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .onTapGesture(perform: onTap)
+    }
+}
+
+private struct GoalLockBadge: View {
+    let locked: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: locked ? "lock.fill" : "lock.open")
+                    .font(.system(size: 9.5, weight: .semibold))
+                Text(locked ? "고정" : "열림")
+                    .font(.system(size: 10.5, weight: .bold))
+            }
+            .foregroundStyle(locked ? JDTheme.me : JDTheme.tertiaryText)
+            .padding(.horizontal, 8)
+            .frame(height: 23)
+            .background((locked ? JDTheme.me : JDTheme.tertiaryText).opacity(0.16))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(locked ? "목표 고정 해제" : "목표 고정")
+    }
+}
+
+private struct GoalRingWithText: View {
+    let progress: Double
+    let tint: Color
+    let size: CGFloat
+    let lineWidth: CGFloat
+
+    private var normalizedProgress: Double {
+        min(1, max(0, progress))
+    }
+
+    private var percentageText: String {
+        "\(Int((normalizedProgress * 100).rounded()))%"
+    }
+
+    var body: some View {
+        ZStack {
+            GoalRing(progress: normalizedProgress, tint: tint, size: size, lineWidth: lineWidth)
+            Text(percentageText)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(JDTheme.primaryText)
+                .monospacedDigit()
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+private struct GoalEditorDraft: Identifiable {
+    var id = UUID()
+    var goal: Goal?
+    var periodType: GoalPeriodType
+    var periodKey: String
+    var title: String
+    var note: String?
+    var locked: Bool
+
+    init(draft: GoalDraft) {
+        periodType = draft.periodType
+        periodKey = draft.periodKey
+        title = draft.title
+        note = draft.note
+        locked = draft.locked
+    }
+
+    init(goal: Goal) {
+        self.goal = goal
+        periodType = goal.periodType
+        periodKey = goal.periodKey
+        title = goal.title
+        note = goal.note
+        locked = goal.locked
+    }
+}
+
+private struct GoalEditorDialog: View {
+    @State var draft: GoalEditorDraft
+    let onCancel: () -> Void
+    let onSave: (GoalEditorDraft) -> Void
+    let onDelete: (GoalEditorDraft) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(draft.goal == nil ? "목표 추가" : "목표 수정")
+                    .font(.system(size: 19, weight: .bold))
+                Spacer()
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("닫기")
+            }
+
+            HStack(alignment: .center, spacing: 10) {
+                TextField("목표", text: $draft.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .textInputAutocapitalization(.never)
+                    .frame(height: 28)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    draft.locked.toggle()
+                } label: {
+                    Image(systemName: draft.locked ? "lock.fill" : "lock.open")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(draft.locked ? JDTheme.primaryText : JDTheme.tertiaryText)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 10)
+            .frame(height: 54)
+            .background(JDTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            TextField("메모", text: noteBinding)
+                .font(.system(size: 13, weight: .medium))
+                .textInputAutocapitalization(.never)
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .background(JDTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            HStack(spacing: 8) {
+                Spacer()
+                if draft.goal != nil {
+                    Button("삭제", role: .destructive) {
+                        onDelete(draft)
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                }
+                Button("저장") {
+                    onSave(draft)
+                }
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(height: 38)
+                .background(JDTheme.primaryText)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 4)
+        }
+        .padding(18)
+        .frame(maxWidth: 340)
+        .background(JDTheme.surface)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(JDTheme.divider, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.16), radius: 24, y: 12)
+    }
+
+    private var noteBinding: Binding<String> {
+        Binding(
+            get: { draft.note ?? "" },
+            set: { draft.note = $0 }
+        )
+    }
+}
+
+private struct GoalReportFullScreen: View {
+    let presentation: GoalReportPresentation
+    let goals: [Goal]
+    let tasks: [Task]
+    let habits: [Habit]
+    let onClose: () -> Void
+
+    @State private var page = 0
+
+    private var tint: Color { presentation.target.periodType == .yearly ? JDTheme.me : JDTheme.habit }
+    private var progress: [GoalProgress] {
+        GoalSelectors.progress(
+            goals: goals,
+            tasks: tasks,
+            type: presentation.target.periodType,
+            periodKey: presentation.target.periodKey
+        )
+    }
+    private var average: Double {
+        guard !progress.isEmpty else { return 0 }
+        return progress.map(\.progress).reduce(0, +) / Double(progress.count)
+    }
+
+    var body: some View {
+        ZStack {
+            JDTheme.background.ignoresSafeArea()
+            if presentation.isPreview {
+                GoalFreePreview(
+                    target: presentation.target,
+                    progress: progress,
+                    average: average,
+                    onClose: onClose
+                )
+            } else {
+                reportFlow
+            }
+        }
+    }
+
+    private var reportFlow: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onClose) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundStyle(JDTheme.accent)
+                Spacer()
+                Text(reportTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                Spacer()
+                Text("\(page + 1)/4")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(JDTheme.tertiaryText)
+                    .frame(width: 36, alignment: .trailing)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+
+            TabView(selection: $page) {
+                GoalReportPage(
+                    eyebrow: presentation.target.periodType == .yearly ? "\(presentation.target.periodKey) · 연간 리포트" : "\(GoalSelectors.periodLabel(.monthly, periodKey: presentation.target.periodKey)) · 월간 리포트",
+                    title: presentation.target.periodType == .yearly ? "\(presentation.target.periodKey), 어디까지 왔나요" : "\(GoalSelectors.periodLabel(.monthly, periodKey: presentation.target.periodKey)), 어떻게 지나갔나요",
+                    tint: tint
+                ) {
+                    GoalMetricGrid(metrics: [
+                        ("목표", "\(progress.count)", ""),
+                        ("평균 진행", "\(Int((average * 100).rounded()))", "%"),
+                        ("완료 task", "\(progress.flatMap(\.completed).count)", ""),
+                        ("밀림", "\(progress.flatMap(\.slipped).count)", "")
+                    ])
+                }
+                .tag(0)
+
+                GoalReportPage(eyebrow: "활동 흐름", title: presentation.target.periodType == .yearly ? "월별 흐름" : "활동 히트맵", tint: tint) {
+                    GoalHeatmap(values: GoalSelectors.heatmap(tasks: tasks, habits: habits, type: presentation.target.periodType, periodKey: presentation.target.periodKey), tint: tint)
+                }
+                .tag(1)
+
+                GoalReportPage(eyebrow: "목표별 진행", title: presentation.target.periodType == .yearly ? "연간 목표" : "목표별", tint: tint) {
+                    VStack(spacing: 10) {
+                        ForEach(progress) { item in
+                            GoalProgressRow(item: item, tint: tint)
+                        }
+                    }
+                }
+                .tag(2)
+
+                GoalReportPage(eyebrow: "이야기", title: presentation.target.periodType == .yearly ? "한 해의 이야기" : "한 달의 이야기", tint: tint) {
+                    Text(narrative)
+                        .font(.system(size: 14, weight: .medium))
+                        .lineSpacing(8)
+                        .foregroundStyle(JDTheme.primaryText)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(JDTheme.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .tag(3)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .automatic))
+        }
+    }
+
+    private var reportTitle: String {
+        presentation.target.periodType == .yearly ? "\(presentation.target.periodKey)" : "\(GoalSelectors.periodLabel(.monthly, periodKey: presentation.target.periodKey)) 리포트"
+    }
+
+    private var narrative: String {
+        let percent = Int((average * 100).rounded())
+        if progress.isEmpty {
+            return "아직 기록된 목표가 없어요. 다음 기간에는 작은 약속 하나부터 쌓아볼 수 있습니다."
+        }
+        return "이번 기간에는 \(progress.count)개의 목표를 두고 \(percent)%까지 도착했어요. 완료된 task와 남은 항목을 보면, 꾸준히 반복된 흐름과 다음에 줄여볼 밀림이 함께 보입니다."
+    }
+}
+
+private struct GoalReportPage<Content: View>: View {
+    let eyebrow: String
+    let title: String
+    let tint: Color
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(eyebrow)
+                        .font(.system(size: 10.5, weight: .bold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                    Text(title)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(JDTheme.primaryText)
+                }
+                content
+                Spacer(minLength: 40)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+        }
+    }
+}
+
+private struct GoalFreePreview: View {
+    let target: GoalReportTarget
+    let progress: [GoalProgress]
+    let average: Double
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onClose) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundStyle(JDTheme.accent)
+                Spacer()
+                Text("FREE")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(JDTheme.tertiaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(JDTheme.tertiaryText.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("\(GoalSelectors.periodLabel(target.periodType, periodKey: target.periodKey))의 한 달 요약")
+                        .font(.system(size: 22, weight: .bold))
+                    GoalMetricGrid(metrics: [
+                        ("목표", "\(progress.count)", ""),
+                        ("진행", "\(progress.filter { $0.progress > 0 }.count)", ""),
+                        ("달성", "\(progress.filter { $0.progress >= 1 }.count)", "")
+                    ])
+                    ZStack {
+                        VStack(spacing: 8) {
+                            ForEach(progress.prefix(3)) { item in
+                                GoalProgressRow(item: item, tint: JDTheme.habit)
+                            }
+                        }
+                        .blur(radius: 5)
+                        .opacity(0.45)
+
+                        VStack(spacing: 8) {
+                            Image(systemName: "lock.open")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(JDTheme.secondaryText)
+                            Text("Pro에서 펼쳐져요")
+                                .font(.system(size: 15, weight: .bold))
+                            Text("목표별 완료율, 히트맵, 한 달의 이야기까지.")
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(JDTheme.secondaryText)
+                                .multilineTextAlignment(.center)
+                            Button("Pro로 펼치기") {}
+                                .buttonStyle(.borderedProminent)
+                                .tint(JDTheme.primaryText)
+                                .disabled(true)
+                        }
+                        .padding(18)
+                        .frame(width: 280)
+                        .background(JDTheme.surface)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(JDTheme.divider, lineWidth: 0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+            }
+        }
+    }
+}
+
+private struct GoalMetricGrid: View {
+    let metrics: [(String, String, String)]
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
+            ForEach(Array(metrics.enumerated()), id: \.offset) { _, metric in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(metric.0)
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                    HStack(alignment: .firstTextBaseline, spacing: 1) {
+                        Text(metric.1)
+                            .font(.system(size: 20, weight: .bold))
+                            .monospacedDigit()
+                        Text(metric.2)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(JDTheme.tertiaryText)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(JDTheme.surface)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+}
+
+private struct GoalProgressRow: View {
+    let item: GoalProgress
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(item.goal.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                Spacer()
+                Text("\(Int((item.progress * 100).rounded()))%")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(JDTheme.tertiaryText)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(JDTheme.surfaceAlt)
+                    Capsule().fill(tint).frame(width: proxy.size.width * item.progress)
+                }
+            }
+            .frame(height: 4)
+        }
+        .padding(12)
+        .background(JDTheme.surface)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct GoalHeatmap: View {
+    let values: [Int]
+    let tint: Color
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: values.count > 12 ? 7 : 6), spacing: 4) {
+            ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(tint.opacity(value == 0 ? 0.12 : min(0.85, 0.25 + Double(value) * 0.12)))
+                    .aspectRatio(1, contentMode: .fit)
+            }
+        }
+        .padding(12)
+        .background(JDTheme.surface)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct GoalRing: View {
+    let progress: Double
+    let tint: Color
+    let size: CGFloat
+    let lineWidth: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(JDTheme.surfaceAlt, lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: min(1, max(0, progress)))
+                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: size, height: size)
     }
 }
 

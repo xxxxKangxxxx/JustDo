@@ -3938,3 +3938,313 @@ This document records coordination notes for work done with Codex and Claude Cod
 - 현재 Web Just Do Mode 최종 보정은 `apps/web/src/features/just-do/app-shell.tsx`,
   `store.tsx`, `app-shell.test.tsx`에 반영된 상태이며, 다음 Goal & Pro Report
   작업은 이 파일들을 이어서 확장하는 방향이 가장 자연스럽다.
+
+## 2026-05-29 Goal & Pro Report schema migration
+
+### Codex
+
+- Goal & Pro Report MVP의 첫 구현 단계로 Supabase migration 추가:
+  - `supabase/migrations/20260529120000_goal_report.sql`
+- 추가된 테이블:
+  - `public.goals`
+  - `public.goal_prompt_dismissals`
+- `public.goals` 설계:
+  - `user_id`는 기존 backend strategy와 동일하게 `public.users(id)` 참조.
+  - `period_type`: `monthly` / `yearly`.
+  - `period_key`: monthly는 `YYYY-MM`, yearly는 `YYYY`.
+  - `title`은 공백-only 입력 방지를 위해 `length(btrim(title)) > 0` check.
+  - `note`, `sort_order`, `locked`, `locked_at` 포함.
+  - `created_at`, `updated_at` 포함.
+  - `goals_set_updated_at` trigger로 update 시 `updated_at` 자동 갱신.
+  - index: `idx_goals_user_period(user_id, period_type, period_key, sort_order)`.
+- `public.goal_prompt_dismissals` 설계:
+  - `user_id`는 `public.users(id)` 참조.
+  - `prompt_type`: `onboarding` / `monthly` / `yearly`.
+  - `period_key`: monthly는 `YYYY-MM`, yearly는 `YYYY`, onboarding은 `initial`.
+  - `unique (user_id, prompt_type, period_key)`로 같은 기간 dismiss 중복 방지.
+  - `dismissed_permanently_for_period`는 MVP에서 true 기본값.
+- RLS:
+  - 두 테이블 모두 row level security enabled.
+  - select/insert/update/delete owner-only policy 추가.
+  - update policy에는 `with check (auth.uid() = user_id)`도 포함해 user_id 변경을
+    방지.
+- 최대 5개 목표 제한:
+  - 이번 migration에는 DB trigger를 넣지 않고, 문서 결정대로 Web/iOS
+    app/service layer에서 먼저 enforce 예정.
+
+### Initial verification
+
+- `git diff --check` 통과.
+- 로컬 Supabase 검증 주의:
+  - sandbox 일반 실행의 `supabase status`는 Docker socket permission denied로
+    실패.
+  - 권한 상승 `supabase status`는 응답 없이 멈춰 수동 종료.
+  - Docker Desktop UI상 `justdo` Supabase stack은 보였고 Docker engine도
+    running이었지만, `supabase_db_justdo` row는 running indicator 없이 start
+    action이 보이는 상태였다. 사용자가 DB 컨테이너 start/restart를 시도했으나
+    컨테이너가 계속 loading 상태로 멈춤.
+
+### Restart follow-up
+
+- 노트북 재시작 후 Docker/Supabase 상태 재확인:
+  - `docker ps --filter name=supabase_db_justdo` → `supabase_db_justdo`가
+    `Up ... (healthy)` 상태.
+  - `supabase status` → local development setup running.
+  - `supabase_imgproxy_justdo`, `supabase_edge_runtime_justdo`,
+    `supabase_pooler_justdo`는 stopped로 표시되지만 현재 DB migration 검증에는
+    영향 없음.
+- `supabase db push --local` 실행 완료:
+  - 로컬 DB에 `20260525090000_categories_user_name_unique.sql`와
+    `20260529120000_goal_report.sql` 적용.
+- `supabase gen types typescript --local` 실행 완료:
+  - `apps/web/src/lib/supabase/database.types.ts`에 `goals`와
+    `goal_prompt_dismissals` 타입 반영.
+- 호스트에 `psql`이 없어 컨테이너 내부 `psql`로 schema 확인:
+  - `public.goals`, `public.goal_prompt_dismissals` 모두 RLS enabled.
+  - owner-only select/insert/update/delete policy 8개 확인.
+
+## 2026-05-29 Goal & Pro Report Web MVP first pass
+
+### Codex
+
+- 사용자가 추가한 `apps/goal-report/web` prototype 파일을 읽고 Web 화면 결정안을
+  기존 앱 구조에 매핑:
+  - 진입점: Settings → 목표.
+  - 목표 관리: 카드 그리드.
+  - 잠금 UX: 고정 목표 수정 전 확인 모달.
+  - 리포트: 월간/연간 4-step modal.
+  - Free: summary preview + Pro CTA.
+- Web domain/state/storage 확장:
+  - `Goal`, `GoalPeriodType`, `GoalPromptDismissal` domain type 추가.
+  - `AppState`에 `goals`, `goalPromptDismissals` 추가.
+  - local IndexedDB/localStorage/snapshot/offline queue/synced storage에
+    `upsertGoal`, `deleteGoal`, `upsertGoalPromptDismissal` 추가.
+  - Supabase mapping/storage에 `goals`, `goal_prompt_dismissals` load/upsert/delete
+    및 realtime subscription 추가.
+- Web selector 추가:
+  - `periodKeyOf`, `goalsForPeriod`, `rangeForGoalPeriod`,
+    `goalProgressForPeriod`, `periodActivityHeatmap`.
+  - MVP report는 저장 snapshot/AI 없이 현재 tasks/habits/goals에서 실시간 계산.
+- Settings → 목표 UI 구현:
+  - 현재 selected date 기준 yearly/monthly 섹션.
+  - 각 섹션 최대 5개 목표.
+  - 목표 추가/수정/삭제.
+  - locked goal 수정 시 unlock confirmation.
+  - Trial/Pro는 stepped report modal, Free는 preview + Pro upgrade CTA.
+- 자동 prompt delivery 구현:
+  - 가입 직후/목표 0개 상태에서는 onboarding wizard 표시.
+  - 매년 1월 1-7일에는 해당 연도 목표가 없고 dismissal이 없을 때 yearly prompt
+    표시.
+  - 매월 1-3일에는 해당 월 목표가 없고 dismissal이 없을 때 monthly prompt 표시.
+  - Onboarding skip은 `onboarding/initial` dismissal 저장.
+  - Monthly/yearly prompt는 per-period "다시 보지 않기" 선택 시
+    `goal_prompt_dismissals` 저장.
+- Supabase hosted schema drift guard:
+  - 아직 hosted DB에 goal migration이 올라가지 않은 환경에서도 앱 load가 깨지지
+    않도록 `goals` / `goal_prompt_dismissals` load는 missing relation이면 빈 배열로
+    처리. 실제 저장은 migration 적용 후 정상 동작.
+
+### Verification
+
+- `npm --prefix apps/web run lint` 통과.
+- `npm --prefix apps/web test -- --run` 통과: 8 files / 111 tests.
+- `npm --prefix apps/web run build` 통과. 샌드박스 일반 실행은 기존과 동일하게
+  Turbopack port binding 제한으로 실패하므로 권한 상승으로 검증.
+- `git diff --check` 통과.
+
+## 2026-05-29 Goal & Pro Report iOS data layer first pass
+
+### Codex
+
+- Web에서 안정화한 Goal & Pro Report 데이터 정책을 iOS shared layer에 반영.
+- `apps/ios/JustDoShared/Domain/JustDoModels.swift`
+  - `GoalPeriodType`, `GoalPromptType`, `Goal`, `GoalPromptDismissal` 추가.
+  - `AppSnapshot`에 `goals`, `goalPromptDismissals` 추가.
+  - 기존 fixture/구버전 snapshot decode를 위해 두 필드는 decode 시 빈 배열 기본값.
+- Core Data mirror 확장:
+  - `CDGoal`, `CDGoalPromptDismissal` entity 추가.
+  - mapper round-trip 추가.
+  - `CoreDataAppSnapshotStore` load/replace/apply queue 경로에 goals/dismissals 반영.
+- Mutation queue / Supabase sync 확장:
+  - `goal_upsert`, `goal_delete`, `goal_prompt_dismissal_upsert` mutation 추가.
+  - Supabase REST snapshot fetch에 `goals`, `goal_prompt_dismissals` 추가.
+  - Supabase mutation client에 goal upsert/delete 및 prompt dismissal upsert 추가.
+- 테스트 보강:
+  - CoreData model entity expectation 갱신.
+  - Goal / GoalPromptDismissal mapper round-trip 추가.
+  - Supabase snapshot fetch가 goal/dismissal rows를 domain으로 매핑하는지 확인.
+
+### Verification
+
+- `swift test` from `apps/ios` 통과: 45 tests.
+- Xcode real-device Run: `강영모의 iPhone` 대상으로 빌드, 설치, 앱 실행 성공
+  (사용자 확인).
+- Simulator build는 `iPhone 16 Pro` destination이 현재 Xcode에 없어 실패했으나,
+  실기기 Run으로 앱 타겟 링크/실행 검증 완료.
+- 남은 iOS 구현은 native UI:
+  - Settings → 목표 화면.
+  - 목표 CRUD / locked-goal edit confirmation.
+  - onboarding/monthly/yearly prompt sheets.
+  - Trial/Pro stepped report detail, Free preview + Pro CTA.
+
+## 2026-05-29 Goal & Pro Report iOS native UI first pass
+
+### Codex
+
+- `apps/goal-report/mobile` prototype files를 읽고 iOS 화면 결정을 반영:
+  - Settings → 목표는 decided card-stack 형태.
+  - Locked goal 수정은 centered confirmation 흐름.
+  - Report는 full-screen stepped flow.
+  - Free는 summary preview + locked/blurred detail surface.
+- `apps/ios/JustDoApp/JustDoApp/ContentView.swift`
+  - Settings 데이터 섹션에 `목표` 진입점 추가.
+  - `GoalManagementSheet` 추가:
+    - 현재 연도 / 현재 월 섹션.
+    - 카드형 목표 표시, progress ring, related/completed/slipped count.
+    - 기간별 최대 5개 추가 제한.
+    - 목표 추가/수정/삭제를 Core Data mutation queue에 연결.
+    - locked goal 수정 전 확인 alert.
+  - `GoalReportFullScreen` 추가:
+    - Trial/Pro 경로: 4-step report(`요약`, `활동 흐름`, `목표별 진행`, `이야기`).
+    - Free 경로: summary preview + blurred locked detail card + Pro CTA placeholder.
+  - iOS local selector 추가:
+    - period key/label, period range, goal progress, activity heatmap 계산.
+  - 모든 데이터 초기화 경로에 goal deletion mutation 포함.
+
+### Verification
+
+- `swift test` from `apps/ios` 통과: 45 tests.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build` 통과.
+- 남은 iOS UI 후속:
+  - optional onboarding/monthly/yearly prompt sheets.
+  - 실기기에서 Settings → 목표 add/edit/delete/report/free preview smoke.
+
+## 2026-05-29 Goal & Pro Report iOS prompt UI first pass
+
+### Codex
+
+- `apps/ios/JustDoApp/JustDoApp/ContentView.swift`
+  - Snapshot load 후 goal prompt 노출 조건 평가 추가.
+  - 같은 앱 세션에서 닫은 prompt가 sync refresh로 반복 표시되지 않도록
+    `suppressedGoalPromptIDs` 추가.
+  - Onboarding prompt:
+    - `apps/goal-report/mobile`의 `MGRFirstTimeA` 결정에 맞춰 2-step
+      full-screen flow 구현.
+    - STEP 1 연간 목표, STEP 2 월간 목표.
+    - `나중에 할게요`는 `onboarding/initial` dismissal 저장.
+    - 저장 시 연간/월간 목표를 각각 Core Data mutation queue에 enqueue.
+  - Monthly/yearly prompt:
+    - Prototype 결정에 맞춰 dimmed background + centered card 형태.
+    - Monthly: 매월 1-3일, 해당 월 목표가 없고 dismissal 없을 때 후보.
+    - Yearly: 1월 1-7일, 해당 연도 목표가 없고 dismissal 없을 때 후보.
+    - "다시 보지 않기" 선택 시 해당 period의 `goal_prompt_dismissals`
+      upsert mutation enqueue.
+  - Prompt goal save는 기간별 최대 5개 제한을 유지하고 빈 제목은 저장하지 않음.
+
+### Verification
+
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build` 통과.
+- `swift test` from `apps/ios` 통과: 45 tests.
+- `git diff --check` 통과.
+- 남은 작업:
+  - 실기기 smoke: 신규/목표 없음 상태에서 onboarding prompt, 월초/연초 조건 prompt,
+    dismissal 저장 후 재노출 차단, 저장 후 Web/iOS sync 확인.
+
+## 2026-05-30 Goal & Pro Report hosted migration and iOS sync fix
+
+### Codex
+
+- Hosted Supabase migration state confirmed by user:
+  - `supabase db push` reported `Remote database is up to date`.
+  - `supabase migration list` showed `20260529120000` present in both Local and
+    Remote columns.
+- iOS sync failure was diagnosed from Xcode console output:
+  - `JustDo sync failed: httpStatus(400, "... new row for relation \"goals\" violates check constraint \"goals_check1\"")`
+  - PostgreSQL code `23514` confirmed this was a DB check-constraint violation,
+    not a network/Docker/server availability issue.
+- Root cause:
+  - `public.goals` has a check constraint requiring `locked = false` rows to
+    have `locked_at IS NULL`.
+  - iOS goal upsert encoded `locked=false` but omitted optional `locked_at`
+    because Swift `JSONEncoder` skips nil optionals by default.
+  - Supabase upsert with `resolution=merge-duplicates` can preserve an existing
+    non-null `locked_at`, producing `locked=false + locked_at != null`.
+- Fix:
+  - `SupabaseGoalMutationRow.encode(to:)` now explicitly encodes `note: null`
+    and `locked_at: null` when those values are nil.
+  - Added regression coverage in `SupabaseRestSyncTests` to assert an unlocked
+    goal upsert sends `locked_at` as `NSNull`.
+  - `AppSyncStatusStore.markFailed` now surfaces `SupabaseSyncError.userMessage`
+    and prints `JustDo sync failed: ...` to make future REST/RLS/schema failures
+    diagnosable from device logs.
+
+### Verification
+
+- `swift test --package-path apps/ios` passed: 46 tests.
+- `git diff --check` passed.
+- User confirmed the device sync error was resolved after rebuilding/rerunning.
+
+## 2026-05-30 Goal & Pro Report iOS real-device UI iteration
+
+### Codex
+
+- Goal onboarding/prompt flow refined from real-device screenshots and user
+  feedback:
+  - Year text uses plain string formatting so `2026` does not render with a
+    thousands separator.
+  - Initial goal fields start empty.
+  - Keyboard dismisses on outside tap / scroll drag.
+  - Onboarding goal entry starts with one active row instead of three.
+  - Goal rows support swipe-left delete.
+  - Memo input was restored after user decided goals should keep notes.
+  - Step indicator and top copy were centered/size adjusted.
+  - Onboarding guide modal uses visual preview examples instead of numeric-only
+    steps.
+  - First guide preview shows sample annual goals; preview spacing, line breaks,
+    and top clipping were corrected.
+  - Transition from guide to input uses a short loading/soft transition instead
+    of an abrupt screen swap.
+- Settings → 목표 sheet refined:
+  - Removed the top-left back chevron because the sheet can be dismissed by
+    drag-down.
+  - Removed the right-side plan badge from the sheet header.
+  - Tightened spacing between the navigation title `목표` and the first section.
+  - Annual/monthly section labels and text sizing were adjusted.
+  - Add/edit goal UI changed from a nested bottom sheet to a centered modal
+    dialog with dimmed background and outside-tap / `xmark` dismissal.
+- Goal card UI aligned closer to the supplied reference image:
+  - Card text sizes reduced after device feedback.
+  - Goal note is shown under the title.
+  - Bottom-left metrics show percentage, completed/related count, and slipped
+    count.
+  - Progress uses the donut/ring UI, not a horizontal bar.
+  - Donut size increased to 52pt, line width to 5pt, and centered percentage
+    font to 11pt.
+  - The right-side lock badge was visually positioned with the card's right
+    column and made tappable.
+- Goal lock/edit behavior:
+  - Tapping the card keeps the existing edit behavior: locked goals show
+    `고정한 목표를 수정할까요?`, unlocked goals open the editor immediately.
+  - Tapping the card's `고정/열림` lock badge toggles `locked` directly and
+    enqueues a goal save mutation.
+  - Locking sets `lockedAt` if needed; unlocking clears `lockedAt`.
+- Goal editor dialog:
+  - Shows title, memo, and lock toggle.
+  - Delete button is placed immediately left of Save.
+  - Save remains the primary action.
+
+### Verification
+
+- `git diff --check` passed after UI edits.
+- Generic iOS build passed:
+  - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
+- User confirmed the latest modified goal UI state was good.
+
+### Remaining focused follow-up
+
+- Real-device smoke the lock badge tap target: it should toggle lock without
+  also opening the card edit/confirmation path.
+- Decide whether goal delete needs a destructive confirmation alert. Current
+  dialog places Delete next to Save but can still delete immediately.
+- Decide report entry UX now that card tap is reserved for edit:
+  - recommended: section-level annual/monthly report action.

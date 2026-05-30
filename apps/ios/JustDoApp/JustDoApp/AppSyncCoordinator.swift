@@ -68,7 +68,9 @@ final class AppSyncStatusStore: ObservableObject {
 
     func markFailed(_ error: Error, snapshotStore: CoreDataAppSnapshotStore?) {
         let pendingCount = pendingMutationCount(snapshotStore: snapshotStore)
-        status = .failed("네트워크 또는 서버 오류로 동기화하지 못했습니다.", pendingCount: pendingCount)
+        let message = Self.syncFailureMessage(error)
+        print("JustDo sync failed: \(String(describing: error))")
+        status = .failed(message, pendingCount: pendingCount)
     }
 
     func refreshPendingCount(snapshotStore: CoreDataAppSnapshotStore?) {
@@ -81,6 +83,16 @@ final class AppSyncStatusStore: ObservableObject {
             return 0
         }
         return (try? snapshotStore.queuedMutations().count) ?? 0
+    }
+
+    private static func syncFailureMessage(_ error: Error) -> String {
+        if let syncError = error as? SupabaseSyncError {
+            return syncError.userMessage
+        }
+        if let urlError = error as? URLError {
+            return "네트워크 연결을 확인해주세요. (\(urlError.code.rawValue))"
+        }
+        return "네트워크 또는 서버 오류로 동기화하지 못했습니다."
     }
 }
 

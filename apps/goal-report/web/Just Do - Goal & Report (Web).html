@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Just Do — Goal & Report (Web)</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; }
+  * { box-sizing: border-box; }
+  .dc-card *::-webkit-scrollbar { display: none; }
+  .dc-card * { scrollbar-width: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="goal-report/design-canvas.jsx"></script>
+<script type="text/babel" src="goal-report/tweaks-panel.jsx"></script>
+<script type="text/babel" src="web/tokens.jsx"></script>
+<script type="text/babel" src="goal-report/data.jsx"></script>
+<script type="text/babel" src="goal-report/web/parts.jsx"></script>
+<script type="text/babel" src="goal-report/web/modals.jsx"></script>
+<script type="text/babel" src="goal-report/web/pages.jsx"></script>
+<script type="text/babel" src="goal-report/web/decided.jsx"></script>
+
+<script type="text/babel">
+  const GR_TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "timing": "평상시",
+    "plan": "Pro",
+    "tone": "에세이",
+    "dark": false
+  }/*EDITMODE-END*/;
+
+  const TONE_KEY = { '에세이': 'essay', '코치': 'coach', '데이터': 'data' };
+  const PLAN_KEY = { 'Free': 'free', 'Trial': 'trial', 'Pro': 'pro' };
+
+  // Mapping: which sections light up under each timing scenario
+  const TIMING_TAGS = {
+    '평상시':       ['goal-page', 'monthly-report', 'yearly-report', 'free-preview', 'lock'],
+    '가입 직후':    ['first-time'],
+    '매월 1일':     ['monthly-prompt', 'report-ready'],
+    '매년 1월':     ['yearly-prompt', 'report-ready'],
+  };
+
+  function GoalReportCanvas() {
+    const [t, setTweak] = useTweaks(GR_TWEAK_DEFAULTS);
+    const tok = W_TOKENS[t.dark ? 'dark' : 'light'];
+    const tone = TONE_KEY[t.tone] || 'essay';
+    const plan = PLAN_KEY[t.plan] || 'pro';
+    const activeIds = TIMING_TAGS[t.timing] || [];
+
+    const Tag = ({ id }) => activeIds.includes(id) ? (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        marginLeft: 10, padding: '2px 8px', borderRadius: 99,
+        background: '#1C1A17', color: '#F6F4EF',
+        fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+      }}>● 활성 시점</span>
+    ) : null;
+
+    // Wrapper: any modal artboard renders the modal frame
+    const modal = (id, label, w, h, node) => (
+      <DCArtboard id={id} label={label} width={w || 1000} height={h || 640} style={{ background: tok.bg }}>
+        <GRModalFrame t={tok} dark={t.dark} w={w || 1000} h={h || 640} shell={<GRShellBg t={tok} />}>
+          {node}
+        </GRModalFrame>
+      </DCArtboard>
+    );
+
+    // Page artboards
+    const page = (id, label, w, h, node) => (
+      <DCArtboard id={id} label={label} width={w || 1280} height={h || 860} style={{ background: tok.bg }}>
+        <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>{node}</div>
+      </DCArtboard>
+    );
+
+    return (
+      <DesignCanvas key={t.dark ? 'd' : 'l'}>
+        <DCSection id="cover" title="Goal & Report · Web (결정안)" subtitle={`현재 시점: ${t.timing} · Plan: ${t.plan} · Tone: ${t.tone}${t.dark ? ' · Dark' : ''}`}>
+          <DCArtboard id="cover-note" label="기획 노트" width={620} height={700} style={{ background: tok.surface, padding: 32 }}>
+            <div style={{ fontFamily: W_FONT, color: tok.text }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: tok.textTertiary, letterSpacing: 0.5, textTransform: 'uppercase' }}>Just Do</div>
+              <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, marginTop: 6, lineHeight: 1.1 }}>Goal & Report</div>
+              <div style={{ fontSize: 13.5, color: tok.textSecondary, marginTop: 12, lineHeight: 1.65 }}>
+                Just Do Mode와 별도. 월간/연간 목표를 입력하고, 매월·매년 자동으로 모달로 돌아본 뒤 리포트로 정리해드려요.
+              </div>
+
+              <div style={{ borderTop: `0.5px solid ${tok.divider}`, marginTop: 22, paddingTop: 18 }}>
+                <Note l="진입점">
+                  <b>설정 → 목표</b> 서브 항목. 목표 클릭 시 단계별 리포트 모달로 진입.
+                </Note>
+                <Note l="1 첫 가입">2단계 wizard · 연간 → 월간 (컴팩트)</Note>
+                <Note l="2·3 prompt">연간=컴팩트, 월간=차분한 타입</Note>
+                <Note l="4 리포트 준비됨">커버 페이지</Note>
+                <Note l="5 목표 관리">카드 그리드 (설정 안)</Note>
+                <Note l="6 잠금 해제">정중한 확인 모달</Note>
+                <Note l="7 월간 리포트">단계별 모달: 완료율 → 히트맵 → 목표별 → 이야기</Note>
+                <Note l="8 연간 리포트">동일 4단계, 더 자세히 (월별 흐름 포함)</Note>
+                <Note l="9 Free 미리보기">요약 + 잠금 카드 + Pro CTA</Note>
+                <Note l="Narrative 톤">에세이 기본. Tweaks에서 코치/데이터로 비교</Note>
+              </div>
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="first-time" title={<>1. 첫 가입 — 목표 wizard <Tag id="first-time" /></>} subtitle="결정: 컴팩트(A). 2단계 연간 → 월간.">
+          {modal('ft-1', 'Step 1 · 연간', 1000, 680, <WGRFirstTimeA t={tok} dark={t.dark} step={1} />)}
+          {modal('ft-2', 'Step 2 · 월간', 1000, 680, <WGRFirstTimeA t={tok} dark={t.dark} step={2} />)}
+        </DCSection>
+
+        <DCSection id="yearly-prompt" title={<>2. 연간 목표 prompt <Tag id="yearly-prompt" /></>} subtitle="결정: 컴팩트(A). 트리거: 매년 1월 1–7일.">
+          {modal('yp', '컴팩트', 920, 620, <WGRYearlyPromptA t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="monthly-prompt" title={<>3. 월간 목표 prompt <Tag id="monthly-prompt" /></>} subtitle="결정: 차분한 타입(B). 트리거: 매월 1–3일.">
+          {modal('mp', '차분한 타입', 960, 620, <WGRMonthlyPromptB t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="report-ready" title={<>4. 리포트 준비됨 — 진입 모달 <Tag id="report-ready" /></>} subtitle="결정: 커버 페이지(B). 매월/매년 첫 진입 시.">
+          {modal('rr', '커버 페이지', 1000, 640, <WGRReportReadyB t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="goal-page" title={<>5. 목표 관리 페이지 (설정 안) <Tag id="goal-page" /></>} subtitle="결정: 카드 그리드(B). Plan 토글 적용. 목표 클릭 시 리포트 모달로 진입.">
+          {page('gp', '카드', 1280, 920, <WGRGoalPageB t={tok} dark={t.dark} plan={plan} />)}
+        </DCSection>
+
+        <DCSection id="lock" title={<>6. 잠금 해제 확인 모달 <Tag id="lock" /></>} subtitle="고정된 목표를 수정하려고 할 때. 완전 영구 잠금 아님, 한 번 풀고 다시 잠글 수 있음.">
+          {modal('lk', '정중한 버전', 900, 560, <WGRLockB t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="monthly-report" title={<>7. 월간 리포트 — 단계별 모달 <Tag id="monthly-report" /></>} subtitle={`'리포트 보기' 클릭 → 모달이 완료율 → 히트맵 → 목표별 → 이야기로 전환. Tweaks 톤: ${t.tone}.`}>
+          {modal('mr-1', '1 · 완료율', 1000, 760, <WGRMonthlyReportModal t={tok} dark={t.dark} step={0} tone={tone} />)}
+          {modal('mr-2', '2 · 히트맵', 1000, 760, <WGRMonthlyReportModal t={tok} dark={t.dark} step={1} tone={tone} />)}
+          {modal('mr-3', '3 · 목표별', 1000, 760, <WGRMonthlyReportModal t={tok} dark={t.dark} step={2} tone={tone} />)}
+          {modal('mr-4', '4 · 이야기', 1000, 760, <WGRMonthlyReportModal t={tok} dark={t.dark} step={3} tone={tone} />)}
+        </DCSection>
+
+        <DCSection id="yearly-report" title={<>8. 연간 리포트 — 단계별 모달 <Tag id="yearly-report" /></>} subtitle={`요약 → 월별 흐름 → 연간 목표 → 이야기. 월간보다 자세히. Tweaks 톤: ${t.tone}.`}>
+          {modal('yr-1', '1 · 요약', 1000, 760, <WGRYearlyReportModal t={tok} dark={t.dark} step={0} tone={tone} />)}
+          {modal('yr-2', '2 · 월별 흐름', 1000, 760, <WGRYearlyReportModal t={tok} dark={t.dark} step={1} tone={tone} />)}
+          {modal('yr-3', '3 · 연간 목표', 1000, 760, <WGRYearlyReportModal t={tok} dark={t.dark} step={2} tone={tone} />)}
+          {modal('yr-4', '4 · 이야기', 1000, 760, <WGRYearlyReportModal t={tok} dark={t.dark} step={3} tone={tone} />)}
+        </DCSection>
+
+        <DCSection id="free-preview" title={<>9. Free 사용자 리포트 미리보기 <Tag id="free-preview" /></>} subtitle="상단 요약(목표 개수)만 노출 · 그 아래는 잠금 카드. Pro 전환 CTA.">
+          {page('fp', '블러 + 중앙 CTA', 1280, 860, <WGRFreePreviewA t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <TweaksPanel>
+          <TweakSection label="시나리오" />
+          <TweakRadio  label="현재 시점" value={t.timing}
+                       options={['평상시', '가입 직후', '매월 1일', '매년 1월']}
+                       onChange={(v) => setTweak('timing', v)} />
+          <TweakRadio  label="플랜" value={t.plan}
+                       options={['Free', 'Trial', 'Pro']}
+                       onChange={(v) => setTweak('plan', v)} />
+          <TweakSection label="리포트" />
+          <TweakRadio  label="Narrative 톤" value={t.tone}
+                       options={['에세이', '코치', '데이터']}
+                       onChange={(v) => setTweak('tone', v)} />
+          <TweakSection label="외관" />
+          <TweakToggle label="다크 모드" value={t.dark}
+                       onChange={(v) => setTweak('dark', v)} />
+        </TweaksPanel>
+      </DesignCanvas>
+    );
+  }
+
+  function Note({ l, children }) {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(28,26,23,0.45)', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 4 }}>{l}</div>
+        <div style={{ fontSize: 13, color: '#1C1A17', lineHeight: 1.6 }}>{children}</div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<GoalReportCanvas />);
+</script>
+</body>
+</html>

@@ -10,6 +10,9 @@ public enum LocalMutation: Codable, Equatable, Sendable {
     case habitUpsert(Habit)
     case habitDelete(id: UUID)
     case habitLogSet(habitID: UUID, iso: String, value: Int)
+    case goalUpsert(Goal)
+    case goalDelete(id: UUID)
+    case goalPromptDismissalUpsert(GoalPromptDismissal)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -23,6 +26,8 @@ public enum LocalMutation: Codable, Equatable, Sendable {
         case habit
         case habitID = "habitId"
         case iso
+        case goal
+        case dismissal
     }
 
     public init(from decoder: Decoder) throws {
@@ -58,6 +63,14 @@ public enum LocalMutation: Codable, Equatable, Sendable {
                 habitID: try container.decode(UUID.self, forKey: .habitID),
                 iso: try container.decode(String.self, forKey: .iso),
                 value: try container.decode(Int.self, forKey: .value)
+            )
+        case "goal_upsert":
+            self = .goalUpsert(try container.decode(Goal.self, forKey: .goal))
+        case "goal_delete":
+            self = .goalDelete(id: try container.decode(UUID.self, forKey: .id))
+        case "goal_prompt_dismissal_upsert":
+            self = .goalPromptDismissalUpsert(
+                try container.decode(GoalPromptDismissal.self, forKey: .dismissal)
             )
         default:
             throw DecodingError.dataCorruptedError(
@@ -104,6 +117,15 @@ public enum LocalMutation: Codable, Equatable, Sendable {
             try container.encode(habitID, forKey: .habitID)
             try container.encode(iso, forKey: .iso)
             try container.encode(value, forKey: .value)
+        case .goalUpsert(let goal):
+            try container.encode("goal_upsert", forKey: .type)
+            try container.encode(goal, forKey: .goal)
+        case .goalDelete(let id):
+            try container.encode("goal_delete", forKey: .type)
+            try container.encode(id, forKey: .id)
+        case .goalPromptDismissalUpsert(let dismissal):
+            try container.encode("goal_prompt_dismissal_upsert", forKey: .type)
+            try container.encode(dismissal, forKey: .dismissal)
         }
     }
 }
@@ -135,6 +157,9 @@ public enum RemoteChange: Equatable, Sendable {
     case habitUpserted(Habit)
     case habitDeleted(id: UUID)
     case habitLogSet(habitID: UUID, iso: String, value: Int)
+    case goalUpserted(Goal)
+    case goalDeleted(id: UUID)
+    case goalPromptDismissalUpserted(GoalPromptDismissal)
 }
 
 public struct WidgetSnapshot: Codable, Equatable, Sendable {

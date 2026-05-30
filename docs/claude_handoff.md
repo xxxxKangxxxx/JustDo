@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-29
+Date: 2026-05-30
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -81,27 +81,40 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > `.xcodeproj`가 있는 `apps/ios/JustDoApp`에서
 > `xcodebuild -project JustDoApp.xcodeproj ...`로 실행한다.
 
-> **다음 작업자가 픽업할 우선순위 (2026-05-29 갱신)**:
-> 1. **Goal & Pro Report MVP 구현**. Just Do Mode iOS/Web 구현과 smoke
->    follow-up은 완료 흐름으로 정리됨. 다음 제품 트랙은 월간/연간 목표 입력과
->    Pro-gated 리포트다. `docs/next_steps.md`의 "Active Next Track"과
->    "Planned Product Track: Goal & Pro Report", `docs/just_do_prd.md`의
->    Goal & Pro Report 섹션, `docs/just_do_db_schema.md`의 next implementation schema를
->    기준으로 진행.
-> 2. **Goal & Pro Report schema migration 먼저**. Future schema를 실제
->    Supabase migration으로 옮기되, 현재 backend strategy에 맞춰 business data
->    FK는 `public.users(id)`를 사용한다. owner-only RLS, `set_updated_at()`
->    trigger, `user_id + period_type + period_key + sort_order` index를 포함.
->    최대 5개 제한은 MVP에서는 app/service layer에서 먼저 enforce.
-> 3. **Web MVP 후 iOS MVP**. Web은 `app-shell.tsx`, `store.tsx`,
->    `persistence.ts`, `supabase-storage.ts`, `supabase-mapping.ts`,
->    `selectors.ts`와 관련 tests에서 시작. iOS는 Web behavior가 안정된 뒤
->    `ContentView.swift` 및 `apps/ios/Sources` 공유 모델/스토리지로 반영.
+> **2026-05-30 Goal & Pro Report first pass + iOS device iteration** — Goal &
+> Pro Report MVP is no longer only a planned track. The migration
+> `20260529120000_goal_report.sql` exists and hosted Supabase reports it as
+> applied. Web first pass includes Settings → 목표 management, goal CRUD,
+> prompts, Free preview, and Trial/Pro report modal. iOS first pass includes
+> shared `Goal` / `GoalPromptDismissal` models, Core Data mirror, mutation
+> queue, Supabase REST sync, Settings → 목표 sheet, goal cards, centered
+> add/edit dialog, onboarding/monthly/yearly prompts, and report preview/detail
+> scaffolding. Real-device UI feedback was reflected: title spacing tightened,
+> sheet back chevron removed, memo restored, guide previews added, one initial
+> goal row, swipe-delete rows, keyboard dismissal, larger donut progress, and
+> card lock badge direct toggle. Sync issue `HTTP 400` / PostgreSQL `23514` /
+> `goals_check1` was fixed by explicitly encoding `locked_at: null` on unlocked
+> goal upsert. Verification: `swift test --package-path apps/ios` passed 46
+> tests, generic iOS `xcodebuild` passed, `git diff --check` passed, and user
+> confirmed the sync error was resolved.
+
+> **다음 작업자가 픽업할 우선순위 (2026-05-30 갱신)**:
+> 1. **Goal & Pro Report focused smoke / UX 마무리**. 구현 자체는 schema, Web,
+>    iOS first pass까지 반영됨. 다음은 iOS Settings → 목표에서 add/edit/delete,
+>    lock badge direct toggle, locked card confirmation, prompt dismissal,
+>    relaunch persistence, and cloud sync를 실기기로 재확인. 특히 lock badge tap이
+>    카드 edit tap과 동시에 발화하지 않는지 확인.
+> 2. **Goal delete confirmation 결정**. 현재 iOS centered editor dialog에서
+>    Delete는 Save 바로 왼쪽에 있고 즉시 삭제된다. 목표 삭제는 사용자 작성 데이터
+>    손실이므로 `삭제 / 취소` confirmation alert를 넣는 것을 권장.
+> 3. **Report entry UX 결정**. 카드 tap은 edit/locked confirmation에 배정됐다.
+>    리포트는 period-level 기능이므로 연간/월간 섹션 헤더 또는 섹션 하단 CTA로
+>    들어가는 방향이 현재 구조와 가장 잘 맞는다.
 > 4. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
-> 5. **iOS TestFlight/App Store 준비**. Goal & Pro Report를 첫 TestFlight에
->    포함할지 결정한 뒤 archive/TestFlight 작업으로 이동. 현재 Auth landing,
+> 5. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
+>    상태로 focused smoke를 마친 뒤 archive/TestFlight 작업으로 이동. 현재 Auth landing,
 >    Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats, Settings,
 >    Widget 보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션
 >    자동 refresh도 1시간+ 종료 후 재진입 smoke 통과.
@@ -285,25 +298,27 @@ they belong to other projects on this machine.
 
 ## Working Tree State
 
-After the 2026-05-25 signup fix + iOS auth refresh commits and the
-verification capture, the working tree is clean once this docs commit
-lands and is pushed to `origin/main`. The supabase migration was applied
-to hosted Supabase via `supabase db push` on 2026-05-25 before commit. The
-iOS auth refresh change passed the real-device 1-hour close-and-relaunch
-smoke on iPhone 14 Pro / iOS 26.5; the sessionStore concurrent-refresh
-race documented as a follow-up did not surface during the smoke, so it
-stays as a watch item rather than an active task.
+After the 2026-05-30 Goal & Pro Report docs/code commit lands and is pushed,
+the working tree should be clean. Hosted Supabase has migrations through
+`20260529120000_goal_report.sql`. The iOS auth refresh change passed the
+real-device 1-hour close-and-relaunch smoke on iPhone 14 Pro / iOS 26.5; the
+sessionStore concurrent-refresh race documented as a follow-up did not surface
+during the smoke, so it stays as a watch item rather than an active task.
 
-Latest local commits to check before continuing (2026-05-25):
+Latest known commits before the Goal & Pro Report commit (2026-05-30):
 
 ```text
+8eb8e5a docs: plan goal report next track
+ed714aa fix: polish web calendar smoke issues
+2b262d6 fix: align web just do mode behavior
+5d395b9 docs: record ios final smoke pass
+bc71799 fix: refine ios just do mode and pro sync
 80381c7 feat(ios): auto-refresh auth session on foreground
 21ee0cd feat(supabase): add categories user-name unique index for signup trigger
-83a0e61 docs: clarify claude handoff state
 ```
 
 For Claude Code/Codex handoff, do not replay the chat. Start from this file,
-`docs/worklog.md` latest 2026-05-25 entries, and `docs/next_steps.md` current
+`docs/worklog.md` latest 2026-05-30 entries, and `docs/next_steps.md` current
 priority. Then run `git pull --ff-only origin main`, `git status -sb`, and the
 iOS build/test commands below before doing the next real-device smoke pass.
 
@@ -376,7 +391,7 @@ iOS build/test commands below before doing the next real-device smoke pass.
     `https://www.justdo.co.kr`. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
   - 도메인/sync 레이어 (IndexedDB queue, Supabase adapter, auth)는 그대로 유지.
-- Phase 6 iOS / Widget — current state (2026-05-29):
+- Phase 6 iOS / Widget — current state (2026-05-30):
   - `JustDoShared` includes Swift domain models, mutation queue schema, drift
     fixtures, Core Data model/mappers, App Group snapshot/mutation stores,
     Supabase REST read/flush sync, and WidgetKit display models.
@@ -399,6 +414,24 @@ iOS build/test commands below before doing the next real-device smoke pass.
   - iOS Supabase read-sync now reads `user_subscriptions` and maps Pro
     entitlement into local `settings.plan`, so hosted Pro state can unlock
     native Pro-gated features after sync.
+  - Goal & Pro Report iOS first pass is implemented:
+    - shared `Goal` / `GoalPromptDismissal` domain models.
+    - Core Data `CDGoal` / `CDGoalPromptDismissal` mirror entities and mappers.
+    - mutation queue cases `goal_upsert`, `goal_delete`,
+      `goal_prompt_dismissal_upsert`.
+    - Supabase REST fetch/mutation support for `goals` and
+      `goal_prompt_dismissals`.
+    - Settings → 목표 sheet with annual/monthly card stacks and max 5 goals per
+      period.
+    - goal cards with note, progress donut, percentage text,
+      completed/related/slipped counts, and direct lock badge toggle.
+    - centered goal add/edit dialog; delete button is immediately left of Save.
+    - locked card tap confirmation; unlocked card tap opens editor.
+    - onboarding/monthly/yearly goal prompt surfaces and dismissal persistence.
+  - 2026-05-30 sync diagnostic/fix:
+    - `JustDo sync failed` now prints the underlying REST error.
+    - goal upsert now explicitly sends `locked_at: null` and `note: null` for
+      nil values to satisfy `goals_check1` when unlocking.
   - Just Do Mode is implemented with local sheet selection state: Settings
     enables availability, while `오늘만` / `이 날까지` remains switchable in the
     selected-day sheet for eligible users.
@@ -411,15 +444,16 @@ iOS build/test commands below before doing the next real-device smoke pass.
   - App and widget task completion toggles now use compact
     `task_completion_set` mutations instead of full task upsert.
   - Last verified:
-    - `cd apps/ios && swift test` -> pass, 43 tests.
-    - `cd apps/ios/JustDoApp && xcodebuild -quiet -project JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS Simulator' build` -> pass.
+    - `swift test --package-path apps/ios` -> pass, 46 tests.
+    - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build` -> pass.
     - `git diff --check` -> pass.
   - Auth landing, Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats,
     Settings, Widget, 1-hour+ auth session refresh smoke, and final real-device
-    smoke passed on the configured real device. TestFlight/App Store preparation
-    is ready to start after the Goal & Pro Report inclusion decision. Because
-    this is a native SwiftUI/Xcode app, do **not** use Expo Go; install directly
-    from Xcode to a real iPhone or use TestFlight later.
+    smoke passed on the configured real device. Goal & Pro Report first pass is
+    also in the local iOS build; TestFlight/App Store preparation follows the
+    remaining focused Goal smoke and report-entry/delete-confirm UX decisions.
+    Because this is a native SwiftUI/Xcode app, do **not** use Expo Go; install
+    directly from Xcode to a real iPhone or use TestFlight later.
   - Both targets share App Group `group.kr.justdo.app`.
   - Auto-generated `JustDoWidgetControl` (iOS 18-only) removed.
   - `JustDoWidget.swift` now reads `widget_snapshot.json` from the App Group,
@@ -561,6 +595,8 @@ Applied migrations:
 - `20260525090000_categories_user_name_unique.sql` (2026-05-25;
   fixes `handle_new_auth_user()` ON CONFLICT mismatch that blocked all
   brand-new Google signups in production)
+- `20260529120000_goal_report.sql` (2026-05-30 hosted state confirmed;
+  adds `goals` and `goal_prompt_dismissals` for Goal & Pro Report MVP)
 
 Realtime publication includes:
 
@@ -945,8 +981,9 @@ Recommended immediate next steps:
      - Settings / Widget 보정 통과 (계정/profile, 알림/표시 picker,
        data/legal, home/lock widget layout, row tap completion, mode-scoped
        counts 후).
-   - 남은 iOS 작업은 TestFlight/App Store 준비. 상세 체크리스트는
-     `docs/ios_phase6_status.md` 참고.
+   - 2026-05-30 갱신: Goal & Pro Report iOS first pass도 반영됨. 남은 iOS
+     작업은 focused Goal smoke, 삭제 확인/리포트 진입 UX 결정, TestFlight/App
+     Store 준비. 상세 체크리스트는 `docs/ios_phase6_status.md` 참고.
    - Widget은 home-screen small/medium/large와 lock-screen accessory로 분리.
      Home-screen row text deep link는 제거했고 row 전체 탭이 완료 토글이다.
    - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 (wireless 활성 시 USB
@@ -978,7 +1015,7 @@ Recommended immediate next steps:
    환경변수 + CLI로 platform `WEB_COMPUTE` + framework `Next.js - SSR` 명시).
    새 Amplify 앱을 다시 만들 일이 생기면 이 세 가지 모두 적용해야 SSR로 배포됨.
 
-### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-29 갱신)
+### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-30 갱신)
 
 - **2026-05-25 신규 fix 인지부터**: 운영 도메인의 신규 가입자가 로그인 루트로
   되돌아오던 DB 에러는 categories `(user_id, name)` unique index 부재로
@@ -994,6 +1031,11 @@ Recommended immediate next steps:
   task inline edit/delete, Habit date-sheet no-op, pushed detail page 제거,
   Just Do Mode local mode 분리까지 반영됨. 이어받는 세션은 `worklog.md`
   2026-05-29 엔트리와 `next_steps.md` 상단 Where We Are를 먼저 읽기.
+- **2026-05-30 Goal & Pro Report 인지**: schema/Web/iOS first pass가 모두
+  반영됨. Hosted migration은 remote에 적용됐고, iOS `goals_check1` sync 오류는
+  `locked_at: null` 명시 encoding으로 해결됨. 이어받는 세션은 `worklog.md`
+  2026-05-30 엔트리와 `next_steps.md` 상단 Immediate Goal follow-up을 먼저
+  읽기.
 
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5, `next_steps.md` Phase 7 + Deployment
@@ -1016,8 +1058,9 @@ Recommended immediate next steps:
   자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
 - iOS는 Phase 7과 독립 트랙. Auth landing, Home, Add Sheet, editor-sheet
   routing, Just Do Mode, Stats, Settings, Widget 보정은 iPhone 14 Pro iOS 26.5
-  최종 smoke까지 통과. 현재 남은 것은 TestFlight 준비이며, Expo Go로 검증하지
-  않음.
+  최종 smoke까지 통과. Goal & Pro Report first pass도 iOS에 포함됨. 현재 남은
+  것은 focused Goal smoke, 삭제 확인/리포트 진입 UX 결정, TestFlight 준비이며,
+  Expo Go로 검증하지 않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
   주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
   monorepo platform/framework 설정 유지.

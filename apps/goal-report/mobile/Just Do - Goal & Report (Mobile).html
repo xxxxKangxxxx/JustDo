@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Just Do — Goal & Report (Mobile)</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; }
+  * { box-sizing: border-box; }
+  .dc-card *::-webkit-scrollbar { display: none; }
+  .dc-card * { scrollbar-width: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="goal-report/design-canvas.jsx"></script>
+<script type="text/babel" src="goal-report/tweaks-panel.jsx"></script>
+<script type="text/babel" src="styles/tokens.jsx"></script>
+<script type="text/babel" src="styles/primitives.jsx"></script>
+<script type="text/babel" src="web/tokens.jsx"></script>
+<script type="text/babel" src="goal-report/data.jsx"></script>
+<script type="text/babel" src="goal-report/web/parts.jsx"></script>
+<script type="text/babel" src="goal-report/mobile/parts.jsx"></script>
+<script type="text/babel" src="goal-report/mobile/modals.jsx"></script>
+<script type="text/babel" src="goal-report/mobile/pages.jsx"></script>
+<script type="text/babel" src="goal-report/mobile/decided.jsx"></script>
+
+<script type="text/babel">
+  const MGR_TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "timing": "평상시",
+    "plan": "Pro",
+    "tone": "코치",
+    "dark": false
+  }/*EDITMODE-END*/;
+
+  const TONE_KEY = { '에세이': 'essay', '코치': 'coach', '데이터': 'data' };
+  const PLAN_KEY = { 'Free': 'free', 'Trial': 'trial', 'Pro': 'pro' };
+
+  const TIMING_TAGS = {
+    '평상시':    ['goal-page', 'monthly-report', 'yearly-report', 'free-preview', 'lock'],
+    '가입 직후': ['first-time'],
+    '매월 1일':  ['monthly-prompt', 'report-ready'],
+    '매년 1월':  ['yearly-prompt', 'report-ready'],
+  };
+
+  const P = 390, H = 844;
+
+  function MobileCanvas() {
+    const [t, setTweak] = useTweaks(MGR_TWEAK_DEFAULTS);
+    const tok = W_TOKENS[t.dark ? 'dark' : 'light'];
+    const tone = TONE_KEY[t.tone] || 'essay';
+    const plan = PLAN_KEY[t.plan] || 'pro';
+    const active = TIMING_TAGS[t.timing] || [];
+
+    const Tag = ({ id }) => active.includes(id) ? (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', marginLeft: 10,
+        padding: '2px 8px', borderRadius: 99, background: '#1C1A17', color: '#F6F4EF',
+        fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+      }}>● 활성 시점</span>
+    ) : null;
+
+    // Phone-wrapped artboard
+    const phone = (id, label, node) => (
+      <DCArtboard id={id} label={label} width={P + 14} height={H + 14}>
+        <JDPhone dark={t.dark} width={P} height={H}>
+          {node}
+        </JDPhone>
+      </DCArtboard>
+    );
+
+    return (
+      <DesignCanvas key={t.dark ? 'd' : 'l'}>
+        <DCSection id="cover" title="Goal & Report · Mobile (결정안)" subtitle={`현재 시점: ${t.timing} · Plan: ${t.plan} · Tone: ${t.tone}${t.dark ? ' · Dark' : ''}`}>
+          <DCArtboard id="cover-note" label="결정 노트" width={420} height={H + 14} style={{ background: tok.surface, padding: 28 }}>
+            <div style={{ fontFamily: W_FONT, color: tok.text }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: tok.textTertiary, letterSpacing: 0.5, textTransform: 'uppercase' }}>Just Do · iOS</div>
+              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.9, marginTop: 6, lineHeight: 1.1 }}>Goal & Report</div>
+              <div style={{ fontSize: 13, color: tok.textSecondary, marginTop: 10, lineHeight: 1.6 }}>
+                모바일 결정안. 각 화면은 선택된 한 가지 방향으로 확정했어요.
+              </div>
+              <div style={{ borderTop: `0.5px solid ${tok.divider}`, marginTop: 18, paddingTop: 14 }}>
+                <Note l="1 첫 가입">2단계 wizard · 연간 → 월간. 나중에=좌하단, 다음=우하단</Note>
+                <Note l="2·3 prompt">연간/월간 모두 중앙 모달</Note>
+                <Note l="4 리포트 준비됨">풀스크린 커버</Note>
+                <Note l="5 목표 관리">카드형 (설정 > 목표)</Note>
+                <Note l="6 잠금 해제">중앙 모달</Note>
+                <Note l="7 월간 리포트">4단계: 완료율 → 히트맵 → 목표별 → 이야기</Note>
+                <Note l="8 연간 리포트">동일 4단계, 더 자세히 (월별 흐름 포함)</Note>
+                <Note l="9 Free 미리보기">요약 + 잠금 카드 + Pro CTA</Note>
+              </div>
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="first-time" title={<>1. 첫 가입 — 목표 wizard <Tag id="first-time" /></>} subtitle="2단계 wizard. 연간 → 월간. 나중에는 좌하단, 다음은 우하단.">
+          {phone('ft-1', 'Step 1 · 연간 목표', <MGRFirstTimeA t={tok} dark={t.dark} step={1} />)}
+          {phone('ft-2', 'Step 2 · 월간 목표', <MGRFirstTimeA t={tok} dark={t.dark} step={2} />)}
+        </DCSection>
+
+        <DCSection id="yearly-prompt" title={<>2. 연간 목표 prompt <Tag id="yearly-prompt" /></>} subtitle="중앙 모달. 트리거: 매년 1월 1–7일.">
+          {phone('yp', '중앙 모달', <MGRYearlyPromptCenter t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="monthly-prompt" title={<>3. 월간 목표 prompt <Tag id="monthly-prompt" /></>} subtitle="중앙 모달. 트리거: 매월 1–3일.">
+          {phone('mp', '중앙 모달', <MGRMonthlyPromptCenter t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="report-ready" title={<>4. 리포트 준비됨 진입 모달 <Tag id="report-ready" /></>} subtitle="풀스크린 커버. 매월/매년 첫 진입 시.">
+          {phone('rr', '풀스크린 커버', <MGRReportReadyB t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="goal-page" title={<>5. 목표 관리 (설정 > 목표) <Tag id="goal-page" /></>} subtitle="카드형. Plan 토글이 우측 상단에 반영됨.">
+          {phone('gp', '카드', <MGRGoalPageB t={tok} dark={t.dark} plan={plan} />)}
+        </DCSection>
+
+        <DCSection id="lock" title={<>6. 잠금 해제 확인 모달 <Tag id="lock" /></>} subtitle="중앙 모달.">
+          {phone('lk', '중앙 모달', <MGRLockCenter t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <DCSection id="monthly-report" title={<>7. 월간 리포트 — 4단계 <Tag id="monthly-report" /></>} subtitle={`완료율 → 히트맵 → 목표별 → 이야기. 한 단계씩 넘기는 플로우. Tweaks 톤: ${t.tone}.`}>
+          {phone('mr-1', '1 · 완료율', <MGRMonthlyReportStep t={tok} dark={t.dark} step={0} tone={tone} />)}
+          {phone('mr-2', '2 · 히트맵', <MGRMonthlyReportStep t={tok} dark={t.dark} step={1} tone={tone} />)}
+          {phone('mr-3', '3 · 목표별', <MGRMonthlyReportStep t={tok} dark={t.dark} step={2} tone={tone} />)}
+          {phone('mr-4', '4 · 이야기', <MGRMonthlyReportStep t={tok} dark={t.dark} step={3} tone={tone} />)}
+        </DCSection>
+
+        <DCSection id="yearly-report" title={<>8. 연간 리포트 — 4단계 <Tag id="yearly-report" /></>} subtitle={`요약 → 월별 흐름 → 연간 목표 → 이야기. 월간보다 자세히. Tweaks 톤: ${t.tone}.`}>
+          {phone('yr-1', '1 · 요약', <MGRYearlyReportStep t={tok} dark={t.dark} step={0} tone={tone} />)}
+          {phone('yr-2', '2 · 월별 흐름', <MGRYearlyReportStep t={tok} dark={t.dark} step={1} tone={tone} />)}
+          {phone('yr-3', '3 · 연간 목표', <MGRYearlyReportStep t={tok} dark={t.dark} step={2} tone={tone} />)}
+          {phone('yr-4', '4 · 이야기', <MGRYearlyReportStep t={tok} dark={t.dark} step={3} tone={tone} />)}
+        </DCSection>
+
+        <DCSection id="free-preview" title={<>9. Free 리포트 미리보기 <Tag id="free-preview" /></>} subtitle="상단 요약(목표 개수) + 잠금 카드 + Pro CTA.">
+          {phone('fp', '블러 + 중앙 CTA', <MGRFreePreviewA t={tok} dark={t.dark} />)}
+        </DCSection>
+
+        <TweaksPanel>
+          <TweakSection label="시나리오" />
+          <TweakRadio  label="현재 시점" value={t.timing}
+                       options={['평상시', '가입 직후', '매월 1일', '매년 1월']}
+                       onChange={(v) => setTweak('timing', v)} />
+          <TweakRadio  label="플랜" value={t.plan}
+                       options={['Free', 'Trial', 'Pro']}
+                       onChange={(v) => setTweak('plan', v)} />
+          <TweakSection label="리포트" />
+          <TweakRadio  label="Narrative 톤" value={t.tone}
+                       options={['에세이', '코치', '데이터']}
+                       onChange={(v) => setTweak('tone', v)} />
+          <TweakSection label="외관" />
+          <TweakToggle label="다크 모드" value={t.dark}
+                       onChange={(v) => setTweak('dark', v)} />
+        </TweaksPanel>
+      </DesignCanvas>
+    );
+  }
+
+  function Note({ l, children }) {
+    return (
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(28,26,23,0.45)', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 3 }}>{l}</div>
+        <div style={{ fontSize: 12.5, color: '#1C1A17', lineHeight: 1.55 }}>{children}</div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<MobileCanvas />);
+</script>
+</body>
+</html>

@@ -5,6 +5,10 @@ import type { JustDoStorage, Persisted, RemoteChange } from "./persistence";
 import {
   categoryDomainToInsert,
   categoryRowToDomain,
+  goalDomainToInsert,
+  goalPromptDismissalDomainToInsert,
+  goalPromptDismissalRowToDomain,
+  goalRowToDomain,
   habitDomainToInsert,
   habitRowToDomain,
   mergeHabitLogs,
@@ -21,6 +25,8 @@ type LegacyCategoryRow = Omit<CategoryRow, "is_default" | "position"> &
 type TaskRow = Parameters<typeof taskRowToDomain>[0];
 type HabitRow = Parameters<typeof habitRowToDomain>[0];
 type HabitLogRow = Parameters<typeof mergeHabitLogs>[1][number];
+type GoalRow = Parameters<typeof goalRowToDomain>[0];
+type GoalPromptDismissalRow = Parameters<typeof goalPromptDismissalRowToDomain>[0];
 type TagRow = { id: string; user_id: string; name: string };
 type TaskTagRow = { task_id: string; tag_id: string };
 type UserPreferences = { week_start?: unknown; just_do_mode?: unknown };
@@ -190,6 +196,33 @@ export const createSupabaseStorage = (
     };
   };
 
+  const isMissingRelation = (error: { code?: string } | null) =>
+    error?.code === "42P01" || error?.code === "42703" || error?.code === "PGRST205";
+
+  const loadGoals = async () => {
+    const { data, error } = await client
+      .from("goals")
+      .select("*")
+      .eq("user_id", userId);
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      throw error;
+    }
+    return (data ?? []).map(goalRowToDomain);
+  };
+
+  const loadGoalPromptDismissals = async () => {
+    const { data, error } = await client
+      .from("goal_prompt_dismissals")
+      .select("*")
+      .eq("user_id", userId);
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      throw error;
+    }
+    return (data ?? []).map(goalPromptDismissalRowToDomain);
+  };
+
   const savePreferences = async (settings: Persisted["settings"]) => {
     const { data, error } = await client
       .from("users")
@@ -222,7 +255,15 @@ export const createSupabaseStorage = (
 
   return {
     async load(): Promise<Persisted | null> {
-      const [categoriesResult, tasksResult, habitsResult, logsResult, preferences] = await Promise.all([
+      const [
+        categoriesResult,
+        tasksResult,
+        habitsResult,
+        logsResult,
+        goalsResult,
+        dismissalsResult,
+        preferences,
+      ] = await Promise.all([
         loadCategories(),
         client
           .from("tasks")
@@ -230,6 +271,8 @@ export const createSupabaseStorage = (
           .eq("user_id", userId),
         client.from("habits").select("*").eq("user_id", userId),
         client.from("habit_logs").select("*").eq("user_id", userId),
+        loadGoals(),
+        loadGoalPromptDismissals(),
         loadPreferences(),
       ]);
 
@@ -241,6 +284,8 @@ export const createSupabaseStorage = (
       const tasks = ((tasksResult.data ?? []) as TaskWithJoins[]).map(taskFromJoinedRow);
       const habitsBare = (habitsResult.data ?? []).map(habitRowToDomain);
       const habits = mergeHabitLogs(habitsBare, logsResult.data ?? []);
+      const goals = goalsResult;
+      const goalPromptDismissals = dismissalsResult;
 
       // The remote source has no settings/view yet — return them so the
       // store keeps its in-memory defaults instead of wiping them.
@@ -255,6 +300,8 @@ export const createSupabaseStorage = (
         categories,
         tasks,
         habits,
+        goals,
+        goalPromptDismissals,
         settings: {
           notify: true,
           notifyTime: "09:00",
@@ -347,20 +394,43 @@ export const createSupabaseStorage = (
       }
     },
 
+    async upsertGoal(goal) {
+      const { error } = await client
+        .from("goals")
+        .upsert(goalDomainToInsert(goal, userId));
+      if (error) throw error;
+    },
+
+    async deleteGoal(id) {
+      const { error } = await client
+        .from("goals")
+        .delete()
+        .eq("user_id", userId)
+        .eq("id", id);
+      if (error) throw error;
+    },
+
+    async upsertGoalPromptDismissal(dismissal) {
+      const { error } = await client
+        .from("goal_prompt_dismissals")
+        .upsert(goalPromptDismissalDomainToInsert(dismissal, userId), {
+          onConflict: "user_id,prompt_type,period_key",
+        });
+      if (error) throw error;
+    },
+
     subscribe(callback) {
       const channels: RealtimeChannel[] = [];
 
-      // CHANNEL_ERROR fires whenever the realtime websocket cannot be reached,
-      // which includes the expected offline transition (DevTools throttle to
-      // Offline, network drop, etc). Surfacing those as syncError makes the
-      // settings sync panel claim "확인 필요" while the offline queue is still
-      // healthy. Treat CHANNEL_ERROR as a real error only when the browser
-      // currently believes it is online — otherwise the queue is the source of
-      // truth and will reconcile on reconnect.
       const onChannelStatus = (label: string) => (status: string) => {
         if (status !== "CHANNEL_ERROR") return;
-        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-        emitError(callback, new Error(`${label} realtime subscription failed`));
+        // Realtime is opportunistic. REST load/mutation plus the IndexedDB
+        // queue are the source of truth, and Supabase websocket failures are
+        // common in restricted dev networks. Do not mark storage as broken just
+        // because a realtime channel cannot attach.
+        if (process.env.NODE_ENV !== "production") {
+          console.debug(`JustDo realtime channel unavailable: ${label}`);
+        }
       };
 
       const tasksChannel = client
@@ -513,6 +583,54 @@ export const createSupabaseStorage = (
         )
         .subscribe(onChannelStatus("habit logs"));
       channels.push(logsChannel);
+
+      const goalsChannel = client
+        .channel(`just-do:${userId}:goals`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "goals",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as Partial<GoalRow>;
+              if (oldRow.id) emit(callback, { type: "goal_deleted", id: oldRow.id });
+              return;
+            }
+            emit(callback, {
+              type: "goal_upserted",
+              goal: goalRowToDomain(payload.new as GoalRow),
+            });
+          },
+        )
+        .subscribe(onChannelStatus("goals"));
+      channels.push(goalsChannel);
+
+      const dismissalsChannel = client
+        .channel(`just-do:${userId}:goal_prompt_dismissals`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "goal_prompt_dismissals",
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "DELETE") return;
+            emit(callback, {
+              type: "goal_prompt_dismissal_upserted",
+              dismissal: goalPromptDismissalRowToDomain(
+                payload.new as GoalPromptDismissalRow,
+              ),
+            });
+          },
+        )
+        .subscribe(onChannelStatus("goal prompt dismissals"));
+      channels.push(dismissalsChannel);
 
       return () => {
         for (const channel of channels) {
