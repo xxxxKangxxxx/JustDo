@@ -87,11 +87,12 @@ Goal & Pro Report MVP first pass is now mirrored into iOS:
 - Card tap keeps the existing edit behavior: locked goals show confirmation,
   unlocked goals open the editor.
 - The lock badge toggles locked/unlocked directly and enqueues a sync mutation.
-- Goal add/edit uses a centered modal dialog, not a nested bottom sheet.
+- Goal add/edit uses a centered modal dialog, not a nested bottom sheet; existing
+  goals show a destructive delete confirmation before removal.
 - Onboarding/monthly/yearly goal prompts are implemented with skip/dismissal
   persistence.
 
-Latest focused checks: `swift test --package-path apps/ios` passed 46 tests,
-generic iOS `xcodebuild` passed, and `git diff --check` passed. TestFlight/App
-Store preparation follows the remaining focused Goal smoke and report-entry UX
-decision.
+Latest focused checks: Settings → 목표 smoke was user-confirmed, `swift test
+--package-path apps/ios` passed 46 tests, generic iOS `xcodebuild` passed, and
+`git diff --check` passed. TestFlight/App Store preparation follows the
+remaining report-entry UX decision.

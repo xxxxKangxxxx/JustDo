@@ -4242,9 +4242,33 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 ### Remaining focused follow-up
 
-- Real-device smoke the lock badge tap target: it should toggle lock without
-  also opening the card edit/confirmation path.
-- Decide whether goal delete needs a destructive confirmation alert. Current
-  dialog places Delete next to Save but can still delete immediately.
+- Decide report entry UX now that card tap is reserved for edit:
+  - recommended: section-level annual/monthly report action.
+
+## 2026-05-30 Goal delete confirmation and focused smoke close-out
+
+### Codex
+
+- Added destructive confirmation to the iOS centered goal editor dialog:
+  - The existing `삭제` button no longer deletes immediately.
+  - Tapping `삭제` opens `목표를 삭제할까요?`.
+  - `취소` keeps the goal.
+  - Alert `삭제` performs the existing `onDelete(draft)` path, so local deletion
+    and Supabase sync queue behavior stay unchanged.
+- Updated docs to remove stale "delete confirmation decision" wording and record
+  that the Settings → 목표 focused smoke was user-confirmed.
+
+### Verification
+
+- User confirmed the Settings → 목표 focused smoke items before this change:
+  open/dismiss, add/edit/delete, lock toggle, locked-card confirmation, prompt
+  dismissal, app relaunch persistence, and cloud sync.
+- `git diff --check` passed.
+- `swift test --package-path apps/ios` passed: 46 tests.
+- Generic iOS build passed:
+  - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
+
+### Remaining focused follow-up
+
 - Decide report entry UX now that card tap is reserved for edit:
   - recommended: section-level annual/monthly report action.

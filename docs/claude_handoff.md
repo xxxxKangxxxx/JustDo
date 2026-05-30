@@ -94,31 +94,25 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > goal row, swipe-delete rows, keyboard dismissal, larger donut progress, and
 > card lock badge direct toggle. Sync issue `HTTP 400` / PostgreSQL `23514` /
 > `goals_check1` was fixed by explicitly encoding `locked_at: null` on unlocked
-> goal upsert. Verification: `swift test --package-path apps/ios` passed 46
-> tests, generic iOS `xcodebuild` passed, `git diff --check` passed, and user
-> confirmed the sync error was resolved.
+> goal upsert. Settings → 목표 focused smoke is user-confirmed, and the centered
+> goal editor now asks `목표를 삭제할까요?` before destructive deletion.
+> Verification: `swift test --package-path apps/ios` passed 46 tests, generic
+> iOS `xcodebuild` passed, `git diff --check` passed, and user confirmed the
+> sync error was resolved.
 
 > **다음 작업자가 픽업할 우선순위 (2026-05-30 갱신)**:
-> 1. **Goal & Pro Report focused smoke / UX 마무리**. 구현 자체는 schema, Web,
->    iOS first pass까지 반영됨. 다음은 iOS Settings → 목표에서 add/edit/delete,
->    lock badge direct toggle, locked card confirmation, prompt dismissal,
->    relaunch persistence, and cloud sync를 실기기로 재확인. 특히 lock badge tap이
->    카드 edit tap과 동시에 발화하지 않는지 확인.
-> 2. **Goal delete confirmation 결정**. 현재 iOS centered editor dialog에서
->    Delete는 Save 바로 왼쪽에 있고 즉시 삭제된다. 목표 삭제는 사용자 작성 데이터
->    손실이므로 `삭제 / 취소` confirmation alert를 넣는 것을 권장.
-> 3. **Report entry UX 결정**. 카드 tap은 edit/locked confirmation에 배정됐다.
+> 1. **Report entry UX 결정**. 카드 tap은 edit/locked confirmation에 배정됐다.
 >    리포트는 period-level 기능이므로 연간/월간 섹션 헤더 또는 섹션 하단 CTA로
 >    들어가는 방향이 현재 구조와 가장 잘 맞는다.
-> 4. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
+> 2. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
-> 5. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
->    상태로 focused smoke를 마친 뒤 archive/TestFlight 작업으로 이동. 현재 Auth landing,
+> 3. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
+>    상태로 archive/TestFlight 작업으로 이동. 현재 Auth landing,
 >    Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats, Settings,
 >    Widget 보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션
 >    자동 refresh도 1시간+ 종료 후 재진입 smoke 통과.
-> 6. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
+> 4. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 Toss test-key E2E smoke, Toss 공식 dashboard secret/header 확인
 >    후 webhook signature 검증, live billing 직전 `justdo-prod-billing-cron`
@@ -425,7 +419,8 @@ iOS build/test commands below before doing the next real-device smoke pass.
       period.
     - goal cards with note, progress donut, percentage text,
       completed/related/slipped counts, and direct lock badge toggle.
-    - centered goal add/edit dialog; delete button is immediately left of Save.
+    - centered goal add/edit dialog; delete button is immediately left of Save
+      and now shows destructive confirmation before removal.
     - locked card tap confirmation; unlocked card tap opens editor.
     - onboarding/monthly/yearly goal prompt surfaces and dismissal persistence.
   - 2026-05-30 sync diagnostic/fix:
@@ -450,8 +445,9 @@ iOS build/test commands below before doing the next real-device smoke pass.
   - Auth landing, Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats,
     Settings, Widget, 1-hour+ auth session refresh smoke, and final real-device
     smoke passed on the configured real device. Goal & Pro Report first pass is
-    also in the local iOS build; TestFlight/App Store preparation follows the
-    remaining focused Goal smoke and report-entry/delete-confirm UX decisions.
+    also in the local iOS build; Settings → 목표 focused smoke is user-confirmed,
+    and delete confirmation is implemented. TestFlight/App Store preparation
+    follows the remaining report-entry UX decision.
     Because this is a native SwiftUI/Xcode app, do **not** use Expo Go; install
     directly from Xcode to a real iPhone or use TestFlight later.
   - Both targets share App Group `group.kr.justdo.app`.
@@ -981,9 +977,10 @@ Recommended immediate next steps:
      - Settings / Widget 보정 통과 (계정/profile, 알림/표시 picker,
        data/legal, home/lock widget layout, row tap completion, mode-scoped
        counts 후).
-   - 2026-05-30 갱신: Goal & Pro Report iOS first pass도 반영됨. 남은 iOS
-     작업은 focused Goal smoke, 삭제 확인/리포트 진입 UX 결정, TestFlight/App
-     Store 준비. 상세 체크리스트는 `docs/ios_phase6_status.md` 참고.
+  - 2026-05-30 갱신: Goal & Pro Report iOS first pass도 반영됨. Settings → 목표
+    focused smoke는 사용자 확인 완료이고 삭제 확인 alert도 구현됨. 남은 iOS
+    작업은 리포트 진입 UX 결정과 TestFlight/App Store 준비. 상세 체크리스트는
+    `docs/ios_phase6_status.md` 참고.
    - Widget은 home-screen small/medium/large와 lock-screen accessory로 분리.
      Home-screen row text deep link는 제거했고 row 전체 탭이 완료 토글이다.
    - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 (wireless 활성 시 USB
@@ -1058,9 +1055,9 @@ Recommended immediate next steps:
   자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.
 - iOS는 Phase 7과 독립 트랙. Auth landing, Home, Add Sheet, editor-sheet
   routing, Just Do Mode, Stats, Settings, Widget 보정은 iPhone 14 Pro iOS 26.5
-  최종 smoke까지 통과. Goal & Pro Report first pass도 iOS에 포함됨. 현재 남은
-  것은 focused Goal smoke, 삭제 확인/리포트 진입 UX 결정, TestFlight 준비이며,
-  Expo Go로 검증하지 않음.
+  최종 smoke까지 통과. Goal & Pro Report first pass도 iOS에 포함됨. Settings →
+  목표 focused smoke와 삭제 확인 alert까지 완료됐고, 현재 남은 것은 리포트 진입 UX
+  결정과 TestFlight 준비이며, Expo Go로 검증하지 않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
   주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
   monorepo platform/framework 설정 유지.

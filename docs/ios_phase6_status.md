@@ -116,7 +116,8 @@ implementation gaps, and checks to run before testing or shipping.
   - The card lock badge directly toggles locked state and queues a goal save.
   - Card tap opens editor for unlocked goals and shows a confirmation alert for
     locked goals.
-  - Goal add/edit uses a centered dialog, not a nested bottom sheet.
+  - Goal add/edit uses a centered dialog, not a nested bottom sheet; deleting an
+    existing goal now requires a destructive confirmation alert.
   - Goal prompt flows cover onboarding, monthly, and yearly prompts with
     persisted dismissal state.
 - Settings account rows use the signed-in Google profile name when available,
@@ -216,9 +217,9 @@ implementation gaps, and checks to run before testing or shipping.
   - [x] Hosted migration state confirmed through `supabase migration list`.
   - [x] Sync error after goal write fixed and user-confirmed.
   - [x] Settings → 목표 UI latest visual iteration accepted by user.
-  - [ ] Verify lock badge tap does not also trigger card edit.
-  - [ ] Verify add/edit/delete/lock changes survive app relaunch and cloud sync.
-  - [ ] Decide and implement delete confirmation if desired.
+  - [x] Verify lock badge tap does not also trigger card edit.
+  - [x] Verify add/edit/delete/lock changes survive app relaunch and cloud sync.
+  - [x] Delete confirmation implemented for the goal editor.
   - [ ] Decide report entry UX now that card tap is reserved for edit.
 - App icon: only the light (default) 1024x1024 variant is shipped. Dark
   and tinted home-screen variants are deferred until dedicated artwork
@@ -352,8 +353,9 @@ swift test
 > gating follow-up까지 simulator build/shared tests 통과. 같은 날 iPhone 14 Pro
 > iOS 26.5 최종 smoke에서 Smoke 1~5 정상 확인.
 > 2026-05-30: Goal & Pro Report iOS first pass와 실기기 UI 피드백 반영 완료.
-> 다음 차례는 Goal focused smoke, 삭제 확인/리포트 진입 UX 결정, TestFlight/App
-> Store 준비, 그리고 Toss 외부 의존 트랙.
+> Settings → 목표 focused smoke는 사용자 확인 완료. 삭제 확인 alert도 반영됨.
+> 다음 차례는 리포트 진입 UX 결정, TestFlight/App Store 준비, 그리고 Toss 외부
+> 의존 트랙.
 
 - [x] **iOS 최종 실기기 smoke (2026-05-29 통과)**.
   - 환경: `강영모의 iPhone` / iOS 26.5, bundle id `kr.justdo.app`.
@@ -370,7 +372,8 @@ swift test
   - Settings → 목표 sheet, annual/monthly card stacks, max 5 goals per period.
   - Goal onboarding guide + annual/monthly entry, one initial active row,
     swipe-delete rows, memo input, keyboard dismissal.
-  - Centered goal add/edit dialog with delete left of save.
+  - Centered goal add/edit dialog with delete left of save and destructive
+    confirmation before removal.
   - Goal cards with title/note/metrics/donut progress/lock badge.
   - Lock badge direct toggle; card tap still controls edit/locked confirmation.
   - Supabase goal sync error (`goals_check1`) fixed and user-confirmed.

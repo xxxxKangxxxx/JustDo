@@ -16,8 +16,9 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
   `20260529120000_goal_report.sql` is applied, Web Settings → 목표 and report
   preview/detail surfaces are wired, and iOS Settings → 목표 / onboarding
   prompt / goal card management have been iterated through real-device
-  feedback. Remaining work is focused smoke, delete-confirm/report-entry UX
-  decisions, and TestFlight readiness. 자세한 내용: `docs/next_steps.md` Active
+  feedback. Focused smoke is user-confirmed, and iOS goal deletion now requires
+  destructive confirmation. Remaining work is report-entry UX and TestFlight
+  readiness. 자세한 내용: `docs/next_steps.md` Active
   Track.
 - **Phase 7 Web Desktop Redesign** is complete except the Pro checkout track.
   데스크탑 reference는 `reference/web_proto/`와
@@ -161,7 +162,8 @@ plan read-sync, Home/Add/Stats/Settings/Widget visual checks, deep-link UI
 tests, 1-hour+ auth session refresh smoke, and final real-device smoke are
 complete. Goal & Pro Report MVP first pass is now included in native iOS:
 Settings → 목표, annual/monthly goal cards, onboarding/monthly/yearly prompt
-flows, centered add/edit dialog, lock toggle, and Supabase goal sync. iOS
-TestFlight/App Store preparation follows the remaining focused smoke. 자세한 내용:
+  flows, centered add/edit dialog with delete confirmation, lock toggle, and
+  Supabase goal sync. iOS TestFlight/App Store preparation follows the remaining
+  report-entry UX decision. 자세한 내용:
 `docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`,
 `docs/claude_handoff.md`.

@@ -5000,6 +5000,7 @@ private struct GoalEditorDraft: Identifiable {
 
 private struct GoalEditorDialog: View {
     @State var draft: GoalEditorDraft
+    @State private var isShowingDeleteConfirmation = false
     let onCancel: () -> Void
     let onSave: (GoalEditorDraft) -> Void
     let onDelete: (GoalEditorDraft) -> Void
@@ -5058,7 +5059,7 @@ private struct GoalEditorDialog: View {
                 Spacer()
                 if draft.goal != nil {
                     Button("삭제", role: .destructive) {
-                        onDelete(draft)
+                        isShowingDeleteConfirmation = true
                     }
                     .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 12)
@@ -5083,6 +5084,14 @@ private struct GoalEditorDialog: View {
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(JDTheme.divider, lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.16), radius: 24, y: 12)
+        .alert("목표를 삭제할까요?", isPresented: $isShowingDeleteConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive) {
+                onDelete(draft)
+            }
+        } message: {
+            Text("삭제한 목표는 되돌릴 수 없고, 동기화 대기열에 반영됩니다.")
+        }
     }
 
     private var noteBinding: Binding<String> {

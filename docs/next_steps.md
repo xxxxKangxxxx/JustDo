@@ -16,9 +16,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 > Just Do Mode iOS/Web implementation and smoke follow-up are complete. The
 > **Goal & Pro Report** MVP first pass is now implemented across Supabase
-> schema, Web, and native iOS. The next work is not a broad new build-out; it is
-> focused smoke, UX decisions for deletion/report entry, and TestFlight/App Store
-> readiness.
+> schema, Web, and native iOS. Settings → 목표 focused smoke is
+> user-confirmed, and destructive delete confirmation is implemented. The next
+> work is not a broad new build-out; it is report-entry UX and TestFlight/App
+> Store readiness.
 
 Recommended order for the next coding session:
 
@@ -92,7 +93,8 @@ Recommended order for the next coding session:
      - The card lock badge is now a direct toggle. Card tap still follows the
        existing edit behavior: locked goals ask for confirmation, unlocked goals
        open the editor.
-     - Delete in the editor dialog sits immediately left of Save.
+     - Delete in the editor dialog sits immediately left of Save and now opens a
+       destructive `목표를 삭제할까요?` confirmation before removal.
    - 2026-05-30 sync fix: hosted migration was already applied, but iOS goal
      sync failed with `HTTP 400` / PostgreSQL `23514` /
      `goals_check1`. Root cause was unlocked goal upsert omitting nullable
@@ -104,9 +106,9 @@ Recommended order for the next coding session:
      successfully before UI work; after UI iterations,
      `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
      passed.
-   - Next: run another focused real-device smoke through Settings → 목표,
-     add/edit/delete, lock toggle, locked-goal confirmation, prompt dismissal,
-     app relaunch persistence, and cross-device/cloud sync.
+   - 2026-05-30 follow-up: user confirmed the Settings → 목표 focused smoke
+     items, including add/edit/delete, lock toggle, locked-goal confirmation,
+     prompt dismissal, app relaunch persistence, and cloud sync.
    - Mirror the same data policy and prompt windows.
    - Keep iOS UX native: modal/sheet entry, non-blocking skip action, and
      settings/report entry points consistent with current SwiftUI patterns.
@@ -122,8 +124,7 @@ Recommended order for the next coding session:
 
 5. **TestFlight/App Store preparation**
    - Goal & Pro Report MVP is now included in the local iOS build. Start
-     archive/TestFlight work after the focused Goal smoke and the report-entry
-     UX decision.
+     archive/TestFlight work after the report-entry UX decision.
    - Current iOS Home/Add/Edit/Stats/Settings/Widget/Just Do Mode smoke is
      already documented as passing on iPhone 14 Pro / iOS 26.5.
 
@@ -136,12 +137,13 @@ Recommended order for the next coding session:
    - Card lock badge toggles without also opening the edit confirmation.
    - Locked card tap shows confirmation; unlocked card tap opens editor.
    - Add/edit/delete/lock changes sync and survive app relaunch.
+   - 2026-05-30: user confirmed these focused smoke items.
 
-2. **Delete confirmation decision**
-   - Current editor delete button can remove a goal directly.
-   - Decide whether to add a lightweight destructive confirmation before
-     deletion. Because goal deletion is user-authored data loss, adding
-     `삭제 / 취소` confirmation is the recommended next UX polish.
+2. **Delete confirmation**
+   - Implemented on 2026-05-30 in the centered iOS goal editor dialog.
+   - The editor delete button opens `목표를 삭제할까요?`.
+   - `취소` keeps the goal and `삭제` performs the actual removal, which then
+     enters the existing local mutation/sync path.
 
 3. **Report entry UX decision**
    - Card tap is reserved for edit/locked confirmation.
@@ -281,10 +283,10 @@ Recommended order for the next coding session:
   - Goal cards show reference-aligned title/note/metrics/progress donut/lock
     badge.
   - Lock badge directly toggles lock state; card tap remains edit/confirmation.
-  - Delete sits immediately left of Save in the editor dialog.
-- **Immediate next work**: focused real-device smoke, delete confirmation
-  decision, and report entry UX decision. TestFlight/App Store preparation
-  follows those items.
+  - Delete sits immediately left of Save in the editor dialog and opens a
+    destructive confirmation before removal.
+- **Immediate next work**: report entry UX decision. TestFlight/App Store
+  preparation follows that item.
 
 ## Where We Are (2026-05-29)
 
