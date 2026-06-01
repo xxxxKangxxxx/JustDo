@@ -20,10 +20,12 @@ import {
 } from "@/lib/billing/toss-client";
 import type { Goal, GoalPeriodType, Habit, HabitRecurType, Priority, Task } from "@/types/domain";
 import {
+  availableReports,
   goalProgressForPeriod,
   goalsForPeriod,
   habitActiveOn,
   habitStreak,
+  homeBannerReport,
   justDoTaskSections,
   justDoTasksUntil,
   periodActivityHeatmap,
@@ -230,7 +232,16 @@ function JustDoViewport() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [goalPrompt, setGoalPrompt] = useState<GoalPromptTarget | null>(null);
+  const [reportTarget, setReportTarget] = useState<ReportTarget>(null);
+  const [reportUpgradePlan, setReportUpgradePlan] = useState<UpgradePlan | null>(null);
+  const billing = useBillingSubscription();
   const searchRef = useRef<HTMLInputElement | null>(null);
+
+  const homeBanner = homeBannerReport(today, s.state.goals, s.state.goalPromptDismissals);
+  const canSeeReportDetail = (() => {
+    const plan = planKeyOf(billing.subscription);
+    return plan === "trial" || plan === "pro";
+  })();
 
   const flash = (message: string) => {
     setToast(message);
@@ -415,6 +426,20 @@ function JustDoViewport() {
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              {visiblePage === "calendar" && homeBanner ? (
+                <ReportHomeBanner
+                  mode={mode}
+                  report={homeBanner}
+                  onOpen={() => setReportTarget({ periodType: homeBanner.periodType, periodKey: homeBanner.periodKey })}
+                  onDismiss={() =>
+                    s.dismissGoalPrompt({
+                      promptType: homeBanner.periodType === "yearly" ? "report_yearly" : "report_monthly",
+                      periodKey: homeBanner.periodKey,
+                      dismissedPermanentlyForPeriod: true,
+                    })
+                  }
+                />
+              ) : null}
               {visiblePage === "calendar" && calendarView === "month" ? (
                 <MonthGrid
                   mode={mode}
@@ -463,6 +488,24 @@ function JustDoViewport() {
             today={today}
             onClose={() => setGoalPrompt(null)}
           />
+        ) : null}
+        {reportTarget ? (
+          canSeeReportDetail ? (
+            <GoalReportModal mode={mode} target={reportTarget} onClose={() => setReportTarget(null)} />
+          ) : (
+            <GoalReportPreviewModal
+              mode={mode}
+              target={reportTarget}
+              onClose={() => setReportTarget(null)}
+              onUpgrade={() => {
+                setReportTarget(null);
+                setReportUpgradePlan("monthly");
+              }}
+            />
+          )
+        ) : null}
+        {reportUpgradePlan ? (
+          <UpgradeModal mode={mode} plan={reportUpgradePlan} onClose={() => setReportUpgradePlan(null)} />
         ) : null}
         {toast ? <Toast mode={mode}>{toast}</Toast> : null}
       </div>
@@ -2062,6 +2105,53 @@ const planKeyOf = (subscription: BillingSubscription | null): "free" | "trial" |
   return hasProEntitlement(subscription) ? "pro" : "free";
 };
 
+function ReportHomeBanner({
+  mode,
+  report,
+  onOpen,
+  onDismiss,
+}: {
+  mode: ThemeMode;
+  report: { periodType: GoalPeriodType; periodKey: string };
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  const t = webTokens(mode);
+  const title = `${periodLabel(report.periodType, report.periodKey)} 리포트가 준비됐어요`;
+  return (
+    <div className="mx-6 mt-4 flex items-center gap-3 rounded-xl border px-4 py-3" style={{ borderColor: t.me.solid, background: t.me.soft }}>
+      <span aria-hidden className="text-[15px]">✨</span>
+      <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold" style={{ color: t.text }}>{title}</div>
+      <button type="button" onClick={onOpen} className="rounded-full px-4 py-1.5 text-[12.5px] font-semibold" style={{ background: t.me.solid, color: "#fff" }}>
+        보기
+      </button>
+      <button type="button" onClick={onDismiss} aria-label="리포트 배너 닫기" className="rounded-md px-2 py-1 text-[13px]" style={{ color: t.textSecondary }}>
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function ReportSupportingBanner({
+  mode,
+  report,
+  onOpen,
+}: {
+  mode: ThemeMode;
+  report: { periodType: GoalPeriodType; periodKey: string };
+  onOpen: () => void;
+}) {
+  const t = webTokens(mode);
+  const title = `${periodLabel(report.periodType, report.periodKey)} 리포트 준비 완료`;
+  return (
+    <button type="button" onClick={onOpen} className="mb-2 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left" style={{ borderColor: t.divider, background: t.bg2 }}>
+      <span aria-hidden className="text-[12px]">✨</span>
+      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold" style={{ color: t.text }}>{title}</span>
+      <span className="text-[12px] font-semibold" style={{ color: t.me.ink }}>보기 ›</span>
+    </button>
+  );
+}
+
 function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (plan: UpgradePlan) => void }) {
   const s = useJustDo();
   const t = webTokens(mode);
@@ -2071,6 +2161,9 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
   const yearlyKey = periodKeyOf("yearly", selectedDate);
   const plan = planKeyOf(billing.subscription);
   const canSeeReportDetail = plan === "trial" || plan === "pro";
+  const reports = availableReports(todayISO(), s.state.goals);
+  const yearlyReport = reports.find((report) => report.periodType === "yearly") ?? null;
+  const monthlyReport = reports.find((report) => report.periodType === "monthly") ?? null;
   const [editing, setEditing] = useState<GoalDraft | null>(null);
   const [lockedGoal, setLockedGoal] = useState<Goal | null>(null);
   const [report, setReport] = useState<ReportTarget>(null);
@@ -2131,28 +2224,36 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
           <PlanBadge mode={mode} plan={plan} />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <GoalPeriodSection
-            mode={mode}
-            title={`${yearlyKey}년 연간 목표`}
-            periodType="yearly"
-            periodKey={yearlyKey}
-            goals={s.state.goals}
-            tasks={s.state.tasks}
-            onAdd={() => startAdd("yearly", yearlyKey)}
-            onEdit={startEdit}
-            onReport={() => setReport({ periodType: "yearly", periodKey: yearlyKey })}
-          />
-          <GoalPeriodSection
-            mode={mode}
-            title={`${monthLabel(monthlyKey)} 월간 목표`}
-            periodType="monthly"
-            periodKey={monthlyKey}
-            goals={s.state.goals}
-            tasks={s.state.tasks}
-            onAdd={() => startAdd("monthly", monthlyKey)}
-            onEdit={startEdit}
-            onReport={() => setReport({ periodType: "monthly", periodKey: monthlyKey })}
-          />
+          <div>
+            {yearlyReport ? (
+              <ReportSupportingBanner mode={mode} report={yearlyReport} onOpen={() => setReport(yearlyReport)} />
+            ) : null}
+            <GoalPeriodSection
+              mode={mode}
+              title={`${yearlyKey}년 연간 목표`}
+              periodType="yearly"
+              periodKey={yearlyKey}
+              goals={s.state.goals}
+              tasks={s.state.tasks}
+              onAdd={() => startAdd("yearly", yearlyKey)}
+              onEdit={startEdit}
+            />
+          </div>
+          <div>
+            {monthlyReport ? (
+              <ReportSupportingBanner mode={mode} report={monthlyReport} onOpen={() => setReport(monthlyReport)} />
+            ) : null}
+            <GoalPeriodSection
+              mode={mode}
+              title={`${monthLabel(monthlyKey)} 월간 목표`}
+              periodType="monthly"
+              periodKey={monthlyKey}
+              goals={s.state.goals}
+              tasks={s.state.tasks}
+              onAdd={() => startAdd("monthly", monthlyKey)}
+              onEdit={startEdit}
+            />
+          </div>
         </div>
       </Panel>
       {editing ? (
@@ -2443,7 +2544,6 @@ function GoalPeriodSection({
   tasks,
   onAdd,
   onEdit,
-  onReport,
 }: {
   mode: ThemeMode;
   title: string;
@@ -2453,7 +2553,6 @@ function GoalPeriodSection({
   tasks: Task[];
   onAdd: () => void;
   onEdit: (goal: Goal) => void;
-  onReport: () => void;
 }) {
   const t = webTokens(mode);
   const progress = goalProgressForPeriod(goals, tasks, periodType, periodKey);
@@ -2464,9 +2563,6 @@ function GoalPeriodSection({
         <div className="text-[14px] font-bold tracking-[-0.3px]">{title}</div>
         <span className="text-[11px]" style={{ color: t.textTertiary }}>{progress.length}/5</span>
         <div className="flex-1" />
-        <button type="button" onClick={onReport} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.textSecondary }}>
-          리포트
-        </button>
         <button type="button" onClick={onAdd} disabled={progress.length >= 5} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-40" style={{ borderColor: t.divider, color: t.text }}>
           + 추가
         </button>

@@ -125,6 +125,8 @@ public enum GoalPromptType: String, Codable, Equatable, Sendable {
     case onboarding
     case monthly
     case yearly
+    case reportMonthly = "report_monthly"
+    case reportYearly = "report_yearly"
 }
 
 public struct Goal: Identifiable, Codable, Equatable, Sendable {

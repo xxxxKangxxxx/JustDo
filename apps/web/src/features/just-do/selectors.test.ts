@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { Habit, Task } from "@/types/domain";
+import type { Goal, GoalPeriodType, GoalPromptDismissal, Habit, Task } from "@/types/domain";
 import {
+  availableReports,
   habitActiveOn,
   habitStreak,
+  homeBannerReport,
+  isReportDismissed,
   justDoTaskSections,
   justDoTasksUntil,
   tasksInRange,
@@ -140,5 +143,89 @@ describe("habitStreak", () => {
     };
 
     expect(habitStreak(weekly, "2026-04-10")).toBe(3);
+  });
+});
+
+describe("availableReports", () => {
+  const goal = (periodType: GoalPeriodType, periodKey: string): Goal => ({
+    id: `g-${periodType}-${periodKey}`,
+    periodType,
+    periodKey,
+    title: `goal ${periodKey}`,
+    note: null,
+    sortOrder: 0,
+    locked: false,
+    lockedAt: null,
+  });
+
+  it("surfaces the previous month throughout the current month", () => {
+    expect(availableReports("2026-06-15", [goal("monthly", "2026-05")])).toEqual([
+      { periodType: "monthly", periodKey: "2026-05" },
+    ]);
+  });
+
+  it("rolls the previous month across the year boundary in January", () => {
+    expect(availableReports("2026-01-10", [goal("monthly", "2025-12")])).toContainEqual({
+      periodType: "monthly",
+      periodKey: "2025-12",
+    });
+  });
+
+  it("does not surface the current (unfinished) month", () => {
+    expect(availableReports("2026-06-15", [goal("monthly", "2026-06")])).toEqual([]);
+  });
+
+  it("surfaces the previous year only in January, with priority over monthly", () => {
+    expect(availableReports("2026-06-15", [goal("yearly", "2025")])).toEqual([]);
+    expect(
+      availableReports("2026-01-10", [goal("monthly", "2025-12"), goal("yearly", "2025")]),
+    ).toEqual([
+      { periodType: "yearly", periodKey: "2025" },
+      { periodType: "monthly", periodKey: "2025-12" },
+    ]);
+  });
+});
+
+describe("homeBannerReport / isReportDismissed", () => {
+  const goal = (periodType: GoalPeriodType, periodKey: string): Goal => ({
+    id: `g-${periodType}-${periodKey}`,
+    periodType,
+    periodKey,
+    title: `goal ${periodKey}`,
+    note: null,
+    sortOrder: 0,
+    locked: false,
+    lockedAt: null,
+  });
+  const dismissal = (promptType: GoalPromptDismissal["promptType"], periodKey: string): GoalPromptDismissal => ({
+    id: `d-${promptType}-${periodKey}`,
+    promptType,
+    periodKey,
+    dismissedPermanentlyForPeriod: true,
+    dismissedAt: "2026-06-01T00:00:00Z",
+  });
+
+  it("falls through to the monthly report when the top yearly one is dismissed", () => {
+    const banner = homeBannerReport(
+      "2026-01-10",
+      [goal("monthly", "2025-12"), goal("yearly", "2025")],
+      [dismissal("report_yearly", "2025")],
+    );
+    expect(banner).toEqual({ periodType: "monthly", periodKey: "2025-12" });
+  });
+
+  it("returns null when every available report is dismissed", () => {
+    const banner = homeBannerReport(
+      "2026-06-15",
+      [goal("monthly", "2026-05")],
+      [dismissal("report_monthly", "2026-05")],
+    );
+    expect(banner).toBeNull();
+  });
+
+  it("scopes dismissal to the matching period", () => {
+    const report = { periodType: "monthly" as const, periodKey: "2026-05" };
+    expect(isReportDismissed(report, [dismissal("report_monthly", "2026-04")])).toBe(false);
+    expect(isReportDismissed(report, [dismissal("report_monthly", "2026-05")])).toBe(true);
   });
 });

@@ -4468,3 +4468,99 @@ This document records coordination notes for work done with Codex and Claude Cod
   prompt/report entry still behaves correctly after the dead-guard removal.
 - This closes the "Real-device smoke still needed" item from the prior
   2026-06-01 iOS IA implementation entry.
+
+## 2026-06-01 Period-end report banners (iOS + Web)
+
+### Product behavior implemented (per next_steps "Report entry UX decision")
+
+- Reports are no longer reachable from an always-on menu. They are surfaced only
+  after a period ends, through banners.
+- Availability rules (pure selectors, both platforms):
+  - Monthly: the immediately previous month is surfaced throughout the current
+    month (e.g. all of June surfaces the May report), rolling across the year
+    boundary in January.
+  - Yearly: the immediately previous year is surfaced only during January and
+    takes priority over the monthly report when both are present.
+  - A report is only surfaced when at least one goal exists for that period.
+- Home top banner (primary entry, dismissible):
+  - Shows the highest-priority available, non-dismissed report.
+  - `보기` opens the report (Free: preview + Pro CTA; Trial/Pro: full report).
+  - `×` persists a dismissal so the banner is hidden for that period; cross-device
+    via `goal_prompt_dismissals`.
+- Settings → 목표 supporting banner (quiet fallback, no close button):
+  - Shown next to the matching annual/monthly section while the report is
+    available, independent of the Home banner dismissal.
+  - Replaces the previous always-on `리포트` button (web). iOS had no report
+    entry point after the IA dead-code removal, so the banners are now its only
+    report entry.
+
+### Data / migration
+
+- New migration `supabase/migrations/20260601120000_report_banner_dismissal.sql`
+  relaxes `goal_prompt_dismissals` CHECK constraints to allow `report_monthly`
+  and `report_yearly` prompt types with their period_key formats
+  (`YYYY-MM` / `YYYY`). Constraint-only change: `database.types.ts` is unaffected
+  because `prompt_type` is already typed as `string`.
+- **User action still required:** apply the migration to hosted Supabase
+  (`supabase db push`) before report-banner dismissals persist remotely. Local
+  stack was not running this session.
+
+### Shared logic
+
+- iOS: new `apps/ios/JustDoShared/Domain/GoalReportAvailability.swift` with
+  `GoalReportSelectors.availableReports / homeBannerReport / isDismissed` (pure
+  integer date math, no `JDDate` dependency so it lives in the testable shared
+  package). `GoalPromptType` gained `.reportMonthly` / `.reportYearly`.
+- Web: `selectors.ts` gained `availableReports / homeBannerReport /
+  isReportDismissed` mirroring the iOS logic; `GoalPromptType` union and
+  `toGoalPromptType` extended; `domain.ts` union extended.
+
+### iOS (`ContentView.swift`)
+
+- Home `.home` tab renders a prominent `ReportBanner` under the header when a
+  non-dismissed report is available; `보기` opens `goalReportPresentation`, `×`
+  reuses `upsertGoalPromptDismissal` with the report prompt type.
+- `GoalManagementSheet` renders a compact `ReportSupportingBanner` above the
+  matching annual/monthly section, wired to the previously-unused `onOpenReport`.
+
+### Web (`app-shell.tsx`)
+
+- `JustDoViewport` renders `ReportHomeBanner` at the top of the calendar column
+  (calendar page only) with viewport-level report + upgrade modal state.
+- `GoalSettingsPanel` renders `ReportSupportingBanner` above the matching section
+  and the always-on `리포트` button was removed from `GoalPeriodSection`.
+
+### Verification
+
+- iOS: `swift test --package-path apps/ios` 54 tests pass (8 new
+  `GoalReportSelectorsTests`); generic iOS `xcodebuild` build pass.
+- Web: `npm --prefix apps/web run lint` clean, `npm --prefix apps/web test`
+  122 tests pass (incl. new selectors tests), `npm --prefix apps/web run build`
+  pass.
+- `git diff --check` clean.
+- Hosted `supabase db push` applied by the user (migration `20260601120000`
+  reported applied). The banner appears only when a previous period has goals;
+  to force it for testing, seed a goal in a previous month/year.
+
+### Follow-up fixes (same commit)
+
+- **Settings report bug fix**: tapping the Settings → 목표 supporting banner used
+  to bounce the report presentation up to `HomeRootView`, which sits behind the
+  Settings full-screen cover, so the report only appeared after closing Settings.
+  `GoalManagementSheet` now owns its own `reportPresentation` state and presents
+  `GoalReportFullScreen` directly on top of itself. The dead callback chain
+  (`GoalManagementSheet.onOpenReport`, `SettingsRootTabView.onOpenGoalReport`,
+  and the HomeRootView wiring closure) was removed.
+- **Close button unification**: all full-screen close affordances now use a plain
+  top-right xmark. The text `닫기` toolbar buttons on the legal, habit-management,
+  category-management, and goal-management sheets were replaced. Because iOS 26
+  wraps `ToolbarItem` buttons in a Liquid Glass circular background (which
+  `.buttonStyle(.plain)` does not remove), those four sheets were converted from
+  `NavigationStack` + `.toolbar` to a shared `SheetCloseHeader` (custom header
+  HStack with a bare xmark), matching the existing Home/Settings/Habit headers.
+  The legal sheet's close also moved from the left to the right.
+- **List background unification**: habit/category management use `List`, whose
+  default grouped background differed from the `JDTheme.background` header. Added
+  `.scrollContentBackground(.hidden)` so the header and body share one background.
+- Verification after the follow-ups: `swift test` 54 pass, generic iOS build
+  pass, `git diff --check` clean. User confirmed on-device.

@@ -475,12 +475,6 @@ private struct HomeRootView: View {
                 onAddGoal: addGoal(_:),
                 onSaveGoal: saveGoal(_:),
                 onDeleteGoal: deleteGoal(_:),
-                onOpenGoalReport: { target in
-                    goalReportPresentation = GoalReportPresentation(
-                        target: target,
-                        isPreview: !isProPlan
-                    )
-                },
                 onAddHabit: addHabit(title:emoji:),
                 onDeleteHabit: deleteHabit(_:),
                 onAddCategory: addCategory(name:color:),
@@ -605,6 +599,15 @@ private struct HomeRootView: View {
                 Spacer()
                     .frame(height: 36)
                 homeHeader
+                if let banner = homeReportBanner {
+                    ReportBanner(
+                        title: reportBannerTitle(banner),
+                        onOpen: { openReport(banner) },
+                        onDismiss: { dismissReportBanner(banner) }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                }
                 Spacer()
                     .frame(height: 36)
                 MonthCalendarView(
@@ -722,6 +725,38 @@ private struct HomeRootView: View {
 
     private var effectiveJustDoMode: Bool {
         isProPlan && (snapshot?.settings.justDoMode ?? false)
+    }
+
+    private var homeReportBanner: GoalReportAvailability? {
+        let today = JDDate.todayComponents
+        return GoalReportSelectors.homeBannerReport(
+            todayYear: today.year,
+            todayMonth: today.month,
+            goals: snapshot?.goals ?? [],
+            dismissals: snapshot?.goalPromptDismissals ?? []
+        )
+    }
+
+    private func reportBannerTitle(_ report: GoalReportAvailability) -> String {
+        if report.periodType == .yearly {
+            return "\(report.periodKey)년 리포트가 준비됐어요"
+        }
+        return "\(GoalSelectors.periodLabel(.monthly, periodKey: report.periodKey)) 리포트가 준비됐어요"
+    }
+
+    private func openReport(_ report: GoalReportAvailability) {
+        goalReportPresentation = GoalReportPresentation(
+            target: GoalReportTarget(periodType: report.periodType, periodKey: report.periodKey),
+            isPreview: !isProPlan
+        )
+    }
+
+    private func dismissReportBanner(_ report: GoalReportAvailability) {
+        upsertGoalPromptDismissal(
+            promptType: report.dismissalPromptType,
+            periodKey: report.periodKey,
+            dismissedPermanentlyForPeriod: true
+        )
     }
 
     private func presentAddSheetForSelectedDate(useJustDoMode: Bool? = nil) {
@@ -2826,7 +2861,6 @@ private struct SettingsRootTabView: View {
     let onAddGoal: (GoalDraft) -> Void
     let onSaveGoal: (Goal) -> Void
     let onDeleteGoal: (Goal) -> Void
-    let onOpenGoalReport: (GoalReportTarget) -> Void
     let onAddHabit: (String, String) -> Void
     let onDeleteHabit: (Habit) -> Void
     let onAddCategory: (String, String) -> Void
@@ -3028,13 +3062,7 @@ private struct SettingsRootTabView: View {
                 isProPlan: isProPlan,
                 onAddGoal: onAddGoal,
                 onSaveGoal: onSaveGoal,
-                onDeleteGoal: onDeleteGoal,
-                onOpenReport: { target in
-                    isShowingGoalManager = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                        onOpenGoalReport(target)
-                    }
-                }
+                onDeleteGoal: onDeleteGoal
             )
         }
         .fullScreenCover(isPresented: $isShowingCategoryManager) {
@@ -3445,12 +3473,42 @@ private enum LegalDocument: String, Identifiable {
     }
 }
 
+/// Plain top-right xmark close header used by full-screen management sheets so
+/// every close affordance matches the Home/Settings header xmark. Using a custom
+/// header avoids the iOS 26 toolbar "Liquid Glass" capsule that wraps
+/// ToolbarItem buttons in a circular background.
+private struct SheetCloseHeader: View {
+    let title: String
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center) {
+            Text(title)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(JDTheme.primaryText)
+            Spacer()
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(JDTheme.secondaryText)
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("닫기")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 8)
+    }
+}
+
 private struct LegalDocumentSheet: View {
     let document: LegalDocument
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: document.title, onClose: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ForEach(Array(document.sections.enumerated()), id: \.offset) { _, section in
@@ -3467,16 +3525,8 @@ private struct LegalDocumentSheet: View {
                 }
                 .padding(20)
             }
-            .background(JDTheme.background)
-            .navigationTitle(document.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("닫기") { dismiss() }
-                        .font(.system(size: 14, weight: .semibold))
-                }
-            }
         }
+        .background(JDTheme.background)
     }
 }
 
@@ -3491,7 +3541,8 @@ private struct HabitManagementSheet: View {
     private let emojis = ["🌱", "💧", "🏃", "📖", "🧘", "✏️"]
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: "습관 관리", onClose: { dismiss() })
             List {
                 Section("새 습관") {
                     TextField("습관 이름", text: $title)
@@ -3548,15 +3599,9 @@ private struct HabitManagementSheet: View {
             }
             .font(.system(size: 13, weight: .medium))
             .listSectionSpacing(.compact)
-            .navigationTitle("습관 관리")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("닫기") { dismiss() }
-                        .font(.system(size: 14, weight: .semibold))
-                }
-            }
+            .scrollContentBackground(.hidden)
         }
+        .background(JDTheme.background)
     }
 }
 
@@ -3571,7 +3616,8 @@ private struct CategoryManagementSheet: View {
     private let colors = ["#558CB9", "#C87A6D", "#69A17D", "#4F6FD8", "#D36A3A"]
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: "카테고리 관리", onClose: { dismiss() })
             List {
                 Section("새 카테고리") {
                     TextField("카테고리 이름", text: $name)
@@ -3632,15 +3678,9 @@ private struct CategoryManagementSheet: View {
             }
             .font(.system(size: 13, weight: .medium))
             .listSectionSpacing(.compact)
-            .navigationTitle("카테고리 관리")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("닫기") { dismiss() }
-                        .font(.system(size: 14, weight: .semibold))
-                }
-            }
+            .scrollContentBackground(.hidden)
         }
+        .background(JDTheme.background)
     }
 }
 
@@ -4597,6 +4637,82 @@ private struct GoalDraft {
     var locked: Bool = true
 }
 
+private struct ReportBanner: View {
+    let title: String
+    let onOpen: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(JDTheme.accent)
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(JDTheme.primaryText)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button(action: onOpen) {
+                Text("보기")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .frame(height: 30)
+                    .background(JDTheme.accent)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(JDTheme.secondaryText)
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("리포트 배너 닫기")
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .padding(.vertical, 10)
+        .background(JDTheme.accent.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(JDTheme.accent.opacity(0.22), lineWidth: 1)
+        )
+    }
+}
+
+private struct ReportSupportingBanner: View {
+    let title: String
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(JDTheme.accent)
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(JDTheme.primaryText)
+                Spacer(minLength: 6)
+                Text("보기")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(JDTheme.accent)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(JDTheme.accent)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(JDTheme.accent.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct GoalReportTarget: Identifiable, Equatable {
     var periodType: GoalPeriodType
     var periodKey: String
@@ -4712,19 +4828,45 @@ private struct GoalManagementSheet: View {
     let onAddGoal: (GoalDraft) -> Void
     let onSaveGoal: (Goal) -> Void
     let onDeleteGoal: (Goal) -> Void
-    let onOpenReport: (GoalReportTarget) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var editingDraft: GoalEditorDraft?
     @State private var lockedGoal: Goal?
+    @State private var reportPresentation: GoalReportPresentation?
 
     private var yearlyKey: String { GoalSelectors.periodKey(.yearly, iso: JDDate.todayISO) }
     private var monthlyKey: String { GoalSelectors.periodKey(.monthly, iso: JDDate.todayISO) }
 
+    private var supportingReports: [GoalReportAvailability] {
+        let today = JDDate.todayComponents
+        return GoalReportSelectors.availableReports(todayYear: today.year, todayMonth: today.month, goals: goals)
+    }
+
+    private func supportingBannerTitle(_ report: GoalReportAvailability) -> String {
+        if report.periodType == .yearly {
+            return "\(report.periodKey)년 리포트 준비 완료"
+        }
+        return "\(GoalSelectors.periodLabel(.monthly, periodKey: report.periodKey)) 리포트 준비 완료"
+    }
+
+    private func openSupportingReport(_ report: GoalReportAvailability) {
+        reportPresentation = GoalReportPresentation(
+            target: GoalReportTarget(periodType: report.periodType, periodKey: report.periodKey),
+            isPreview: !isProPlan
+        )
+    }
+
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: "목표", onClose: { dismiss() })
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
+                    if let yearlyReport = supportingReports.first(where: { $0.periodType == .yearly }) {
+                        ReportSupportingBanner(
+                            title: supportingBannerTitle(yearlyReport),
+                            onOpen: { openSupportingReport(yearlyReport) }
+                        )
+                    }
                     GoalPeriodCards(
                         title: "연간 · \(yearlyKey)",
                         tint: JDTheme.me,
@@ -4733,6 +4875,12 @@ private struct GoalManagementSheet: View {
                         onEdit: startEdit(_:),
                         onToggleLock: toggleGoalLock(_:)
                     )
+                    if let monthlyReport = supportingReports.first(where: { $0.periodType == .monthly }) {
+                        ReportSupportingBanner(
+                            title: supportingBannerTitle(monthlyReport),
+                            onOpen: { openSupportingReport(monthlyReport) }
+                        )
+                    }
                     GoalPeriodCards(
                         title: "월간 · \(GoalSelectors.periodLabel(.monthly, periodKey: monthlyKey))",
                         tint: JDTheme.habit,
@@ -4746,16 +4894,9 @@ private struct GoalManagementSheet: View {
                 .padding(.top, 4)
                 .padding(.bottom, 28)
             }
-            .background(JDTheme.background)
-            .navigationTitle("목표")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("닫기") { dismiss() }
-                        .font(.system(size: 14, weight: .semibold))
-                }
-            }
-            .overlay { goalEditorOverlay }
+        }
+        .background(JDTheme.background)
+        .overlay { goalEditorOverlay }
             .alert("고정한 목표를 수정할까요?", isPresented: lockedGoalBinding) {
                 Button("유지하기", role: .cancel) {
                     lockedGoal = nil
@@ -4771,7 +4912,15 @@ private struct GoalManagementSheet: View {
             } message: {
                 Text("처음 세운 약속과 달라질 수 있어요.")
             }
-        }
+            .fullScreenCover(item: $reportPresentation) { presentation in
+                GoalReportFullScreen(
+                    presentation: presentation,
+                    goals: goals,
+                    tasks: tasks,
+                    habits: habits,
+                    onClose: { reportPresentation = nil }
+                )
+            }
     }
 
     @ViewBuilder

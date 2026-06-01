@@ -56,7 +56,12 @@ export type Goal = {
   lockedAt?: string | null;
 };
 
-export type GoalPromptType = "onboarding" | "monthly" | "yearly";
+export type GoalPromptType =
+  | "onboarding"
+  | "monthly"
+  | "yearly"
+  | "report_monthly"
+  | "report_yearly";
 
 export type GoalPromptDismissal = {
   id: string;

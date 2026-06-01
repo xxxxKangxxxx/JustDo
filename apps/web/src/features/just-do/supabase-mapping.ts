@@ -36,7 +36,12 @@ const toGoalPeriodType = (value: string): GoalPeriodType =>
   value === "yearly" ? "yearly" : "monthly";
 
 const toGoalPromptType = (value: string): GoalPromptType =>
-  value === "yearly" || value === "onboarding" ? value : "monthly";
+  value === "yearly" ||
+  value === "onboarding" ||
+  value === "report_monthly" ||
+  value === "report_yearly"
+    ? value
+    : "monthly";
 
 export const categoryRowToDomain = (row: CategoryRow): Category => ({
   id: row.id,

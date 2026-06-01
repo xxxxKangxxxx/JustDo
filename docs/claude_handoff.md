@@ -143,10 +143,23 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > the dead-guard removal). See `worklog.md` 2026-06-01 "close-button unification,
 > dead-code removal, device smoke pass" entry.
 
+> **2026-06-01 Period-end report banners — first pass DONE (iOS + Web)** —
+> 기간 종료 리포트 배너를 iOS/Web 양쪽에 구현. 항상 보이는 메뉴가 아니라 기간
+> 종료 후에만 노출: 월간=직전 달(현재 달 내내), 연간=직전 해(1월만, 월간보다
+> 우선), 해당 기간에 목표가 있을 때만. Home 상단 배너=기본 진입(dismissible,
+> `보기`=리포트 / `×`=`goal_prompt_dismissals`에 `report_monthly`/`report_yearly`
+> 저장 → cross-device), Settings → 목표 보조 배너=조용한 fallback(닫기 없음).
+> 신규 마이그레이션 `20260601120000_report_banner_dismissal.sql`(CHECK 제약만
+> 완화, `database.types.ts` 무영향). 검증: `swift test` 54개 / iOS build /
+> web lint·test(122)·build / `git diff --check` 통과. 자세한 경위는 `worklog.md`
+> 2026-06-01 "Period-end report banners" 엔트리.
+> **남은 항목**: ① hosted Supabase에 `supabase db push` (사용자). ② iOS 실기기
+> smoke — 배너는 직전 기간에 목표가 있어야 보이므로, 테스트 시 이전 월/연에
+> 목표를 시드해서 강제 노출 확인. ③ Web 시각 확인.
+
 > **다음 작업자가 픽업할 우선순위 (2026-06-01 갱신)**:
-> 1. **Period-end report banners**. 기간 종료 리포트는 Home 상단 배너를 기본
->    진입으로, Settings → 목표 보조 배너를 fallback으로 구현한다. Card tap remains
->    edit/lock-confirmation only. (iOS IA 트랙은 완료·실기기 smoke 통과로 종료.)
+> 1. **Report banners 마무리**: hosted `supabase db push` + iOS 실기기 / Web
+>    시각 smoke (위 항목 참고).
 > 2. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.

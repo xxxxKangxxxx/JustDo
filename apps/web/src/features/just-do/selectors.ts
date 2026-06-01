@@ -1,5 +1,5 @@
 import { addDays, daysInMonth, isoOf, parseISO, weekdayOfISO } from "@/lib/date";
-import type { Goal, GoalPeriodType, Habit, Task } from "@/types/domain";
+import type { Goal, GoalPeriodType, GoalPromptDismissal, Habit, Task } from "@/types/domain";
 
 export const tasksOnDate = (tasks: Task[], iso: string) =>
   tasks.filter((task) => task.startDate <= iso && iso <= task.endDate);
@@ -139,3 +139,59 @@ export const periodActivityHeatmap = (
     return completedTasks + completedHabits;
   });
 };
+
+export type ReportAvailability = { periodType: GoalPeriodType; periodKey: string };
+
+const reportDismissalPromptType = (periodType: GoalPeriodType) =>
+  periodType === "yearly" ? "report_yearly" : "report_monthly";
+
+/**
+ * Period-end reports eligible to surface today, highest priority first.
+ *
+ * Reports are retrospective: a period's report only appears once the period has
+ * ended. The monthly report surfaces the immediately previous month throughout
+ * the current month; the yearly report surfaces the previous year but only in
+ * January, where it takes priority over the monthly report. A report is only
+ * included when at least one goal exists for that period.
+ */
+export const availableReports = (
+  today: string,
+  goals: Goal[],
+): ReportAvailability[] => {
+  const { year, month } = parseISO(today);
+  const result: ReportAvailability[] = [];
+
+  if (month === 1) {
+    const previousYearKey = String(year - 1);
+    if (goals.some((goal) => goal.periodType === "yearly" && goal.periodKey === previousYearKey)) {
+      result.push({ periodType: "yearly", periodKey: previousYearKey });
+    }
+  }
+
+  const previousMonthYear = month === 1 ? year - 1 : year;
+  const previousMonth = month === 1 ? 12 : month - 1;
+  const previousMonthKey = `${previousMonthYear}-${String(previousMonth).padStart(2, "0")}`;
+  if (goals.some((goal) => goal.periodType === "monthly" && goal.periodKey === previousMonthKey)) {
+    result.push({ periodType: "monthly", periodKey: previousMonthKey });
+  }
+
+  return result;
+};
+
+export const isReportDismissed = (
+  report: ReportAvailability,
+  dismissals: GoalPromptDismissal[],
+) =>
+  dismissals.some(
+    (dismissal) =>
+      dismissal.promptType === reportDismissalPromptType(report.periodType) &&
+      dismissal.periodKey === report.periodKey,
+  );
+
+/** Highest-priority non-dismissed report for the dismissible Home banner, or null. */
+export const homeBannerReport = (
+  today: string,
+  goals: Goal[],
+  dismissals: GoalPromptDismissal[],
+): ReportAvailability | null =>
+  availableReports(today, goals).find((report) => !isReportDismissed(report, dismissals)) ?? null;
