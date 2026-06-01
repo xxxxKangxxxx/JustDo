@@ -462,11 +462,15 @@ private struct HomeRootView: View {
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsRootTabView(
+                snapshot: snapshot,
                 settings: snapshot?.settings,
                 authProfile: authProfile,
+                year: displayYear,
+                month: displayMonth,
                 isDarkMode: $isDarkMode,
                 actionMessage: actionMessage,
                 syncStatus: syncStatus.status,
+                onToggleHabit: toggleHabit(_:on:),
                 onSetNotify: setNotify(_:),
                 onSetNotifyTime: setNotifyTime(_:),
                 onSetWeekStart: setWeekStart(_:),
@@ -671,8 +675,21 @@ private struct HomeRootView: View {
 
     private var homeHeader: some View {
         VStack(alignment: .leading, spacing: 16) {
-            JustDoWordmark(size: 24, dotSize: 6)
+            HStack(alignment: .center) {
+                JustDoWordmark(size: 24, dotSize: 6)
+                    .offset(y: -14)
+                Spacer()
+                Button {
+                    isShowingSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .foregroundStyle(JDTheme.secondaryText)
+                }
                 .offset(y: -14)
+                .accessibilityLabel("설정")
+            }
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(displayYear))
@@ -704,17 +721,6 @@ private struct HomeRootView: View {
                         .background(JDTheme.accent.opacity(0.12))
                         .clipShape(Capsule())
                 }
-                Button {
-                    isShowingSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 34, height: 34)
-                        .foregroundStyle(JDTheme.secondaryText)
-                        .background(JDTheme.surface)
-                        .clipShape(Circle())
-                }
-                .accessibilityLabel("설정")
                 Button {
                     presentAddSheet(startDate: selectedDate, endDate: selectedDate)
                 } label: {
@@ -2826,11 +2832,15 @@ private struct StatsRootTabView: View {
 }
 
 private struct SettingsRootTabView: View {
+    let snapshot: AppSnapshot?
     let settings: Settings?
     let authProfile: AuthProfile?
+    let year: Int
+    let month: Int
     @Binding var isDarkMode: Bool
     let actionMessage: String?
     let syncStatus: AppSyncStatus
+    let onToggleHabit: (Habit, String) -> Void
     let onSetNotify: (Bool) -> Void
     let onSetNotifyTime: (String) -> Void
     let onSetWeekStart: (Int) -> Void
@@ -2851,6 +2861,7 @@ private struct SettingsRootTabView: View {
     @State private var weekStartValue = 0
     @State private var accountMessage: String?
     @State private var isShowingResetConfirmation = false
+    @State private var isShowingStats = false
     @State private var legalDocument: LegalDocument?
     @State private var settingsMessage: String?
 
@@ -2932,6 +2943,7 @@ private struct SettingsRootTabView: View {
                 }
                 SettingGroup(label: "데이터") {
                     SyncStatusRow(status: syncStatus, actionMessage: actionMessage, onRetry: onRetrySync)
+                    SettingsRow(title: "통계", chevron: true, action: { isShowingStats = true })
                     SettingsRow(title: "목표", chevron: true, action: onManageGoals)
                     SettingsRow(title: "습관 관리", chevron: true, action: onManageHabits)
                     SettingsRow(title: "카테고리 관리", chevron: true, action: onManageCategories)
@@ -3000,6 +3012,18 @@ private struct SettingsRootTabView: View {
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
+        }
+        .sheet(isPresented: $isShowingStats) {
+            StatsRootTabView(
+                snapshot: snapshot,
+                year: year,
+                month: month,
+                onToggleHabit: onToggleHabit
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.background)
         }
         .sheet(isPresented: $isShowingNotifyTimePicker) {
             TimePickerSheet(
