@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-06-01
+Date: 2026-06-02
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -153,23 +153,33 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > 완화, `database.types.ts` 무영향). 검증: `swift test` 54개 / iOS build /
 > web lint·test(122)·build / `git diff --check` 통과. 자세한 경위는 `worklog.md`
 > 2026-06-01 "Period-end report banners" 엔트리.
-> **남은 항목**: ① hosted Supabase에 `supabase db push` (사용자). ② iOS 실기기
-> smoke — 배너는 직전 기간에 목표가 있어야 보이므로, 테스트 시 이전 월/연에
-> 목표를 시드해서 강제 노출 확인. ③ Web 시각 확인.
+> **상태**: hosted Supabase `supabase db push` 적용 완료(마이그레이션
+> `20260601120000` Remote 반영). iOS 실기기 smoke 통과(설정→목표 보조 배너에서
+> 리포트가 목표 화면 위로 바로 표시되는 것 포함). Web 시각 확인까지 마무리.
+> 후속 fix는 모두 `13f70e4` 커밋에 amend 됨(설정→목표 보조 배너가 리포트를
+> Settings 뒤로 띄우던 버그 수정 + 전체화면 닫기 버튼 xmark 통일 +
+> 습관/카테고리 관리 List 배경색 통일).
 
-> **다음 작업자가 픽업할 우선순위 (2026-06-01 갱신)**:
-> 1. **Report banners 마무리**: hosted `supabase db push` + iOS 실기기 / Web
->    시각 smoke (위 항목 참고).
-> 2. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
+> **2026-06-02 iOS 다크모드 회귀 fix LIVE** — 설정에서 다크모드 토글이 외형을
+> 안 바꾸던 회귀를 수정(커밋 `9a05f12`). `JDTheme`가 뷰 trait 기반 색상인데
+> `preferredColorScheme`가 `HomeRootView`에만 있어, IA 개편으로 Settings가
+> `fullScreenCover`가 되면서 토글을 안 따라가던 문제. scene 루트(`ContentView`)에
+> `auth.status` 분기 `preferredColorScheme` 적용(커버/시트가 present 시 상속,
+> auth/loading은 light 고정) + `SettingsRootTabView` 콘텐츠에도 적용해 열린
+> Settings가 토글 즉시 live 갱신. 실기기 확인 완료. 자세한 경위: `worklog.md`
+> 2026-06-02 엔트리.
+
+> **다음 작업자가 픽업할 우선순위 (2026-06-02 갱신)**:
+> 1. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
-> 3. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
+> 2. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
 >    상태로 archive/TestFlight 작업으로 이동. 현재 Auth landing, Home, Add
 >    Sheet, editor-sheet routing, Just Do Mode, Stats/Settings, Widget
 >    보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션 자동 refresh도
->    1시간+ 종료 후 재진입 smoke 통과. New full-screen Settings IA도 실기기
->    visual smoke 통과 완료.
-> 4. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
+>    1시간+ 종료 후 재진입 smoke 통과. New full-screen Settings IA, 기간 종료
+>    리포트 배너, 다크모드 회귀 fix까지 실기기 visual smoke 통과 완료.
+> 3. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 Toss test-key E2E smoke, Toss 공식 dashboard secret/header 확인
 >    후 webhook signature 검증, live billing 직전 `justdo-prod-billing-cron`
@@ -548,18 +558,17 @@ See `docs/worklog.md` 2026-04-29 entries for full rationale.
 ## Latest Implementation Commit Trail
 
 ```text
-230a979 docs: capture ios session refresh real-device smoke pass
-63db17a docs: capture 2026-05-25 signup fix and ios session refresh
-80381c7 feat(ios): auto-refresh auth session on foreground
-21ee0cd feat(supabase): add categories user-name unique index for signup trigger
-83a0e61 docs: clarify claude handoff state
-3e2e234 feat(ios): polish settings and widgets
-e54423f feat(ios): polish add detail and stats verification
-765a321 docs: capture 2026-05-22 iOS real-device session
-e65a405 feat: add app icon and web favicon
-3081ae4 feat(ios): redesign home calendar and fix auth dark mode
-551f302 chore(ios): rename bundle id to kr.justdo.app
-32d619a docs: confirm B3 first scheduled invocation
+9a05f12 fix: apply dark mode to settings full-screen cover
+13f70e4 feat: add period-end goal report banners (ios + web)
+88c0ce9 refactor: unify ios settings close buttons and drop ia dead code
+98e30e7 feat: refine ios settings ia
+30ac586 feat: add stats entry to ios settings
+9c8ee51 feat: simplify ios navigation ia
+2e59c6f fix: normalize web task tag input
+489fbf6 fix: filter web tasks by sidebar tags
+6a5dba2 docs: record product ia decision
+b4cbf9e fix: confirm goal deletion on ios
+25343a5 feat: add goal report MVP
 ```
 
 Watch items (not active tasks):
