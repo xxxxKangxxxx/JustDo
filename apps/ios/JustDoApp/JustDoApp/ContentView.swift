@@ -108,8 +108,6 @@ struct ContentView: View {
 
 private enum RootTab: String, CaseIterable, Identifiable {
     case home
-    case stats
-    case settings
 
     var id: String { rawValue }
 
@@ -117,10 +115,6 @@ private enum RootTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:
             "홈"
-        case .stats:
-            "통계"
-        case .settings:
-            "설정"
         }
     }
 
@@ -128,10 +122,6 @@ private enum RootTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:
             "calendar"
-        case .stats:
-            "chart.bar"
-        case .settings:
-            "gearshape"
         }
     }
 }
@@ -430,6 +420,7 @@ private struct HomeRootView: View {
     @State private var displayMonth = JDDate.todayComponents.month
     @State private var selectedTab: RootTab = .home
     @State private var isShowingAddTask = false
+    @State private var isShowingSettings = false
     @State private var addTaskStartDate: String?
     @State private var addTaskEndDate: String?
     @State private var editingTask: Task?
@@ -468,6 +459,30 @@ private struct HomeRootView: View {
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsRootTabView(
+                settings: snapshot?.settings,
+                authProfile: authProfile,
+                isDarkMode: $isDarkMode,
+                actionMessage: actionMessage,
+                syncStatus: syncStatus.status,
+                onSetNotify: setNotify(_:),
+                onSetNotifyTime: setNotifyTime(_:),
+                onSetWeekStart: setWeekStart(_:),
+                onSetJustDoMode: setJustDoModeFromSettings(_:),
+                onManageGoals: { presentManagerFromSettings(.goals) },
+                onManageHabits: { presentManagerFromSettings(.habits) },
+                onManageCategories: { presentManagerFromSettings(.categories) },
+                onExportData: exportData,
+                onResetData: resetAllData,
+                onRetrySync: retrySync,
+                onSignOut: onSignOut
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.background)
         }
         .sheet(isPresented: $isShowingHabitManager) {
             HabitManagementSheet(
@@ -651,34 +666,6 @@ private struct HomeRootView: View {
             }
             .padding(.bottom, 100)
             .frame(maxHeight: .infinity, alignment: .top)
-        case .stats:
-            StatsRootTabView(
-                snapshot: snapshot,
-                year: displayYear,
-                month: displayMonth,
-                onToggleHabit: toggleHabit(_:on:)
-            )
-                .padding(.bottom, 100)
-        case .settings:
-            SettingsRootTabView(
-                settings: snapshot?.settings,
-                authProfile: authProfile,
-                isDarkMode: $isDarkMode,
-                actionMessage: actionMessage,
-                syncStatus: syncStatus.status,
-                onSetNotify: setNotify(_:),
-                onSetNotifyTime: setNotifyTime(_:),
-                onSetWeekStart: setWeekStart(_:),
-                onSetJustDoMode: setJustDoModeFromSettings(_:),
-                onManageGoals: { isShowingGoalManager = true },
-                onManageHabits: { isShowingHabitManager = true },
-                onManageCategories: { isShowingCategoryManager = true },
-                onExportData: exportData,
-                onResetData: resetAllData,
-                onRetrySync: retrySync,
-                onSignOut: onSignOut
-            )
-                .padding(.bottom, 100)
         }
     }
 
@@ -718,6 +705,17 @@ private struct HomeRootView: View {
                         .clipShape(Capsule())
                 }
                 Button {
+                    isShowingSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .background(JDTheme.surface)
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel("설정")
+                Button {
                     presentAddSheet(startDate: selectedDate, endDate: selectedDate)
                 } label: {
                     Image(systemName: "plus")
@@ -754,6 +752,26 @@ private struct HomeRootView: View {
 
     private var effectiveJustDoMode: Bool {
         isProPlan && (snapshot?.settings.justDoMode ?? false)
+    }
+
+    private enum SettingsManagerDestination {
+        case goals
+        case habits
+        case categories
+    }
+
+    private func presentManagerFromSettings(_ destination: SettingsManagerDestination) {
+        isShowingSettings = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            switch destination {
+            case .goals:
+                isShowingGoalManager = true
+            case .habits:
+                isShowingHabitManager = true
+            case .categories:
+                isShowingCategoryManager = true
+            }
+        }
     }
 
     private func presentAddSheetForSelectedDate(useJustDoMode: Bool? = nil) {
@@ -818,6 +836,7 @@ private struct HomeRootView: View {
         guard goalPromptPresentation == nil,
               goalReportPresentation == nil,
               !isShowingGoalManager,
+              !isShowingSettings,
               !isShowingAddTask,
               !isShowingDayPanel
         else {
