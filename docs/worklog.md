@@ -4423,3 +4423,48 @@ This document records coordination notes for work done with Codex and Claude Cod
     Settings.
   - `설정 → 목표` opens Goal management inside Settings, not via Home.
   - `설정 → 카테고리 관리` opens Category management inside Settings, not via Home.
+
+## 2026-06-01 iOS IA close-button unification, dead-code removal, device smoke pass
+
+### Cleanup implemented
+
+- Close-button placement unified to the right (`.confirmationAction`) across all
+  full-screen management surfaces:
+  - `GoalManagementSheet` (`설정 → 목표`) `닫기` moved from `.cancellationAction`
+    (left) to `.confirmationAction` (right).
+  - `CategoryManagementSheet` (`설정 → 카테고리 관리`) `닫기` moved from
+    `.cancellationAction` (left) to `.confirmationAction` (right).
+  - `HabitManagementSheet` (`습관 관리`) was already on the right; now all three
+    match.
+- Dead code removed from `ContentView.swift` (the Settings-contained management
+  flow already routes through each view's own state, so the old Home-owned path
+  was unreachable):
+  - Removed Home-owned `@State` `isShowingHabitManager` / `isShowingCategoryManager`
+    / `isShowingGoalManager` and their three `.sheet` blocks.
+  - Removed the unreferenced `presentManagerFromSettings(_:)` function and its
+    `SettingsManagerDestination` enum (the anti-pattern that closed Settings and
+    reopened a Home-owned sheet — confirmed 0 callers).
+  - Removed the now-dead `!isShowingGoalManager` guard in
+    `presentGoalPromptIfNeeded(from:)`.
+  - Net change: `ContentView.swift` +2 / -66 lines.
+- Remaining `isShowing*Manager` references are all live code inside
+  `StatsRootTabView` (Habit screen's own Habit management) and
+  `SettingsRootTabView` (Settings-local goal/category management). The earlier
+  worklog note that the old Home-owned path "may still exist" is now obsolete —
+  it has been deleted.
+
+### Verification
+
+- `git diff --check` passed (whitespace clean).
+- `swift test --package-path apps/ios` passed 46 tests.
+- Generic iOS app build passed:
+  - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
+- **Real-device smoke passed** on iPhone 14 Pro (iOS 26.5, Xcode device run).
+  User confirmed all IA flows work: single centered `홈` tab, Home gear opens
+  full-screen Settings, Settings xmark returns to Home, `설정 → 습관` header/stats,
+  `설정 → 습관 → 편집` opens Habit management above the Habit screen and closing it
+  returns to the Habit screen (not Settings/Home), `설정 → 목표` and
+  `설정 → 카테고리 관리` open inside Settings with right-side `닫기`, and goal
+  prompt/report entry still behaves correctly after the dead-guard removal.
+- This closes the "Real-device smoke still needed" item from the prior
+  2026-06-01 iOS IA implementation entry.

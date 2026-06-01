@@ -425,9 +425,6 @@ private struct HomeRootView: View {
     @State private var addTaskEndDate: String?
     @State private var editingTask: Task?
     @State private var editingHabit: Habit?
-    @State private var isShowingHabitManager = false
-    @State private var isShowingCategoryManager = false
-    @State private var isShowingGoalManager = false
     @State private var isShowingDayPanel = false
     @AppStorage("justdo.isDarkMode") private var isDarkMode = false
     @State private var exportURL: ExportFile?
@@ -495,14 +492,6 @@ private struct HomeRootView: View {
                 onDismiss: { isShowingSettings = false }
             )
         }
-        .sheet(isPresented: $isShowingHabitManager) {
-            HabitManagementSheet(
-                habits: snapshot?.habits ?? [],
-                onAdd: addHabit(title:emoji:),
-                onDelete: deleteHabit(_:)
-            )
-            .presentationDetents([.large])
-        }
         .sheet(item: $editingTask) { task in
             TaskDetailEditor(
                 task: task,
@@ -532,38 +521,6 @@ private struct HomeRootView: View {
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
-        }
-        .sheet(isPresented: $isShowingCategoryManager) {
-            CategoryManagementSheet(
-                categories: snapshot?.categories ?? [],
-                onAdd: addCategory(name:color:),
-                onDelete: deleteCategory(_:)
-            )
-            .presentationDetents([.large])
-        }
-        .sheet(isPresented: $isShowingGoalManager) {
-            GoalManagementSheet(
-                goals: snapshot?.goals ?? [],
-                tasks: snapshot?.tasks ?? [],
-                habits: snapshot?.habits ?? [],
-                isProPlan: isProPlan,
-                onAddGoal: addGoal(_:),
-                onSaveGoal: saveGoal(_:),
-                onDeleteGoal: deleteGoal(_:),
-                onOpenReport: { target in
-                    isShowingGoalManager = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                        goalReportPresentation = GoalReportPresentation(
-                            target: target,
-                            isPreview: !isProPlan
-                        )
-                    }
-                }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.background)
         }
         .sheet(item: $exportURL) { file in
             DataExportSheet(url: file.url)
@@ -767,26 +724,6 @@ private struct HomeRootView: View {
         isProPlan && (snapshot?.settings.justDoMode ?? false)
     }
 
-    private enum SettingsManagerDestination {
-        case goals
-        case habits
-        case categories
-    }
-
-    private func presentManagerFromSettings(_ destination: SettingsManagerDestination) {
-        isShowingSettings = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            switch destination {
-            case .goals:
-                isShowingGoalManager = true
-            case .habits:
-                isShowingHabitManager = true
-            case .categories:
-                isShowingCategoryManager = true
-            }
-        }
-    }
-
     private func presentAddSheetForSelectedDate(useJustDoMode: Bool? = nil) {
         if useJustDoMode ?? effectiveJustDoMode {
             let startDate = selectedDate < JDDate.todayISO ? selectedDate : JDDate.todayISO
@@ -848,7 +785,6 @@ private struct HomeRootView: View {
     private func presentGoalPromptIfNeeded(from loaded: AppSnapshot) {
         guard goalPromptPresentation == nil,
               goalReportPresentation == nil,
-              !isShowingGoalManager,
               !isShowingSettings,
               !isShowingAddTask,
               !isShowingDayPanel
@@ -3699,7 +3635,7 @@ private struct CategoryManagementSheet: View {
             .navigationTitle("카테고리 관리")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("닫기") { dismiss() }
                         .font(.system(size: 14, weight: .semibold))
                 }
@@ -4814,7 +4750,7 @@ private struct GoalManagementSheet: View {
             .navigationTitle("목표")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("닫기") { dismiss() }
                         .font(.system(size: 14, weight: .semibold))
                 }

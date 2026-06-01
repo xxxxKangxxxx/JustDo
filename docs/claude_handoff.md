@@ -111,51 +111,52 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > is the primary entry, and Settings → 목표 gets smaller supporting banners near
 > annual/monthly sections.
 
-> **2026-06-01 iOS IA implementation state** — Commits already pushed before
-> the current uncommitted pass:
-> `9c8ee51 feat: simplify ios navigation ia`,
-> `30ac586 feat: add stats entry to ios settings`.
-> Current local changes in `apps/ios/JustDoApp/JustDoApp/ContentView.swift`
-> refine this IA further and are not committed yet at this handoff point unless
-> the working tree says otherwise. Current intended behavior:
-> - Home bottom bar has one centered `홈` tab.
+> **2026-06-01 iOS IA implementation state — DONE + device smoke passed** —
+> The IA refinement, close-button unification, and dead-code removal are now
+> committed and confirmed on a real device. Final behavior (all verified on
+> iPhone 14 Pro / iOS 26.5):
+> - Home bottom bar has one centered `홈` tab (`RootTab` = `.home` only).
 > - Settings opens from Home top-right gear as full-screen cover.
 > - Home gear icon is visually just the icon, no circular white background.
 > - Settings full-screen has a top-right xmark close button.
 > - Old standalone Stats bottom tab is gone.
 > - Old stats content is now `설정 → 습관`, titled `습관`.
 > - `설정 → 습관` header order: title, `편집`, rightmost xmark close.
-> - `설정 → 습관 → 편집` opens Habit management above the Habit screen. Closing
->   Habit management must return to the Habit screen, not Settings or Home.
-> - Habit management's `닫기` toolbar action is on the right side.
-> - `설정 → 목표` opens Goal management full-screen inside Settings. It must not
->   close Settings and then open a Home-owned sheet.
-> - `설정 → 카테고리 관리` opens Category management full-screen inside Settings.
-> - Goal management has its own `닫기` toolbar action for full-screen use.
-> Verification already run after these local IA refinements:
-> `swift test --package-path apps/ios` passed 46 tests, generic iOS
-> `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
-> passed, and `git diff --check` passed. Still needed: user-run Xcode install on
-> real device to visually confirm Settings → 습관 → 편집 → 닫기, Settings → 목표,
-> and Settings → 카테고리 관리 do not jump back through Home.
+> - `설정 → 습관 → 편집` opens Habit management above the Habit screen, owned by
+>   `StatsRootTabView`'s own state. Closing it returns to the Habit screen, not
+>   Settings or Home.
+> - `설정 → 목표` opens Goal management full-screen inside Settings (Settings-local
+>   state), and `설정 → 카테고리 관리` opens Category management full-screen inside
+>   Settings. Neither closes Settings to reopen a Home-owned sheet.
+> - All three full-screen management surfaces (`습관 관리` / `목표` /
+>   `카테고리 관리`) now have their `닫기` toolbar action on the **right side**
+>   (`.confirmationAction`).
+> - Dead code removed: Home-owned `isShowing{Habit,Category,Goal}Manager` state +
+>   their `.sheet` blocks, the unreferenced `presentManagerFromSettings(_:)` +
+>   `SettingsManagerDestination` enum (the close-Settings-then-open-Home-sheet
+>   anti-pattern, 0 callers), and the dead `!isShowingGoalManager` guard in
+>   `presentGoalPromptIfNeeded`. Remaining `isShowing*Manager` references are all
+>   live code inside `StatsRootTabView` / `SettingsRootTabView`.
+> Verification: `swift test --package-path apps/ios` 46 tests pass, generic iOS
+> `xcodebuild` build pass, `git diff --check` clean, and user-confirmed
+> real-device smoke of every flow above (including goal prompt/report entry after
+> the dead-guard removal). See `worklog.md` 2026-06-01 "close-button unification,
+> dead-code removal, device smoke pass" entry.
 
 > **다음 작업자가 픽업할 우선순위 (2026-06-01 갱신)**:
-> 1. **iOS IA local changes commit + real-device smoke**. If not yet committed,
->    commit the current `ContentView.swift` IA refinements and docs. Then user
->    should run Xcode on device and verify Settings/Habit/Goal/Category flows.
-> 2. **Period-end report banners**. 기간 종료 리포트는 Home 상단 배너를 기본
+> 1. **Period-end report banners**. 기간 종료 리포트는 Home 상단 배너를 기본
 >    진입으로, Settings → 목표 보조 배너를 fallback으로 구현한다. Card tap remains
->    edit/lock-confirmation only.
-> 3. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
+>    edit/lock-confirmation only. (iOS IA 트랙은 완료·실기기 smoke 통과로 종료.)
+> 2. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
-> 4. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
+> 3. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
 >    상태로 archive/TestFlight 작업으로 이동. 현재 Auth landing, Home, Add
->    Sheet, editor-sheet routing, Just Do Mode, pre-IA Stats/Settings, Widget
+>    Sheet, editor-sheet routing, Just Do Mode, Stats/Settings, Widget
 >    보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션 자동 refresh도
->    1시간+ 종료 후 재진입 smoke 통과. New full-screen Settings IA has build/test
->    verification and awaits final device visual smoke.
-> 5. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
+>    1시간+ 종료 후 재진입 smoke 통과. New full-screen Settings IA도 실기기
+>    visual smoke 통과 완료.
+> 4. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 Toss test-key E2E smoke, Toss 공식 dashboard secret/header 확인
 >    후 webhook signature 검증, live billing 직전 `justdo-prod-billing-cron`
