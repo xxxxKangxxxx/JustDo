@@ -21,6 +21,11 @@ describe("parseTagInput", () => {
     expect(parseTagInput("#운동, #동")).toEqual(["운동", "동"]);
   });
 
+  it("splits tags by spaces as commit separators", () => {
+    expect(parseTagInput("운동 식단")).toEqual(["운동", "식단"]);
+    expect(parseTagInput("#운동 #식단")).toEqual(["운동", "식단"]);
+  });
+
   it("drops accidental suffix fragments from Korean IME commits", () => {
     expect(parseTagInput("#운동,동")).toEqual(["운동"]);
   });
@@ -37,6 +42,14 @@ describe("mergeTags", () => {
 
   it("ignores duplicates already in the list", () => {
     expect(mergeTags(["work"], ["work", "urgent"])).toEqual(["work", "urgent"]);
+  });
+
+  it("normalizes current and incoming tags before deduping", () => {
+    expect(mergeTags(["#운동", "Work"], ["운동", "#work", "식단"])).toEqual([
+      "운동",
+      "Work",
+      "식단",
+    ]);
   });
 
   it("returns a new array", () => {

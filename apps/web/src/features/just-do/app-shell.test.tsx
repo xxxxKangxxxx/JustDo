@@ -264,6 +264,31 @@ describe("desktop app shell interactions", () => {
     expect(screen.getAllByText("work").length).toBeGreaterThan(0);
   });
 
+  it("commits and normalizes task tags with space in the desktop add modal", async () => {
+    renderApp();
+
+    const titleInput = await openNewItemModal();
+    change(titleInput, "태그 정규화 테스트");
+
+    const tagInput = screen.getByPlaceholderText("태그 추가");
+    change(tagInput, "#운동");
+    keyDown(tagInput, " ");
+    change(tagInput, "운동");
+    keyDown(tagInput, "Enter");
+    change(tagInput, "식단");
+    keyDown(tagInput, " ");
+    submitOpenModal();
+
+    const createdTaskTexts = await screen.findAllByText("태그 정규화 테스트");
+    expect(createdTaskTexts.length).toBeGreaterThan(0);
+    click(createdTaskTexts[createdTaskTexts.length - 1]);
+
+    expect((await screen.findAllByText("운동")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("식단").length).toBeGreaterThan(0);
+    expect(screen.queryByText("#운동")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "태그 운동 삭제" })).toHaveLength(1);
+  });
+
   it("filters calendar tasks by a selected sidebar tag instead of opening search", async () => {
     renderApp(persistedState({
       tasks: [

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { weekdayOfISO } from "@/lib/date";
 import type { HabitRecurType, Priority } from "@/types/domain";
 import { useJustDo } from "./store";
-import { mergeTags, parseTagInput } from "./tags";
+import { isTagCommitKey, mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
 
 export function AddSheet({ mode }: { mode: ThemeMode }) {
@@ -87,7 +87,7 @@ export function AddSheet({ mode }: { mode: ThemeMode }) {
 
   const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (isComposingInputEvent(event)) return;
-    if (event.key === "Enter" || event.key === ",") {
+    if (isTagCommitKey(event.key)) {
       event.preventDefault();
       commitTagDraft(event.currentTarget.value || tagDraft);
       return;

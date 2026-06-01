@@ -31,7 +31,7 @@ import {
   tasksOnDate,
 } from "./selectors";
 import { JustDoProvider, useJustDo } from "./store";
-import { mergeTags, parseTagInput } from "./tags";
+import { isTagCommitKey, mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
 import type { JustDoStorage } from "./persistence";
 
@@ -1442,7 +1442,7 @@ function TaskModalBody({
   };
   const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (isComposingInputEvent(event)) return;
-    if (event.key === "Enter" || event.key === ",") {
+    if (isTagCommitKey(event.key)) {
       event.preventDefault();
       commitTagDraft(event.currentTarget.value || tagDraft);
       return;
@@ -1564,9 +1564,9 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
   };
   const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (isComposingInputEvent(event)) return;
-    if (event.key === "Enter" || event.key === ",") {
+    if (isTagCommitKey(event.key)) {
       event.preventDefault();
-      commitTagDraft(tagDraft);
+      commitTagDraft(event.currentTarget.value || tagDraft);
       return;
     }
     if (event.key === "Backspace" && !tagDraft && tags.length) {
