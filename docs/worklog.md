@@ -4564,3 +4564,25 @@ This document records coordination notes for work done with Codex and Claude Cod
   `.scrollContentBackground(.hidden)` so the header and body share one background.
 - Verification after the follow-ups: `swift test` 54 pass, generic iOS build
   pass, `git diff --check` clean. User confirmed on-device.
+
+## 2026-06-02 iOS dark-mode regression fix
+
+- Symptom: toggling dark mode in Settings did not switch the appearance; Settings
+  (and other surfaces) stayed light until leaving to Home.
+- Root cause: `JDTheme` colors resolve from each view's UIKit trait
+  (`UIColor { traits in ... }`), and `preferredColorScheme(isDarkMode)` was only
+  applied on `HomeRootView`'s body. After the 2026-06-01 IA change moved Settings
+  from a bottom tab into a `fullScreenCover`, the cover (which does not inherit a
+  child view's `preferredColorScheme`) followed the system appearance instead of
+  the toggle.
+- Fix:
+  - Apply `preferredColorScheme` at the scene root (`ContentView.body`), computed
+    from `auth.status` (signed-in honors `isDarkMode`; auth/loading stay light).
+    Same-window covers/sheets inherit this on presentation, so Home and every
+    full-screen surface follow the toggle. Removed the redundant deep
+    `preferredColorScheme` on `HomeRootView`.
+  - Also apply `preferredColorScheme(isDarkMode)` on the `SettingsRootTabView`
+    content so the already-presented Settings cover live-updates the moment the
+    toggle flips (the scene-root one only resolves at presentation time).
+- Verification: generic iOS build pass, `swift test` 54 pass, user confirmed on
+  real device (toggle switches Settings immediately; auth landing stays light).

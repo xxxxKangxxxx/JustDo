@@ -16,6 +16,7 @@ struct ContentView: View {
     @ObservedObject private var syncStatus: AppSyncStatusStore
     @State private var pendingDetailRoute: JustDoDetailRoute?
     @State private var didOpenInitialUITestURL = false
+    @AppStorage("justdo.isDarkMode") private var isDarkMode = false
     @Environment(\.scenePhase) private var scenePhase
     var snapshotStore: CoreDataAppSnapshotStore?
     var onSessionChanged: () async -> Void = {}
@@ -33,6 +34,10 @@ struct ContentView: View {
 
     var body: some View {
         rootScreen
+        // Applied at the scene root so full-screen covers / sheets (which do not
+        // inherit a child view's preferredColorScheme) follow the dark-mode
+        // toggle. Auth/loading surfaces stay light regardless of the toggle.
+        .preferredColorScheme(rootColorScheme)
         .task {
             await auth.reload()
             openInitialUITestURLIfNeeded()
@@ -43,6 +48,15 @@ struct ContentView: View {
         }
         .onOpenURL { url in
             open(url)
+        }
+    }
+
+    private var rootColorScheme: ColorScheme {
+        switch auth.status {
+        case .signedIn:
+            return isDarkMode ? .dark : .light
+        default:
+            return .light
         }
     }
 
@@ -442,7 +456,6 @@ private struct HomeRootView: View {
             BottomTabBar(selectedTab: selectedTab) { selectedTab = $0 }
         }
         .navigationBarHidden(true)
-        .preferredColorScheme(isDarkMode ? .dark : .light)
         .sheet(isPresented: $isShowingAddTask) {
             AddTaskSheet(
                 selectedDate: selectedDate,
@@ -3013,6 +3026,10 @@ private struct SettingsRootTabView: View {
             .padding(.bottom, 8)
         }
         .background(JDTheme.background)
+        // Live-update the already-presented Settings cover when the dark-mode
+        // toggle flips. The scene-root preferredColorScheme only resolves on
+        // presentation, so the open cover needs its own to react immediately.
+        .preferredColorScheme(isDarkMode ? .dark : .light)
         .onAppear {
             localNotify = settings?.notify ?? true
             notifyTimeValue = Self.date(fromTime: settings?.notifyTime ?? "09:00")
