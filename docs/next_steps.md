@@ -18,8 +18,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > **Goal & Pro Report** MVP first pass is now implemented across Supabase
 > schema, Web, and native iOS. Settings → 목표 focused smoke is
 > user-confirmed, and destructive delete confirmation is implemented. The next
-> work is not a broad new build-out; it is the 2026-06-01 IA/report-entry
-> decision, Web tag UX fixes, and TestFlight/App Store readiness.
+> work is not a broad new build-out; it is the remaining iOS report-entry banner
+> pass, final real-device confirmation of the new full-screen Settings IA, and
+> TestFlight/App Store readiness. Web tag UX fixes are complete.
 
 Recommended order for the next coding session:
 
@@ -109,6 +110,30 @@ Recommended order for the next coding session:
    - 2026-05-30 follow-up: user confirmed the Settings → 목표 focused smoke
      items, including add/edit/delete, lock toggle, locked-goal confirmation,
      prompt dismissal, app relaunch persistence, and cloud sync.
+   - 2026-06-01 IA implementation:
+     - Bottom bar now has only one centered `홈` tab.
+     - Settings is opened from the Home top-right gear icon, not from a bottom
+       tab.
+     - Settings is a full-screen cover. Small sub-flows such as account detail,
+       time picker, week-start picker, legal documents, and confirmation dialogs
+       remain sheet/dialog style where appropriate.
+     - Existing standalone Stats bottom tab was removed. The old stats content
+       is now reachable as `설정 → 습관` and titled `습관`.
+     - `설정 → 습관` shows the monthly task completion summary, category
+       progress rows, habit stat cards, and recent 7-day habit rows.
+     - `설정 → 습관` header order is `습관` title, `편집` button, then rightmost
+       `닫기` xmark.
+     - `설정 → 습관 → 편집` opens `HabitManagementSheet` from inside the Habit
+       screen. Closing Habit management returns to the Habit screen, not to
+       Settings or Home.
+     - `HabitManagementSheet` itself keeps its `닫기` toolbar action on the
+       right side.
+     - `설정 → 목표` opens full-screen `GoalManagementSheet` inside Settings.
+       It must not dismiss Settings and then open a Home-owned sheet.
+     - `설정 → 카테고리 관리` opens full-screen category management inside
+       Settings.
+     - Goal management now has an explicit `닫기` toolbar action for full-screen
+       use.
    - Mirror the same data policy and prompt windows.
    - Keep iOS UX native: modal/sheet entry, non-blocking skip action, and
      settings/report entry points consistent with current SwiftUI patterns.
@@ -124,10 +149,12 @@ Recommended order for the next coding session:
 
 5. **TestFlight/App Store preparation**
    - Goal & Pro Report MVP is now included in the local iOS build. Start
-     archive/TestFlight work after the IA/report-entry banner pass and Web tag
-     UX fixes.
-   - Current iOS Home/Add/Edit/Stats/Settings/Widget/Just Do Mode smoke is
-     already documented as passing on iPhone 14 Pro / iOS 26.5.
+     archive/TestFlight work after the remaining report-entry banner pass and
+     final real-device confirmation of the new Settings/Habit/Goal IA.
+   - Current iOS Home/Add/Edit/pre-IA Stats/Settings/Widget/Just Do Mode smoke
+     is already documented as passing on iPhone 14 Pro / iOS 26.5. The
+     2026-06-01 full-screen Settings IA has passed `swift test` and generic iOS
+     `xcodebuild`; it still needs the user-run real-device visual check.
 
 ## Immediate Goal & Pro Report Follow-Up
 
@@ -165,11 +192,17 @@ Recommended order for the next coding session:
 
 ## Product IA Decision (2026-06-01)
 
-- Move Settings out of the bottom tab bar and into a Home top-right icon.
-- Remove the standalone `통계` tab. Existing stats become part of
-  Goal & Pro Report's report/activity-summary experience.
-- Keep the bottom bar for continuity, but show a single centered `홈` tab in the
-  near term.
+- Implemented in iOS on 2026-06-01:
+  - Settings moved out of the bottom tab bar and into a Home top-right icon.
+  - Settings opens full-screen.
+  - The standalone `통계` tab was removed.
+  - Existing stats moved to `설정 → 습관`.
+  - The bottom bar keeps a single centered `홈` tab in the near term.
+- Settings-contained management flow:
+  - `설정 → 습관 → 편집` opens Habit management above the Habit screen.
+  - `설정 → 목표` opens Goal management inside Settings.
+  - `설정 → 카테고리 관리` opens Category management inside Settings.
+  - These flows should not route back through Home-owned sheets.
 - Reserve future bottom-bar expansion for `함께`, not for stats.
 - `함께` is the follow-up social/scheduling product track:
   - friend add/invite,
@@ -177,7 +210,19 @@ Recommended order for the next coding session:
   - shared schedule coordination,
   - future notification/permission work.
 - Do not implement full `함께` before TestFlight. Document it now and use the
-  current cycle for Web tag fixes, report-entry banner UX, and TestFlight prep.
+  current cycle for report-entry banner UX, final iOS real-device IA smoke, and
+  TestFlight prep.
+
+## Web Tag UX Status (2026-06-01)
+
+- Completed and pushed:
+  - `489fbf6 fix: filter web tasks by sidebar tags`
+  - `2e59c6f fix: normalize web task tag input`
+- Sidebar tag clicks now filter calendar tasks directly rather than opening a
+  search route.
+- Task tag input commits tags on Space / Enter / comma, respects IME
+  composition, normalizes `#태그` and `태그` to the same stored tag value
+  `태그`, and dedupes normalized tags.
 
 ## Implemented Product Track: Just Do Mode
 
@@ -397,8 +442,8 @@ Recommended order for the next coding session:
   `kr.justdo.app.supabase-session`. 이전 `com.justdo.app` namespace는
   Apple 글로벌 App ID registry에서 다른 팀이 선점 중이라 회수 불가.
 - Auth landing은 항상 light 모드로 고정 (`.preferredColorScheme(.light)`)
-  되어 다크/라이트 시스템 무관하게 brand-consistent. Home/Stats/Settings
-  는 기존대로 Settings 다크모드 토글 사용.
+  되어 다크/라이트 시스템 무관하게 brand-consistent. Signed-in Home과
+  Settings full-screen surfaces는 Settings 다크모드 토글 사용.
 - Home 화면 캘린더/패널 재디자인 완료:
   - Selected-day panel을 inline drag-resize 패턴에서 bottom sheet
     modal로 전환. 2026-05-29 follow-up에서 Task inline editor 수용을 위해

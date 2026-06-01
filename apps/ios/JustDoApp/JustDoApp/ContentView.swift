@@ -460,7 +460,7 @@ private struct HomeRootView: View {
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
-        .sheet(isPresented: $isShowingSettings) {
+        .fullScreenCover(isPresented: $isShowingSettings) {
             SettingsRootTabView(
                 snapshot: snapshot,
                 settings: snapshot?.settings,
@@ -475,18 +475,25 @@ private struct HomeRootView: View {
                 onSetNotifyTime: setNotifyTime(_:),
                 onSetWeekStart: setWeekStart(_:),
                 onSetJustDoMode: setJustDoModeFromSettings(_:),
-                onManageGoals: { presentManagerFromSettings(.goals) },
-                onManageHabits: { presentManagerFromSettings(.habits) },
-                onManageCategories: { presentManagerFromSettings(.categories) },
+                onAddGoal: addGoal(_:),
+                onSaveGoal: saveGoal(_:),
+                onDeleteGoal: deleteGoal(_:),
+                onOpenGoalReport: { target in
+                    goalReportPresentation = GoalReportPresentation(
+                        target: target,
+                        isPreview: !isProPlan
+                    )
+                },
+                onAddHabit: addHabit(title:emoji:),
+                onDeleteHabit: deleteHabit(_:),
+                onAddCategory: addCategory(name:color:),
+                onDeleteCategory: deleteCategory(_:),
                 onExportData: exportData,
                 onResetData: resetAllData,
                 onRetrySync: retrySync,
-                onSignOut: onSignOut
+                onSignOut: onSignOut,
+                onDismiss: { isShowingSettings = false }
             )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.background)
         }
         .sheet(isPresented: $isShowingHabitManager) {
             HabitManagementSheet(
@@ -2728,6 +2735,11 @@ private struct StatsRootTabView: View {
     let year: Int
     let month: Int
     let onToggleHabit: (Habit, String) -> Void
+    let onAddHabit: (String, String) -> Void
+    let onDeleteHabit: (Habit) -> Void
+    let onDismiss: () -> Void
+
+    @State private var isShowingHabitManager = false
 
     private var tasks: [Task] { snapshot?.tasks ?? [] }
     private var habits: [Habit] { snapshot?.habits ?? [] }
@@ -2746,8 +2758,31 @@ private struct StatsRootTabView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("통계")
-                    .font(.system(size: 28, weight: .bold))
+                HStack(alignment: .center) {
+                    Text("습관")
+                        .font(.system(size: 28, weight: .bold))
+                    Spacer()
+                    Button {
+                        isShowingHabitManager = true
+                    } label: {
+                        Label("편집", systemImage: "slider.horizontal.3")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(JDTheme.accent)
+                            .padding(.horizontal, 12)
+                            .frame(height: 32)
+                            .background(JDTheme.accent.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(JDTheme.secondaryText)
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("닫기")
+                }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: "\(year)년 \(month)월")
@@ -2811,6 +2846,13 @@ private struct StatsRootTabView: View {
             .padding(.top, 18)
         }
         .background(JDTheme.background)
+        .fullScreenCover(isPresented: $isShowingHabitManager) {
+            HabitManagementSheet(
+                habits: habits,
+                onAdd: onAddHabit,
+                onDelete: onDeleteHabit
+            )
+        }
     }
 
     private var categoryStats: [CategoryProgressStat] {
@@ -2845,13 +2887,19 @@ private struct SettingsRootTabView: View {
     let onSetNotifyTime: (String) -> Void
     let onSetWeekStart: (Int) -> Void
     let onSetJustDoMode: (Bool) -> Void
-    let onManageGoals: () -> Void
-    let onManageHabits: () -> Void
-    let onManageCategories: () -> Void
+    let onAddGoal: (GoalDraft) -> Void
+    let onSaveGoal: (Goal) -> Void
+    let onDeleteGoal: (Goal) -> Void
+    let onOpenGoalReport: (GoalReportTarget) -> Void
+    let onAddHabit: (String, String) -> Void
+    let onDeleteHabit: (Habit) -> Void
+    let onAddCategory: (String, String) -> Void
+    let onDeleteCategory: (JDCategory) -> Void
     let onExportData: () -> Void
     let onResetData: () -> Void
     let onRetrySync: () -> Void
     let onSignOut: () -> Void
+    let onDismiss: () -> Void
 
     @State private var localNotify = true
     @State private var isShowingAccountDetail = false
@@ -2862,6 +2910,8 @@ private struct SettingsRootTabView: View {
     @State private var accountMessage: String?
     @State private var isShowingResetConfirmation = false
     @State private var isShowingStats = false
+    @State private var isShowingGoalManager = false
+    @State private var isShowingCategoryManager = false
     @State private var legalDocument: LegalDocument?
     @State private var settingsMessage: String?
 
@@ -2876,11 +2926,22 @@ private struct SettingsRootTabView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("설정")
-                    .font(.system(size: 28, weight: .bold))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 18)
+                HStack(alignment: .center) {
+                    Text("설정")
+                        .font(.system(size: 28, weight: .bold))
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(JDTheme.secondaryText)
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("닫기")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 18)
 
                 SettingGroup(label: "계정") {
                     SettingsRow(
@@ -2943,10 +3004,9 @@ private struct SettingsRootTabView: View {
                 }
                 SettingGroup(label: "데이터") {
                     SyncStatusRow(status: syncStatus, actionMessage: actionMessage, onRetry: onRetrySync)
-                    SettingsRow(title: "통계", chevron: true, action: { isShowingStats = true })
-                    SettingsRow(title: "목표", chevron: true, action: onManageGoals)
-                    SettingsRow(title: "습관 관리", chevron: true, action: onManageHabits)
-                    SettingsRow(title: "카테고리 관리", chevron: true, action: onManageCategories)
+                    SettingsRow(title: "습관", chevron: true, action: { isShowingStats = true })
+                    SettingsRow(title: "목표", chevron: true, action: { isShowingGoalManager = true })
+                    SettingsRow(title: "카테고리 관리", chevron: true, action: { isShowingCategoryManager = true })
                     SettingsRow(
                         title: "데이터 내보내기",
                         pro: true,
@@ -3013,17 +3073,40 @@ private struct SettingsRootTabView: View {
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
-        .sheet(isPresented: $isShowingStats) {
+        .fullScreenCover(isPresented: $isShowingStats) {
             StatsRootTabView(
                 snapshot: snapshot,
                 year: year,
                 month: month,
-                onToggleHabit: onToggleHabit
+                onToggleHabit: onToggleHabit,
+                onAddHabit: onAddHabit,
+                onDeleteHabit: onDeleteHabit,
+                onDismiss: { isShowingStats = false }
             )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.background)
+        }
+        .fullScreenCover(isPresented: $isShowingGoalManager) {
+            GoalManagementSheet(
+                goals: snapshot?.goals ?? [],
+                tasks: snapshot?.tasks ?? [],
+                habits: snapshot?.habits ?? [],
+                isProPlan: isProPlan,
+                onAddGoal: onAddGoal,
+                onSaveGoal: onSaveGoal,
+                onDeleteGoal: onDeleteGoal,
+                onOpenReport: { target in
+                    isShowingGoalManager = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        onOpenGoalReport(target)
+                    }
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $isShowingCategoryManager) {
+            CategoryManagementSheet(
+                categories: snapshot?.categories ?? [],
+                onAdd: onAddCategory,
+                onDelete: onDeleteCategory
+            )
         }
         .sheet(isPresented: $isShowingNotifyTimePicker) {
             TimePickerSheet(
@@ -3532,7 +3615,7 @@ private struct HabitManagementSheet: View {
             .navigationTitle("습관 관리")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("닫기") { dismiss() }
                         .font(.system(size: 14, weight: .semibold))
                 }
@@ -4695,6 +4778,7 @@ private struct GoalManagementSheet: View {
     let onDeleteGoal: (Goal) -> Void
     let onOpenReport: (GoalReportTarget) -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @State private var editingDraft: GoalEditorDraft?
     @State private var lockedGoal: Goal?
 
@@ -4729,6 +4813,12 @@ private struct GoalManagementSheet: View {
             .background(JDTheme.background)
             .navigationTitle("목표")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { dismiss() }
+                        .font(.system(size: 14, weight: .semibold))
+                }
+            }
             .overlay { goalEditorOverlay }
             .alert("고정한 목표를 수정할까요?", isPresented: lockedGoalBinding) {
                 Button("유지하기", role: .cancel) {

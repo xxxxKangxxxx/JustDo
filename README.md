@@ -14,18 +14,20 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
 - **Active product track (2026-06-01)**: Goal & Pro Report MVP is implemented
   across schema, Web, and native iOS first pass. Hosted Supabase migration
   `20260529120000_goal_report.sql` is applied, Web Settings → 목표 and report
-  preview/detail surfaces are wired, and iOS Settings → 목표 / onboarding
-  prompt / goal card management have been iterated through real-device
-  feedback. Focused smoke is user-confirmed, and iOS goal deletion now requires
-  destructive confirmation. The report-entry policy is now period-end banners,
-  not an always-on menu. Remaining work is IA/report banner implementation,
-  Web tag UX, and TestFlight readiness. 자세한 내용: `docs/next_steps.md` Active
-  Track.
-- **Product IA decision (2026-06-01)**: Settings moves from the iOS bottom tab
-  bar to a Home top-right icon, the standalone Stats tab is folded into
-  Goal & Pro Report's report/activity-summary experience, and the bottom bar
-  stays with a single centered Home tab until the future `함께`
-  friendship/scheduling track is ready.
+  preview/detail surfaces are wired, and iOS goal management / onboarding
+  prompt / card management have been iterated through real-device feedback.
+  Focused smoke is user-confirmed, and iOS goal deletion now requires
+  destructive confirmation. The report-entry policy is period-end banners, not
+  an always-on menu. Web tag filter/input UX is complete. Current iOS work has
+  moved to IA cleanup and Settings-contained management screens. 자세한 내용:
+  `docs/next_steps.md` Active Track.
+- **Product IA implementation (2026-06-01)**: iOS Settings moved from the
+  bottom tab bar to a Home top-right icon, the bottom bar now shows only a
+  centered `홈` tab, and the old standalone Stats tab has been removed. The
+  previous stats surface is now accessible as `설정 → 습관`; its `편집` button
+  opens Habit management above the Habit screen itself. `설정 → 목표` and
+  `설정 → 카테고리 관리` open full-screen management surfaces inside Settings.
+  Future bottom-bar expansion is reserved for `함께` friendship/scheduling.
 - **Phase 7 Web Desktop Redesign** is complete except the Pro checkout track.
   데스크탑 reference는 `reference/web_proto/`와
   `reference/Just Do - Web Prototype.html`. 현재 Pro checkout은 Toss
@@ -35,12 +37,11 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
   live billing 직전 DLQ 추가. 자세한 punch list:
   `docs/next_steps.md` Phase 7.
 - iOS Phase 6 실기기 시각 검증은 iPhone 14 Pro iOS 26.5 기준으로
-  Auth landing, Home, Add Sheet, edit-sheet routing, Stats, Settings,
+  Auth landing, Home, Add Sheet, edit-sheet routing, pre-IA Stats/Settings,
   Widget까지 통과. Task/Habit pushed detail page는 제거했고, Home과 app
-  deep link는 기존 add UI와 같은 editor sheet를 연다. 2026-05-29 최종 실기기
-  smoke도 통과했다. 2026-05-30에는 Goal & Pro Report iOS 목표 관리 UI,
-  목표 입력 onboarding prompt, Supabase goal sync, locked goal toggle, centered
-  goal editor dialog까지 반영했고 generic iOS build가 통과했다.
+  deep link는 기존 add UI와 같은 editor sheet를 연다. 2026-06-01에는 Goal &
+  Pro Report iOS 목표 관리 UI와 새 IA가 반영되었고, `swift test
+  --package-path apps/ios` 46 tests 및 generic iOS `xcodebuild`가 통과했다.
 - 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
   기존 구현을 유지함. 결제 모달은 v1에서 Toss만 활성화하고 네이버페이 /
   카카오페이 / PortOne 경유 다중 PG는 추후 확장 트랙으로 남겨둠.

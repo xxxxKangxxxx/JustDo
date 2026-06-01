@@ -4316,8 +4316,9 @@ This document records coordination notes for work done with Codex and Claude Cod
 - `docs/next_steps.md`: Active track and immediate follow-up now reflect the
   confirmed IA/report-entry policy plus Web tag UX as the next implementation
   item.
-- `docs/ios_phase6_status.md`: current Home/Stats/Settings state marked as
-  pre-IA-change; added IA/report-entry follow-up checklist.
+- `docs/ios_phase6_status.md`: then-current Home/Stats/Settings state marked as
+  pre-IA-change; added IA/report-entry follow-up checklist. This was superseded
+  later on 2026-06-01 by the full-screen Settings IA implementation entry below.
 - `docs/claude_handoff.md`, `README.md`, `apps/ios/README.md`: handoff/current
   focus updated to avoid stale "report entry decision pending" wording.
 
@@ -4328,3 +4329,97 @@ This document records coordination notes for work done with Codex and Claude Cod
    Home bottom tab.
 3. Implement period-end report banners on Home and Settings → 목표.
 4. Continue TestFlight/App Store preparation.
+
+## 2026-06-01 Web tag UX implementation
+
+### Changes
+
+- Implemented Web sidebar tag filtering:
+  - Sidebar tag clicks no longer open a search route.
+  - Tag clicks now behave like category/priority filters and directly filter
+    tasks shown in the calendar/task surface.
+  - Commit: `489fbf6 fix: filter web tasks by sidebar tags`.
+- Implemented Web task tag input normalization:
+  - Space, Enter, and comma commit a tag.
+  - IME composition is respected so Korean input is not prematurely committed.
+  - `#태그` and `태그` normalize to the same stored value `태그`.
+  - Normalized duplicates are deduped.
+  - Commit: `2e59c6f fix: normalize web task tag input`.
+
+### Verification
+
+- Web build/tests for the touched tag behavior passed during the implementation
+  pass.
+- Changes were committed and pushed before the iOS IA pass.
+
+## 2026-06-01 iOS IA implementation and Settings-contained management flow
+
+### Product / UX decisions implemented
+
+- Bottom navigation:
+  - Removed standalone `Stats` and `Settings` bottom tabs.
+  - Kept the bottom bar for continuity with a single centered `홈` tab.
+  - Future bottom-bar expansion remains reserved for `함께`.
+- Home header:
+  - Added Settings gear to the Home top-right, aligned with the wordmark row.
+  - Removed the gear's circular white/surface background so only the icon is
+    visible on the page background.
+- Settings:
+  - Opens from Home gear as a full-screen cover instead of a sheet or bottom tab.
+  - Has a top-right xmark close button.
+  - Keeps small setting sub-flows as sheets/dialogs where appropriate:
+    account detail, notification time, week-start picker, legal documents,
+    reset confirmation.
+- Stats / Habit IA:
+  - Removed standalone Stats bottom tab.
+  - Moved the previous stats screen to `설정 → 습관`.
+  - Renamed the screen title from `통계` to `습관`.
+  - `설정 → 습관` still shows current month task completion, category progress,
+    habit stat cards, and recent 7-day habit rows.
+  - Header button order is title, `편집`, then rightmost xmark close.
+  - `설정 → 습관 → 편집` now opens Habit management above the Habit screen itself.
+    Closing Habit management returns to the Habit screen, not to Settings/Home.
+  - Habit management's `닫기` toolbar action was moved to the right side.
+- Settings-contained management:
+  - Fixed the earlier wrong flow where Settings management actions closed
+    Settings, returned to Home, and then opened Home-owned sheets.
+  - `설정 → 목표` now opens Goal management full-screen inside Settings.
+  - `설정 → 카테고리 관리` now opens Category management full-screen inside
+    Settings.
+  - Goal management got its own `닫기` toolbar action for full-screen use.
+  - Goal report preview/detail trigger from Goal management still dismisses the
+    Goal management surface before opening the report presentation.
+
+### Files touched
+
+- `apps/ios/JustDoApp/JustDoApp/ContentView.swift`
+  - `RootTab` reduced to `.home`.
+  - Home Settings presentation changed from sheet to `fullScreenCover`.
+  - `SettingsRootTabView` now owns Settings-local `isShowingGoalManager` and
+    `isShowingCategoryManager` state.
+  - `StatsRootTabView` now owns its own `isShowingHabitManager` state so Habit
+    editing is nested under the Habit screen.
+  - Settings receives goal/habit/category mutation callbacks directly instead of
+    routing through `HomeRootView.presentManagerFromSettings(...)`.
+  - The old `presentManagerFromSettings(...)` and Home-owned manager sheet path
+    may still exist for legacy/home-owned callers; do not use it for Settings
+    entry points.
+
+### Verification
+
+- `git diff --check` passed.
+- `swift test --package-path apps/ios` passed 46 tests.
+- Generic iOS app build passed:
+  - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
+
+### Real-device smoke still needed
+
+- User should run from Xcode on device and confirm:
+  - Home top-right gear opens Settings full-screen.
+  - Settings close xmark returns to Home.
+  - `설정 → 습관` opens full-screen Habit/stats surface.
+  - `설정 → 습관 → 편집` opens Habit management above Habit.
+  - Closing Habit management returns to Habit, and closing Habit returns to
+    Settings.
+  - `설정 → 목표` opens Goal management inside Settings, not via Home.
+  - `설정 → 카테고리 관리` opens Category management inside Settings, not via Home.

@@ -100,32 +100,61 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > iOS `xcodebuild` passed, `git diff --check` passed, and user confirmed the
 > sync error was resolved.
 
-> **2026-06-01 product IA decision** — Settings should move from the iOS bottom
-> tab bar to a Home top-right icon. The standalone Stats tab should be removed
-> and folded into Goal & Pro Report's report/activity-summary experience. Keep
-> the bottom bar for continuity with a single centered `홈` tab until the future
-> `함께` friendship/scheduling track is ready. Reports are period-end retrospectives,
+> **2026-06-01 product IA decision** — Settings moved from the iOS bottom tab
+> bar to a Home top-right icon. The standalone Stats tab was removed and the
+> previous stats content is now handled under Settings/Habit and future
+> report/activity-summary surfaces. Keep the bottom bar for continuity with a
+> single centered `홈` tab until the future `함께` friendship/scheduling track is
+> ready. Reports are period-end retrospectives,
 > not always-on menus: monthly reports activate on the first day of the next
 > month, yearly reports activate on January 1 of the next year, Home top banner
 > is the primary entry, and Settings → 목표 gets smaller supporting banners near
 > annual/monthly sections.
 
+> **2026-06-01 iOS IA implementation state** — Commits already pushed before
+> the current uncommitted pass:
+> `9c8ee51 feat: simplify ios navigation ia`,
+> `30ac586 feat: add stats entry to ios settings`.
+> Current local changes in `apps/ios/JustDoApp/JustDoApp/ContentView.swift`
+> refine this IA further and are not committed yet at this handoff point unless
+> the working tree says otherwise. Current intended behavior:
+> - Home bottom bar has one centered `홈` tab.
+> - Settings opens from Home top-right gear as full-screen cover.
+> - Home gear icon is visually just the icon, no circular white background.
+> - Settings full-screen has a top-right xmark close button.
+> - Old standalone Stats bottom tab is gone.
+> - Old stats content is now `설정 → 습관`, titled `습관`.
+> - `설정 → 습관` header order: title, `편집`, rightmost xmark close.
+> - `설정 → 습관 → 편집` opens Habit management above the Habit screen. Closing
+>   Habit management must return to the Habit screen, not Settings or Home.
+> - Habit management's `닫기` toolbar action is on the right side.
+> - `설정 → 목표` opens Goal management full-screen inside Settings. It must not
+>   close Settings and then open a Home-owned sheet.
+> - `설정 → 카테고리 관리` opens Category management full-screen inside Settings.
+> - Goal management has its own `닫기` toolbar action for full-screen use.
+> Verification already run after these local IA refinements:
+> `swift test --package-path apps/ios` passed 46 tests, generic iOS
+> `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -destination 'generic/platform=iOS' build`
+> passed, and `git diff --check` passed. Still needed: user-run Xcode install on
+> real device to visually confirm Settings → 습관 → 편집 → 닫기, Settings → 목표,
+> and Settings → 카테고리 관리 do not jump back through Home.
+
 > **다음 작업자가 픽업할 우선순위 (2026-06-01 갱신)**:
-> 1. **iOS IA/report-entry 반영**. Settings를 Home 우측 상단으로 옮기고,
->    Stats 독립 탭을 제거해 리포트/활동 요약으로 흡수한다. 하단 바는 Home 단일
->    탭 중앙 배치로 유지한다. 기간 종료 리포트는 Home 상단 배너를 기본 진입으로,
->    Settings → 목표 보조 배너를 fallback으로 구현한다.
-> 2. **Web tag UX 수정**. 좌측 Tag 클릭은 검색이 아니라 category/priority와
->    같은 Task 필터로 동작해야 한다. Task 입력 태그는 Space/Enter로 commit하고
->    `#태그`와 `태그`를 같은 저장값(`태그`)으로 정규화한다.
+> 1. **iOS IA local changes commit + real-device smoke**. If not yet committed,
+>    commit the current `ContentView.swift` IA refinements and docs. Then user
+>    should run Xcode on device and verify Settings/Habit/Goal/Category flows.
+> 2. **Period-end report banners**. 기간 종료 리포트는 Home 상단 배너를 기본
+>    진입으로, Settings → 목표 보조 배너를 fallback으로 구현한다. Card tap remains
+>    edit/lock-confirmation only.
 > 3. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
 > 4. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
->    상태로 archive/TestFlight 작업으로 이동. 현재 Auth landing,
->    Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats, Settings,
->    Widget 보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션
->    자동 refresh도 1시간+ 종료 후 재진입 smoke 통과.
+>    상태로 archive/TestFlight 작업으로 이동. 현재 Auth landing, Home, Add
+>    Sheet, editor-sheet routing, Just Do Mode, pre-IA Stats/Settings, Widget
+>    보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션 자동 refresh도
+>    1시간+ 종료 후 재진입 smoke 통과. New full-screen Settings IA has build/test
+>    verification and awaits final device visual smoke.
 > 5. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 Toss test-key E2E smoke, Toss 공식 dashboard secret/header 확인
@@ -160,8 +189,8 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 >   progress count, compact layout/font/check-dot polish 적용. Lock-screen
 >   widget은 Task-only accessory로 분리하고 rectangular layout 보정.
 > - **iOS 다크모드 처리**: Auth landing은 항상 light 고정
->   (`.preferredColorScheme(.light)`). Home/Stats/Settings는 Settings의
->   다크모드 토글 사용.
+>   (`.preferredColorScheme(.light)`). Signed-in Home과 Settings full-screen
+>   surfaces는 Settings의 다크모드 토글 사용.
 > - **App icon / Web favicon**: iOS는 single 1024 PNG (dark/tinted 추후).
 >   Web은 `apps/web/public/`에 SVG primary + PNG fallback + apple-touch-icon.
 > - **B3 cron**: AWS EventBridge Scheduler -> Lambda -> `/api/billing/charge`,
@@ -411,10 +440,9 @@ iOS build/test commands below before doing the next real-device smoke pass.
     - `JustDoAppUITests` (`kr.justdo.app.uitests`)
     - App Group: `group.kr.justdo.app`
     - Keychain service: `kr.justdo.app.supabase-session`
-  - Native signed-in shell currently includes Home / Stats / Settings based on
-    `reference/proto/`; 2026-06-01 IA decision changes the next target to a Home
-    top-right Settings icon, no standalone Stats tab, and a single centered Home
-    bottom tab.
+  - Native signed-in shell now uses Home as the only bottom-tab item. Settings
+    opens from the Home top-right icon. The former Stats tab is no longer a
+    bottom-tab item; its content is reachable from `설정 → 습관`.
   - Settings includes sync status/error UI.
   - Home calendar task bars/no-dot rendering and the selected-day bottom sheet
     modal were implemented and verified.
@@ -553,9 +581,9 @@ Watch items (not active tasks):
     Settings ON이면 둘 다 사용 가능하고, Settings OFF면 `이 날까지`는 lock.
   - Task row tap은 같은 sheet 안에서 editor로 전환하고 삭제도 가능. Habit row
     tap은 no-op이며 check control만 동작.
-- Stats currently has its own tab; target is no standalone Stats tab.
-- Settings owns dark mode and habit/category management entry points; target is
-  Home top-right icon entry instead of bottom tab entry.
+- Settings owns dark mode and habit/category/goal management entry points.
+- `설정 → 습관 → 편집` must stay nested under the Habit screen; do not reopen the
+  old Home-owned habit manager sheet from this path.
 - Add 플로우는 partial-height bottom sheet (`.height(500)` detent).
 - Auth 랜딩은 Apple/Google/Kakao/Email 4 버튼 + "Just Do" 워드마크
   (`reference/proto/auth.jsx`, `auth-button.jsx`). 시스템 다크모드와

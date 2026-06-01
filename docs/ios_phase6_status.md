@@ -73,17 +73,18 @@ implementation gaps, and checks to run before testing or shipping.
   `taskUpsert` / `habitUpsert`; task deletes enqueue `taskDelete`.
 - Settings includes an app-facing sync status row. It shows syncing, synced,
   pending mutation count, and failed states; failed syncs expose a retry action.
-- The signed-in root shell currently renders native Home / Stats / Settings tabs
-  based on `reference/proto/`, but the 2026-06-01 product IA decision changes
-  the next target structure:
-  - Settings moves out of the bottom tab bar and into a Home top-right icon.
-  - The standalone Stats tab is removed; stats fold into Goal & Pro Report's
-    report/activity-summary experience.
-  - The bottom bar remains for continuity with a single centered Home tab.
+- The signed-in root shell currently renders Home as the only bottom-tab item.
+  The 2026-06-01 product IA pass removed the standalone Stats / Settings bottom
+  tabs:
+  - Home keeps the bottom bar for continuity with a single centered `홈` tab.
+  - Settings opens from the Home top-right gear icon as a full-screen cover.
+  - The old Stats content is no longer a bottom tab; it is reachable as
+    `설정 → 습관`.
   - Future bottom-bar expansion is reserved for `함께` friendship/scheduling,
     not for Stats.
-- The Home tab includes the month calendar, the home header (Just Do
-  wordmark + year/month navigation + today/add buttons), and the bottom tab bar.
+- The Home tab includes the month calendar, the home header (Just Do wordmark +
+  top-right Settings gear + year/month navigation + today/add buttons), and the
+  single-item bottom tab bar.
 - The Home calendar keeps date cells free of dot indicators; tasks are shown by
   horizontal bars with title text. Day cells fill the full row height so the
   tap target is the entire cell, not just the date pill; task bars sit above
@@ -113,10 +114,26 @@ implementation gaps, and checks to run before testing or shipping.
   task date/time/category/priority fields, and habit emoji entry.
 - Settings owns dark-mode control. The home header no longer has a separate
   dark/light button.
-- Settings exposes habit and category management entry points.
+- Settings is a full-screen surface. It exposes account, notification,
+  display, subscription, data, and app-info groups. Small sub-flows such as
+  account detail, notification time picker, week-start picker, legal documents,
+  and reset confirmation remain sheet/dialog style.
+- Settings exposes Habit, Goal, and Category management entry points without
+  routing through Home-owned sheets:
+  - `설정 → 습관` opens the old stats content as a full-screen Habit surface.
+    It shows the current month task completion summary, category progress rows,
+    habit stat cards, and recent 7-day habit rows.
+  - The Habit surface header order is title `습관`, `편집` button, and rightmost
+    `닫기` xmark.
+  - `설정 → 습관 → 편집` opens `HabitManagementSheet` from inside the Habit
+    surface. Closing Habit management returns to the Habit surface.
+  - `HabitManagementSheet` has its own right-side `닫기` toolbar action.
+  - `설정 → 카테고리 관리` opens Category management as a full-screen cover inside
+    Settings.
 - Settings exposes the Goal & Pro Report management entry point:
-  - Settings → 목표 opens a large native sheet with annual and current-month
-    sections.
+  - `설정 → 목표` opens full-screen `GoalManagementSheet` inside Settings with
+    annual and current-month sections.
+  - Goal management has a `닫기` toolbar action for full-screen use.
   - Each period supports up to five goals.
   - Goal cards show period label, title, note, completed/related/slipped counts,
     donut progress with centered percentage, and a `고정/열림` lock badge.
@@ -387,11 +404,18 @@ swift test
   - Lock badge direct toggle; card tap still controls edit/locked confirmation.
   - Supabase goal sync error (`goals_check1`) fixed and user-confirmed.
 
-- [ ] **iOS IA/report-entry follow-up (2026-06-01 결정)**.
-  - Move Settings from bottom tab to Home top-right icon.
-  - Remove standalone Stats tab from the bottom bar.
-  - Keep a bottom bar with a single centered Home tab for continuity.
-  - Fold existing Stats content into report/activity-summary surfaces.
+- [x] **iOS IA implementation (2026-06-01 반영)**.
+  - Settings moved from bottom tab to Home top-right icon.
+  - Standalone Stats tab removed from the bottom bar.
+  - Bottom bar keeps a single centered Home tab for continuity.
+  - Existing Stats content moved to `설정 → 습관`.
+  - `설정 → 습관 → 편집` opens Habit management above the Habit screen.
+  - `설정 → 목표` and `설정 → 카테고리 관리` open inside Settings instead of
+    routing through Home-owned sheets.
+  - Still needs user-run real-device visual confirmation after the latest
+    full-screen IA refinements.
+
+- [ ] **iOS report-entry follow-up (2026-06-01 결정)**.
   - Add Home top report banner when a previous month/year report becomes
     available.
   - Add smaller Settings → 목표 supporting report banners near the matching
