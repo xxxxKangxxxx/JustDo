@@ -12,14 +12,14 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Active Track (2026-05-30)
+## Active Track (2026-06-01)
 
 > Just Do Mode iOS/Web implementation and smoke follow-up are complete. The
 > **Goal & Pro Report** MVP first pass is now implemented across Supabase
 > schema, Web, and native iOS. Settings → 목표 focused smoke is
 > user-confirmed, and destructive delete confirmation is implemented. The next
-> work is not a broad new build-out; it is report-entry UX and TestFlight/App
-> Store readiness.
+> work is not a broad new build-out; it is the 2026-06-01 IA/report-entry
+> decision, Web tag UX fixes, and TestFlight/App Store readiness.
 
 Recommended order for the next coding session:
 
@@ -124,7 +124,8 @@ Recommended order for the next coding session:
 
 5. **TestFlight/App Store preparation**
    - Goal & Pro Report MVP is now included in the local iOS build. Start
-     archive/TestFlight work after the report-entry UX decision.
+     archive/TestFlight work after the IA/report-entry banner pass and Web tag
+     UX fixes.
    - Current iOS Home/Add/Edit/Stats/Settings/Widget/Just Do Mode smoke is
      already documented as passing on iPhone 14 Pro / iOS 26.5.
 
@@ -145,14 +146,38 @@ Recommended order for the next coding session:
    - `취소` keeps the goal and `삭제` performs the actual removal, which then
      enters the existing local mutation/sync path.
 
-3. **Report entry UX decision**
-   - Card tap is reserved for edit/locked confirmation.
-   - Pick a separate report entry surface:
-     - Section header action for annual/monthly report.
-     - Section footer CTA.
-     - Small card-level report icon.
-   - Recommended direction: section-level annual/monthly report action, because
-     current reports are period reports rather than single-goal detail reports.
+3. **Report entry UX decision (2026-06-01 confirmed)**
+   - Reports are not an always-on menu. They are retrospective surfaces activated
+     only after a month/year ends.
+   - Monthly report availability starts on the first day of the next month.
+   - Yearly report availability starts on January 1 of the next year.
+   - Home top banner is the primary entry point.
+     - Example: `5월 리포트가 준비됐어요`.
+     - If monthly and yearly reports are both available in January, prioritize the
+       yearly report in the Home banner.
+     - Home banner should be dismissible and hidden for that period after dismiss.
+   - Settings → 목표 keeps a smaller supporting banner near the matching annual
+     or monthly section.
+     - Example: `5월 리포트 준비 완료  보기`.
+     - No close button; it is a quiet fallback entry when the user manages goals.
+   - Card tap remains reserved for edit/locked confirmation.
+   - Free users open preview + Pro CTA; Trial/Pro users open full report.
+
+## Product IA Decision (2026-06-01)
+
+- Move Settings out of the bottom tab bar and into a Home top-right icon.
+- Remove the standalone `통계` tab. Existing stats become part of
+  Goal & Pro Report's report/activity-summary experience.
+- Keep the bottom bar for continuity, but show a single centered `홈` tab in the
+  near term.
+- Reserve future bottom-bar expansion for `함께`, not for stats.
+- `함께` is the follow-up social/scheduling product track:
+  - friend add/invite,
+  - availability suggestion,
+  - shared schedule coordination,
+  - future notification/permission work.
+- Do not implement full `함께` before TestFlight. Document it now and use the
+  current cycle for Web tag fixes, report-entry banner UX, and TestFlight prep.
 
 ## Implemented Product Track: Just Do Mode
 
@@ -285,8 +310,8 @@ Recommended order for the next coding session:
   - Lock badge directly toggles lock state; card tap remains edit/confirmation.
   - Delete sits immediately left of Save in the editor dialog and opens a
     destructive confirmation before removal.
-- **Immediate next work**: report entry UX decision. TestFlight/App Store
-  preparation follows that item.
+- **Immediate next work**: implement the confirmed IA/report-entry banner policy,
+  fix Web tag filtering/input UX, then continue TestFlight/App Store preparation.
 
 ## Where We Are (2026-05-29)
 

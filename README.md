@@ -11,15 +11,21 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
 
 - **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일
   네이티브, Android=v3. 자세한 내용: `docs/just_do_prd.md` §1.5.
-- **Active product track (2026-05-30)**: Goal & Pro Report MVP is implemented
+- **Active product track (2026-06-01)**: Goal & Pro Report MVP is implemented
   across schema, Web, and native iOS first pass. Hosted Supabase migration
   `20260529120000_goal_report.sql` is applied, Web Settings → 목표 and report
   preview/detail surfaces are wired, and iOS Settings → 목표 / onboarding
   prompt / goal card management have been iterated through real-device
   feedback. Focused smoke is user-confirmed, and iOS goal deletion now requires
-  destructive confirmation. Remaining work is report-entry UX and TestFlight
-  readiness. 자세한 내용: `docs/next_steps.md` Active
+  destructive confirmation. The report-entry policy is now period-end banners,
+  not an always-on menu. Remaining work is IA/report banner implementation,
+  Web tag UX, and TestFlight readiness. 자세한 내용: `docs/next_steps.md` Active
   Track.
+- **Product IA decision (2026-06-01)**: Settings moves from the iOS bottom tab
+  bar to a Home top-right icon, the standalone Stats tab is folded into
+  Goal & Pro Report's report/activity-summary experience, and the bottom bar
+  stays with a single centered Home tab until the future `함께`
+  friendship/scheduling track is ready.
 - **Phase 7 Web Desktop Redesign** is complete except the Pro checkout track.
   데스크탑 reference는 `reference/web_proto/`와
   `reference/Just Do - Web Prototype.html`. 현재 Pro checkout은 Toss
@@ -162,8 +168,10 @@ plan read-sync, Home/Add/Stats/Settings/Widget visual checks, deep-link UI
 tests, 1-hour+ auth session refresh smoke, and final real-device smoke are
 complete. Goal & Pro Report MVP first pass is now included in native iOS:
 Settings → 목표, annual/monthly goal cards, onboarding/monthly/yearly prompt
-  flows, centered add/edit dialog with delete confirmation, lock toggle, and
-  Supabase goal sync. iOS TestFlight/App Store preparation follows the remaining
-  report-entry UX decision. 자세한 내용:
+flows, centered add/edit dialog with delete confirmation, lock toggle, and
+Supabase goal sync. The next iOS IA target moves Settings to the Home top-right
+icon, folds Stats into report/activity summary, and introduces period-end report
+banners. iOS TestFlight/App Store preparation follows that IA/report-entry pass.
+자세한 내용:
 `docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`,
 `docs/claude_handoff.md`.

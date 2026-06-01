@@ -73,8 +73,15 @@ implementation gaps, and checks to run before testing or shipping.
   `taskUpsert` / `habitUpsert`; task deletes enqueue `taskDelete`.
 - Settings includes an app-facing sync status row. It shows syncing, synced,
   pending mutation count, and failed states; failed syncs expose a retry action.
-- The signed-in root shell now renders native Home / Stats / Settings tabs
-  based on `reference/proto/`.
+- The signed-in root shell currently renders native Home / Stats / Settings tabs
+  based on `reference/proto/`, but the 2026-06-01 product IA decision changes
+  the next target structure:
+  - Settings moves out of the bottom tab bar and into a Home top-right icon.
+  - The standalone Stats tab is removed; stats fold into Goal & Pro Report's
+    report/activity-summary experience.
+  - The bottom bar remains for continuity with a single centered Home tab.
+  - Future bottom-bar expansion is reserved for `함께` friendship/scheduling,
+    not for Stats.
 - The Home tab includes the month calendar, the home header (Just Do
   wordmark + year/month navigation + today/add buttons), and the bottom tab bar.
 - The Home calendar keeps date cells free of dot indicators; tasks are shown by
@@ -354,8 +361,10 @@ swift test
 > iOS 26.5 최종 smoke에서 Smoke 1~5 정상 확인.
 > 2026-05-30: Goal & Pro Report iOS first pass와 실기기 UI 피드백 반영 완료.
 > Settings → 목표 focused smoke는 사용자 확인 완료. 삭제 확인 alert도 반영됨.
-> 다음 차례는 리포트 진입 UX 결정, TestFlight/App Store 준비, 그리고 Toss 외부
-> 의존 트랙.
+> 2026-06-01: 제품 IA 결정 반영 예정. Settings는 Home 우측 상단으로 이동,
+> Stats 독립 탭은 리포트/활동 요약으로 흡수, 하단 바는 단기적으로 Home 단일
+> 탭 중앙 배치, 미래 확장은 `함께` 탭으로 예약. 다음 차례는 이 구조 반영,
+> 기간 종료 리포트 배너, Web 태그 UX, TestFlight/App Store 준비.
 
 - [x] **iOS 최종 실기기 smoke (2026-05-29 통과)**.
   - 환경: `강영모의 iPhone` / iOS 26.5, bundle id `kr.justdo.app`.
@@ -377,6 +386,17 @@ swift test
   - Goal cards with title/note/metrics/donut progress/lock badge.
   - Lock badge direct toggle; card tap still controls edit/locked confirmation.
   - Supabase goal sync error (`goals_check1`) fixed and user-confirmed.
+
+- [ ] **iOS IA/report-entry follow-up (2026-06-01 결정)**.
+  - Move Settings from bottom tab to Home top-right icon.
+  - Remove standalone Stats tab from the bottom bar.
+  - Keep a bottom bar with a single centered Home tab for continuity.
+  - Fold existing Stats content into report/activity-summary surfaces.
+  - Add Home top report banner when a previous month/year report becomes
+    available.
+  - Add smaller Settings → 목표 supporting report banners near the matching
+    annual/monthly sections.
+  - Reserve future bottom-bar slot for `함께` friendship/scheduling.
   - `swift test --package-path apps/ios` passed with 46 tests.
   - `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme
     JustDoApp -destination 'generic/platform=iOS' build` passed.

@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-05-30
+Date: 2026-06-01
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -100,19 +100,33 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > iOS `xcodebuild` passed, `git diff --check` passed, and user confirmed the
 > sync error was resolved.
 
-> **다음 작업자가 픽업할 우선순위 (2026-05-30 갱신)**:
-> 1. **Report entry UX 결정**. 카드 tap은 edit/locked confirmation에 배정됐다.
->    리포트는 period-level 기능이므로 연간/월간 섹션 헤더 또는 섹션 하단 CTA로
->    들어가는 방향이 현재 구조와 가장 잘 맞는다.
-> 2. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
+> **2026-06-01 product IA decision** — Settings should move from the iOS bottom
+> tab bar to a Home top-right icon. The standalone Stats tab should be removed
+> and folded into Goal & Pro Report's report/activity-summary experience. Keep
+> the bottom bar for continuity with a single centered `홈` tab until the future
+> `함께` friendship/scheduling track is ready. Reports are period-end retrospectives,
+> not always-on menus: monthly reports activate on the first day of the next
+> month, yearly reports activate on January 1 of the next year, Home top banner
+> is the primary entry, and Settings → 목표 gets smaller supporting banners near
+> annual/monthly sections.
+
+> **다음 작업자가 픽업할 우선순위 (2026-06-01 갱신)**:
+> 1. **iOS IA/report-entry 반영**. Settings를 Home 우측 상단으로 옮기고,
+>    Stats 독립 탭을 제거해 리포트/활동 요약으로 흡수한다. 하단 바는 Home 단일
+>    탭 중앙 배치로 유지한다. 기간 종료 리포트는 Home 상단 배너를 기본 진입으로,
+>    Settings → 목표 보조 배너를 fallback으로 구현한다.
+> 2. **Web tag UX 수정**. 좌측 Tag 클릭은 검색이 아니라 category/priority와
+>    같은 Task 필터로 동작해야 한다. Task 입력 태그는 Space/Enter로 commit하고
+>    `#태그`와 `태그`를 같은 저장값(`태그`)으로 정규화한다.
+> 3. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
-> 3. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
+> 4. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
 >    상태로 archive/TestFlight 작업으로 이동. 현재 Auth landing,
 >    Home, Add Sheet, editor-sheet routing, Just Do Mode, Stats, Settings,
 >    Widget 보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션
 >    자동 refresh도 1시간+ 종료 후 재진입 smoke 통과.
-> 4. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
+> 5. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 Toss test-key E2E smoke, Toss 공식 dashboard secret/header 확인
 >    후 webhook signature 검증, live billing 직전 `justdo-prod-billing-cron`
@@ -397,8 +411,10 @@ iOS build/test commands below before doing the next real-device smoke pass.
     - `JustDoAppUITests` (`kr.justdo.app.uitests`)
     - App Group: `group.kr.justdo.app`
     - Keychain service: `kr.justdo.app.supabase-session`
-  - Native signed-in shell includes Home / Stats / Settings based on
-    `reference/proto/`.
+  - Native signed-in shell currently includes Home / Stats / Settings based on
+    `reference/proto/`; 2026-06-01 IA decision changes the next target to a Home
+    top-right Settings icon, no standalone Stats tab, and a single centered Home
+    bottom tab.
   - Settings includes sync status/error UI.
   - Home calendar task bars/no-dot rendering and the selected-day bottom sheet
     modal were implemented and verified.
@@ -447,7 +463,7 @@ iOS build/test commands below before doing the next real-device smoke pass.
     smoke passed on the configured real device. Goal & Pro Report first pass is
     also in the local iOS build; Settings → 목표 focused smoke is user-confirmed,
     and delete confirmation is implemented. TestFlight/App Store preparation
-    follows the remaining report-entry UX decision.
+    follows the 2026-06-01 IA/report-entry pass.
     Because this is a native SwiftUI/Xcode app, do **not** use Expo Go; install
     directly from Xcode to a real iPhone or use TestFlight later.
   - Both targets share App Group `group.kr.justdo.app`.
@@ -519,7 +535,10 @@ Watch items (not active tasks):
 
 ### App Shape — iOS (current native root, proto-aligned)
 
-- Bottom tabs are `홈 / 통계 / 설정` (proto = `reference/proto/tabbar.jsx` 기준).
+- Current bottom tabs are `홈 / 통계 / 설정`, but this is now a pre-IA-change
+  state. 2026-06-01 target: Settings moves to the Home top-right icon, Stats is
+  folded into report/activity summary, and the bottom bar keeps a single centered
+  `홈` tab for continuity. Future expansion is `홈 / 함께`.
 - Home (2026-05-29 갱신):
   - Header에 `Just Do` wordmark (24pt) + 년/월 + nav 화살표 + 우상단 add (+) 버튼.
   - Calendar (월간 6 weeks) full-bleed, task bar overlay 유지. 빈 날짜
@@ -534,8 +553,9 @@ Watch items (not active tasks):
     Settings ON이면 둘 다 사용 가능하고, Settings OFF면 `이 날까지`는 lock.
   - Task row tap은 같은 sheet 안에서 editor로 전환하고 삭제도 가능. Habit row
     tap은 no-op이며 check control만 동작.
-- Stats has its own tab.
-- Settings owns dark mode and habit/category management entry points.
+- Stats currently has its own tab; target is no standalone Stats tab.
+- Settings owns dark mode and habit/category management entry points; target is
+  Home top-right icon entry instead of bottom tab entry.
 - Add 플로우는 partial-height bottom sheet (`.height(500)` detent).
 - Auth 랜딩은 Apple/Google/Kakao/Email 4 버튼 + "Just Do" 워드마크
   (`reference/proto/auth.jsx`, `auth-button.jsx`). 시스템 다크모드와
@@ -977,10 +997,10 @@ Recommended immediate next steps:
      - Settings / Widget 보정 통과 (계정/profile, 알림/표시 picker,
        data/legal, home/lock widget layout, row tap completion, mode-scoped
        counts 후).
-  - 2026-05-30 갱신: Goal & Pro Report iOS first pass도 반영됨. Settings → 목표
+  - 2026-06-01 갱신: Goal & Pro Report iOS first pass도 반영됨. Settings → 목표
     focused smoke는 사용자 확인 완료이고 삭제 확인 alert도 구현됨. 남은 iOS
-    작업은 리포트 진입 UX 결정과 TestFlight/App Store 준비. 상세 체크리스트는
-    `docs/ios_phase6_status.md` 참고.
+    작업은 IA/report-entry banner 반영과 TestFlight/App Store 준비. 상세
+    체크리스트는 `docs/ios_phase6_status.md` 참고.
    - Widget은 home-screen small/medium/large와 lock-screen accessory로 분리.
      Home-screen row text deep link는 제거했고 row 전체 탭이 완료 토글이다.
    - 검증 방식: Expo Go가 아니라 Xcode 직접 설치 (wireless 활성 시 USB
@@ -1012,7 +1032,7 @@ Recommended immediate next steps:
    환경변수 + CLI로 platform `WEB_COMPUTE` + framework `Next.js - SSR` 명시).
    새 Amplify 앱을 다시 만들 일이 생기면 이 세 가지 모두 적용해야 SSR로 배포됨.
 
-### Codex 또는 Claude Code 세션 재개 가이드 (2026-05-30 갱신)
+### Codex 또는 Claude Code 세션 재개 가이드 (2026-06-01 갱신)
 
 - **2026-05-25 신규 fix 인지부터**: 운영 도메인의 신규 가입자가 로그인 루트로
   되돌아오던 DB 에러는 categories `(user_id, name)` unique index 부재로
@@ -1033,6 +1053,10 @@ Recommended immediate next steps:
   `locked_at: null` 명시 encoding으로 해결됨. 이어받는 세션은 `worklog.md`
   2026-05-30 엔트리와 `next_steps.md` 상단 Immediate Goal follow-up을 먼저
   읽기.
+- **2026-06-01 IA/report-entry 결정 인지**: Settings는 Home 우측 상단으로
+  이동, Stats 독립 탭은 report/activity summary로 흡수, 하단 바는 Home 단일
+  중앙 탭으로 유지, 미래 확장은 `함께` 탭으로 예약. 리포트는 월말/연말 이후
+  Home top banner + Settings → 목표 보조 배너로 진입한다.
 
 
 - 가장 먼저: `docs/just_do_prd.md` §1.5, `next_steps.md` Phase 7 + Deployment

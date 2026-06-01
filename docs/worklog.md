@@ -4272,3 +4272,59 @@ This document records coordination notes for work done with Codex and Claude Cod
 
 - Decide report entry UX now that card tap is reserved for edit:
   - recommended: section-level annual/monthly report action.
+
+## 2026-06-01 Product IA and report-entry decision
+
+### Product Decisions
+
+- Confirmed that the standalone `통계` bottom tab is too shallow for a primary
+  navigation slot in the current product shape.
+- Settings will move out of the bottom tab bar and into a Home top-right icon.
+- Existing stats will not remain a standalone bottom tab. They will be folded
+  into Goal & Pro Report's report/activity-summary experience.
+- The bottom bar stays in place for continuity, but the near-term state shows a
+  single centered `홈` tab.
+- Future bottom-bar expansion is reserved for `함께`, not for stats.
+- `함께` is documented as a follow-up product track covering friend add/invite,
+  availability suggestion, and shared schedule coordination. It is not part of
+  the immediate TestFlight scope.
+
+### Report Entry Policy
+
+- Reports are retrospective period-end surfaces, not always-on menu items.
+- Monthly reports become available on the first day of the next month.
+  Example: 2026-06-01 activates the 2026-05 monthly report.
+- Yearly reports become available on January 1 of the next year.
+  Example: 2027-01-01 activates the 2026 yearly report.
+- Home top banner is the primary report entry.
+  - Monthly example: `5월 리포트가 준비됐어요`.
+  - If monthly and yearly reports are both available in January, Home prioritizes
+    the yearly report.
+  - Home banner should be dismissible and hidden for that report period after
+    dismissal.
+- Settings → 목표 gets smaller supporting banners near matching annual/monthly
+  sections.
+  - Example: `5월 리포트 준비 완료  보기`.
+  - No close action; this is a quiet fallback when users manage goals.
+- Goal card tap remains reserved for edit/locked confirmation.
+- Free users open report preview + Pro CTA. Trial/Pro users open the full report.
+
+### Documentation Updated
+
+- `docs/just_do_prd.md`: iOS navigation target, report/activity summary policy,
+  period-end report activation, `함께` follow-up track.
+- `docs/next_steps.md`: Active track and immediate follow-up now reflect the
+  confirmed IA/report-entry policy plus Web tag UX as the next implementation
+  item.
+- `docs/ios_phase6_status.md`: current Home/Stats/Settings state marked as
+  pre-IA-change; added IA/report-entry follow-up checklist.
+- `docs/claude_handoff.md`, `README.md`, `apps/ios/README.md`: handoff/current
+  focus updated to avoid stale "report entry decision pending" wording.
+
+### Next Implementation Order
+
+1. Implement Web tag filter and tag input normalization.
+2. Implement iOS IA changes: Settings top-right icon, remove Stats tab, centered
+   Home bottom tab.
+3. Implement period-end report banners on Home and Settings → 목표.
+4. Continue TestFlight/App Store preparation.

@@ -18,7 +18,10 @@ Current contents:
 - `JustDoApp/JustDoApp` implements the native app shell, auth flow,
   Core Data mirror sync, Home/Stats/Settings tabs, add/editor-sheet flows,
   Just Do Mode, Goal & Pro Report goal management/prompt/report surfaces, and
-  widget snapshot writer.
+  widget snapshot writer. The next IA target moves Settings to a Home top-right
+  icon, folds the standalone Stats tab into report/activity summary, keeps a
+  single centered Home bottom tab for continuity, and reserves future bottom-bar
+  expansion for `함께` friendship/scheduling.
 - `JustDoApp/JustDoWidget` hosts the WidgetKit extension that reads the
   App Group snapshot and queues widget mutations.
 
@@ -95,4 +98,8 @@ Goal & Pro Report MVP first pass is now mirrored into iOS:
 Latest focused checks: Settings → 목표 smoke was user-confirmed, `swift test
 --package-path apps/ios` passed 46 tests, generic iOS `xcodebuild` passed, and
 `git diff --check` passed. TestFlight/App Store preparation follows the
-remaining report-entry UX decision.
+2026-06-01 IA/report-entry pass:
+
+- Home top report banner when a previous month/year report becomes available.
+- Smaller Settings → 목표 supporting report banners near annual/monthly sections.
+- Report entry is period-end only, not an always-on menu.
