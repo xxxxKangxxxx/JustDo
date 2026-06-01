@@ -4586,3 +4586,25 @@ This document records coordination notes for work done with Codex and Claude Cod
     toggle flips (the scene-root one only resolves at presentation time).
 - Verification: generic iOS build pass, `swift test` 54 pass, user confirmed on
   real device (toggle switches Settings immediately; auth landing stays light).
+
+## 2026-06-02 Web stats IA aligned with iOS (stats under Settings → 습관)
+
+- Goal: match the iOS IA where the standalone Stats tab was removed and stats
+  live under `설정 → 습관`. Web previously had a top-level sidebar `통계` tab.
+- Changes in `apps/web/src/features/just-do/app-shell.tsx`:
+  - Removed the sidebar `통계` nav item; sidebar is now `캘린더 / 설정`.
+  - Dropped `"stats"` from the `Page` type and the standalone stats page render,
+    the header title branch, the command-palette `통계로 이동` entry (the
+    `설정으로 이동` command already exists), and the now-unused `IconChart`.
+  - Folded `StatsDashboard` into the Settings `습관` section: habit management
+    list first (free CRUD, always visible), then the Pro-gated stats dashboard
+    below. This keeps habit management usable for Free users while the stats
+    area shows the Pro CTA, mirroring iOS `설정 → 습관`.
+  - `StatsDashboard` lost its full-page wrapper (`flex-1 overflow-auto px-7 py-5`
+    / `mx-auto max-w-[1100px]`) so it fits the Settings right column; stat-card
+    grid min column reduced to 160px for the narrower width.
+- Tests updated: the two Pro-stats tests now navigate `설정 → 습관` instead of the
+  removed `통계` tab.
+- Verification: `npm --prefix apps/web run lint` clean, `npm --prefix apps/web
+  test` 122 pass, `npm --prefix apps/web run build` pass, `git diff --check`
+  clean. User confirmed the Settings → 습관 layout on the running dev server.

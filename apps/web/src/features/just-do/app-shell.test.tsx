@@ -406,7 +406,8 @@ describe("desktop app shell interactions", () => {
     mockSubscriptionFetch({ status: "trial" });
     renderApp();
 
-    click(await screen.findByRole("button", { name: "통계" }));
+    click(await screen.findByRole("button", { name: "설정" }));
+    click(await screen.findByRole("button", { name: "습관" }));
 
     expect(await screen.findByText("이번 주 활동")).toBeInTheDocument();
     expect(screen.queryByText("통계는 Pro 기능입니다")).not.toBeInTheDocument();
@@ -416,7 +417,8 @@ describe("desktop app shell interactions", () => {
     mockSubscriptionFetch({ status: "cancelled" });
     renderApp();
 
-    click(await screen.findByRole("button", { name: "통계" }));
+    click(await screen.findByRole("button", { name: "설정" }));
+    click(await screen.findByRole("button", { name: "습관" }));
 
     expect(await screen.findByText("통계는 Pro 기능입니다")).toBeInTheDocument();
     expect(screen.getByText("해지됨")).toBeInTheDocument();

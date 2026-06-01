@@ -37,7 +37,7 @@ import { isTagCommitKey, mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
 import type { JustDoStorage } from "./persistence";
 
-type Page = "calendar" | "stats" | "settings" | "search";
+type Page = "calendar" | "settings" | "search";
 type CalendarView = "month" | "week" | "list";
 type SettingsSection =
   | "account"
@@ -461,7 +461,6 @@ function JustDoViewport() {
                 />
               ) : null}
               {visiblePage === "search" ? <SearchPage mode={mode} tasks={filteredTasks} query={search} onOpenTask={setTaskModalId} /> : null}
-              {visiblePage === "stats" ? <StatsDashboard mode={mode} /> : null}
               {visiblePage === "settings" ? <SettingsPage mode={mode} /> : null}
             </div>
             {visiblePage === "calendar" && showToday ? <TodayPanel mode={mode} onOpenTask={setTaskModalId} onNewTask={setNewTask} /> : null}
@@ -838,7 +837,6 @@ function Sidebar({
   const categories = sortedCategories(s.state.categories);
   const nav = [
     { id: "calendar" as const, label: "캘린더", icon: <IconCalendar /> },
-    { id: "stats" as const, label: "통계", icon: <IconChart /> },
     { id: "settings" as const, label: "설정", icon: <IconGear /> },
   ];
   return (
@@ -976,7 +974,7 @@ function Header({
 }) {
   const s = useJustDo();
   const t = webTokens(mode);
-  const title = page === "calendar" ? `${s.state.view.year}년 ${s.state.view.month}월` : page === "stats" ? "통계" : page === "settings" ? "설정" : "검색";
+  const title = page === "calendar" ? `${s.state.view.year}년 ${s.state.view.month}월` : page === "settings" ? "설정" : "검색";
   return (
     <header className="sticky top-0 z-10 flex items-center gap-3 border-b px-[22px] py-2.5 backdrop-blur-xl xl:gap-4" style={{ background: t.glass, borderColor: t.glassBorder }}>
       {page === "calendar" ? (
@@ -1814,7 +1812,6 @@ function CommandPalette({
     { id: "month", label: "월간 뷰", kind: "view", run: () => { onPage("calendar"); onView("month"); onClose(); } },
     { id: "week", label: "주간 뷰", kind: "view", run: () => { onPage("calendar"); onView("week"); onClose(); } },
     { id: "list", label: "리스트 뷰", kind: "view", run: () => { onPage("calendar"); onView("list"); onClose(); } },
-    { id: "stats", label: "통계로 이동", kind: "nav", run: () => { onPage("stats"); onClose(); } },
     { id: "settings", label: "설정으로 이동", kind: "nav", run: () => { onPage("settings"); onClose(); } },
   ];
   const taskItems = tasks.map((task) => ({ id: task.id, label: task.title, hint: shortDate(task.startDate), kind: "task", run: () => { onOpenTask(task.id); onClose(); } }));
@@ -1864,28 +1861,24 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
   const max = Math.max(1, ...dayCounts.map((item) => item.total));
   if (billing.loading) {
     return (
-      <div className="flex-1 overflow-auto px-7 py-5">
-        <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하고 있습니다.">
-          <div className="h-20 rounded-lg" style={{ background: t.surfaceAlt }} />
-        </Panel>
-      </div>
+      <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하고 있습니다.">
+        <div className="h-20 rounded-lg" style={{ background: t.surfaceAlt }} />
+      </Panel>
     );
   }
   if (billing.error) {
     return (
-      <div className="flex-1 overflow-auto px-7 py-5">
-        <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하지 못했습니다.">
-          <div className="text-[13px]" style={{ color: t.danger }}>{billing.error}</div>
-          <button type="button" onClick={billing.refresh} className="mt-3 rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.text }}>
-            다시 확인
-          </button>
-        </Panel>
-      </div>
+      <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하지 못했습니다.">
+        <div className="text-[13px]" style={{ color: t.danger }}>{billing.error}</div>
+        <button type="button" onClick={billing.refresh} className="mt-3 rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.text }}>
+          다시 확인
+        </button>
+      </Panel>
     );
   }
   if (!canUseStats) {
     return (
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <>
         <ProFeatureGate
           mode={mode}
           title="통계는 Pro 기능입니다"
@@ -1894,19 +1887,18 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
           onUpgrade={setUpgradePlan}
         />
         {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
-      </div>
+      </>
     );
   }
   return (
-    <div className="flex-1 overflow-auto px-7 py-5">
-      <div className="mx-auto max-w-[1100px]">
-        <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3.5">
-          <StatCard mode={mode} label="완료율" value={`${completion}%`} hint={`${done}/${tasks.length}`} accent={t.me.solid} />
-          <StatCard mode={mode} label="진행 중" value={open} hint="open tasks" accent={t.ext.solid} />
-          <StatCard mode={mode} label="완료" value={done} hint="this period" accent={t.habit.solid} />
-          <StatCard mode={mode} label="활성 습관" value={s.state.habits.length} hint="streaks" accent={t.accent} />
-        </div>
-        <Panel mode={mode} title="이번 주 활동" subtitle="최근 7일 task 완료 추이">
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3.5">
+        <StatCard mode={mode} label="완료율" value={`${completion}%`} hint={`${done}/${tasks.length}`} accent={t.me.solid} />
+        <StatCard mode={mode} label="진행 중" value={open} hint="open tasks" accent={t.ext.solid} />
+        <StatCard mode={mode} label="완료" value={done} hint="this period" accent={t.habit.solid} />
+        <StatCard mode={mode} label="활성 습관" value={s.state.habits.length} hint="streaks" accent={t.accent} />
+      </div>
+      <Panel mode={mode} title="이번 주 활동" subtitle="최근 7일 task 완료 추이">
           <div className="flex h-40 items-end gap-2.5 px-1 py-3">
             {dayCounts.map((item) => (
               <div key={item.day} className="flex flex-1 flex-col items-center gap-1.5">
@@ -1921,7 +1913,7 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
             ))}
           </div>
         </Panel>
-        <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <Panel mode={mode} title="카테고리별">
             {sortedCategories(s.state.categories).map((category) => {
               const items = tasks.filter((task) => task.categoryId === category.id);
@@ -1936,7 +1928,6 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
           </Panel>
         </div>
       </div>
-    </div>
   );
 }
 
@@ -2034,6 +2025,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
           {section === "goals" ? <GoalSettingsPanel mode={mode} onUpgrade={setUpgradePlan} /> : null}
           {section === "categories" ? <CategoryManagementPanel mode={mode} /> : null}
           {section === "habits" ? (
+          <div className="flex flex-col gap-4">
           <Panel mode={mode} title="습관 관리" subtitle="web에서도 habit을 확인하고 수정/삭제할 수 있습니다. 새 habit은 상단 새 Task 버튼에서 Habit 탭으로 추가합니다.">
             <div className="flex flex-col gap-2">
               {s.state.habits.length ? s.state.habits.map((habit) => (
@@ -2056,6 +2048,8 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
               )) : <div className="text-[12px]" style={{ color: t.textTertiary }}>아직 habit이 없습니다.</div>}
             </div>
           </Panel>
+          <StatsDashboard mode={mode} />
+          </div>
           ) : null}
           {section === "subscription" ? <SubscriptionPanel mode={mode} onUpgrade={setUpgradePlan} /> : null}
           {section === "sync" ? (
@@ -3956,7 +3950,6 @@ function webTokens(mode: ThemeMode) {
 }
 
 function IconCalendar() { return <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="3" width="10" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3" /><path d="M2 6h10M5 2v2M9 2v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>; }
-function IconChart() { return <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 11h10M4 9V5M7 9V3M10 9V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
 function IconGear() { return <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.3" /><path d="M7 1.8v1.3M7 10.9v1.3M12.2 7h-1.3M3.1 7H1.8M10.7 3.3l-.9.9M4.2 9.8l-.9.9M10.7 10.7l-.9-.9M4.2 4.2l-.9-.9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>; }
 function IconSidebar() { return <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 2v10M2 2h10v10H2z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
 function IconChevronLeft() { return <svg width="11" height="11" viewBox="0 0 11 11"><path d="M7 2 3 5.5 7 9" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
