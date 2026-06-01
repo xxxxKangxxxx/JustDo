@@ -4608,3 +4608,18 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Verification: `npm --prefix apps/web run lint` clean, `npm --prefix apps/web
   test` 122 pass, `npm --prefix apps/web run build` pass, `git diff --check`
   clean. User confirmed the Settings → 습관 layout on the running dev server.
+
+## 2026-06-02 Web Settings → 목표 layout polish
+
+- Settings → 목표 (`GoalSettingsPanel`) now stacks the annual and monthly goal
+  sections vertically (`flex flex-col gap-4`) instead of the previous two-column
+  side-by-side grid, matching the iOS top-to-bottom flow.
+- Goal cards within each section moved from a single full-width column to a
+  responsive `grid-cols-[repeat(auto-fill,minmax(240px,1fr))]` so they wrap into
+  2–3 per row at the Settings column width instead of stretching. The empty
+  state spans `col-span-full`.
+- Goal cards now show only the circular donut (`ProgressRing`); the redundant
+  linear `ProgressBar` was removed from the card (the report modal still uses the
+  bar).
+- Verification: web lint clean, test 122 pass, build pass, `git diff --check`
+  clean. User confirmed on the running dev server.

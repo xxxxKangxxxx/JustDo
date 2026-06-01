@@ -2217,7 +2217,7 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
           </div>
           <PlanBadge mode={mode} plan={plan} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-4">
           <div>
             {yearlyReport ? (
               <ReportSupportingBanner mode={mode} report={yearlyReport} onOpen={() => setReport(yearlyReport)} />
@@ -2561,7 +2561,7 @@ function GoalPeriodSection({
           + 추가
         </button>
       </div>
-      <div className="grid gap-2">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2.5">
         {progress.length ? progress.map((item) => (
           <button
             key={item.goal.id}
@@ -2582,7 +2582,6 @@ function GoalPeriodSection({
               </div>
               <ProgressRing pct={item.progress} size={46} color={color.solid} bg={t.surfaceAlt} />
             </div>
-            <ProgressBar pct={item.progress} color={color.solid} bg={t.surfaceAlt} />
             <div className="mt-3 flex items-baseline gap-3 text-[11px]" style={{ color: t.textTertiary }}>
               <span><b className="text-[13px]" style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b> 진행</span>
               <span>{item.completed.length}/{item.related.length} task</span>
@@ -2590,7 +2589,7 @@ function GoalPeriodSection({
             </div>
           </button>
         )) : (
-          <div className="rounded-xl border border-dashed px-4 py-8 text-center text-[12.5px]" style={{ borderColor: t.dividerStrong, color: t.textTertiary }}>
+          <div className="col-span-full rounded-xl border border-dashed px-4 py-8 text-center text-[12.5px]" style={{ borderColor: t.dividerStrong, color: t.textTertiary }}>
             아직 목표가 없습니다.
           </div>
         )}
