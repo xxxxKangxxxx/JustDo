@@ -264,6 +264,46 @@ describe("desktop app shell interactions", () => {
     expect(screen.getAllByText("work").length).toBeGreaterThan(0);
   });
 
+  it("filters calendar tasks by a selected sidebar tag instead of opening search", async () => {
+    renderApp(persistedState({
+      tasks: [
+        {
+          id: "task-work",
+          title: "업무 태그 할일",
+          startDate: selectedDate,
+          endDate: selectedDate,
+          scheduledTime: null,
+          categoryId: defaultCategories[0].id,
+          priority: "medium",
+          isCompleted: false,
+          tags: ["work"],
+        },
+        {
+          id: "task-personal",
+          title: "개인 태그 할일",
+          startDate: selectedDate,
+          endDate: selectedDate,
+          scheduledTime: null,
+          categoryId: defaultCategories[1].id,
+          priority: "medium",
+          isCompleted: false,
+          tags: ["personal"],
+        },
+      ],
+    }));
+
+    click(await screen.findByTitle("Today 패널"));
+    click(screen.getByRole("button", { name: "리스트" }));
+    expect(screen.getByText("업무 태그 할일")).toBeTruthy();
+    expect(screen.getByText("개인 태그 할일")).toBeTruthy();
+
+    click(screen.getByRole("button", { name: "work" }));
+
+    expect(screen.getByText("업무 태그 할일")).toBeTruthy();
+    expect(screen.queryByText("개인 태그 할일")).toBeNull();
+    expect(screen.queryByText(/결과/)).toBeNull();
+  });
+
   it("edits task tags from the task detail modal", async () => {
     renderApp();
 

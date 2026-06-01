@@ -223,6 +223,7 @@ function JustDoViewport() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | Priority>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [taskModalId, setTaskModalId] = useState<string | null>(null);
   const [newTask, setNewTask] = useState<NewTaskDraft>(null);
@@ -237,8 +238,8 @@ function JustDoViewport() {
   };
 
   const filteredTasks = useMemo(
-    () => filterTasks(s.state.tasks, categoryFilter, priorityFilter, search),
-    [categoryFilter, priorityFilter, s.state.tasks, search],
+    () => filterTasks(s.state.tasks, categoryFilter, priorityFilter, tagFilter, search),
+    [categoryFilter, priorityFilter, s.state.tasks, search, tagFilter],
   );
   const visiblePage: Page = search.trim() ? "search" : page === "search" ? "calendar" : page;
 
@@ -375,13 +376,15 @@ function JustDoViewport() {
           collapsed={collapsed}
           categoryFilter={categoryFilter}
           priorityFilter={priorityFilter}
+          tagFilter={tagFilter}
           onPage={setPage}
           onToggle={() => setCollapsed((value) => !value)}
           onCategory={setCategoryFilter}
           onPriority={setPriorityFilter}
-          onSearchTag={(tag) => {
-            setSearch(tag);
-            setPage("search");
+          onTag={(tag) => {
+            setTagFilter((current) => (current === tag ? "all" : tag));
+            setSearch("");
+            setPage("calendar");
           }}
           onPalette={() => setPaletteOpen(true)}
         />
@@ -765,11 +768,12 @@ function Sidebar({
   collapsed,
   categoryFilter,
   priorityFilter,
+  tagFilter,
   onPage,
   onToggle,
   onCategory,
   onPriority,
-  onSearchTag,
+  onTag,
   onPalette,
 }: {
   mode: ThemeMode;
@@ -777,11 +781,12 @@ function Sidebar({
   collapsed: boolean;
   categoryFilter: string;
   priorityFilter: "all" | Priority;
+  tagFilter: string;
   onPage: (page: Page) => void;
   onToggle: () => void;
   onCategory: (id: string) => void;
   onPriority: (priority: "all" | Priority) => void;
-  onSearchTag: (tag: string) => void;
+  onTag: (tag: string) => void;
   onPalette: () => void;
 }) {
   const s = useJustDo();
@@ -849,8 +854,11 @@ function Sidebar({
             ))}
           </SidebarSection>
           <SidebarSection title="태그" mode={mode}>
+            <SidebarChip active={tagFilter === "all"} onClick={() => onTag("all")} mode={mode}>
+              전체
+            </SidebarChip>
             {topTags(s.state.tasks).map((tag) => (
-              <SidebarChip key={tag} onClick={() => onSearchTag(tag)} mode={mode}>
+              <SidebarChip key={tag} active={tagFilter === tag} onClick={() => onTag(tag)} mode={mode}>
                 {tag}
               </SidebarChip>
             ))}
@@ -3741,14 +3749,31 @@ function buildTracks(cells: Array<{ iso: string }>, tasks: Task[]) {
   return tracks;
 }
 
-function filterTasks(tasks: Task[], categoryId: string, priority: "all" | Priority, query: string) {
+function filterTasks(
+  tasks: Task[],
+  categoryId: string,
+  priority: "all" | Priority,
+  tagFilter: string,
+  query: string,
+) {
   const q = query.trim().toLowerCase();
+  const normalizedTagFilter = normalizeTagValue(tagFilter);
   return tasks.filter((task) => {
     if (categoryId !== "all" && task.categoryId !== categoryId) return false;
     if (priority !== "all" && (task.priority ?? "medium") !== priority) return false;
+    if (
+      tagFilter !== "all" &&
+      !task.tags.some((tag) => normalizeTagValue(tag) === normalizedTagFilter)
+    ) {
+      return false;
+    }
     if (!q) return true;
     return `${task.title} ${(task.tags ?? []).join(" ")} ${task.startDate} ${task.endDate}`.toLowerCase().includes(q);
   });
+}
+
+function normalizeTagValue(tag: string) {
+  return tag.trim().replace(/^#+/, "").toLowerCase();
 }
 
 function moveCalendar(s: ReturnType<typeof useJustDo>, view: CalendarView, offset: -1 | 1) {
