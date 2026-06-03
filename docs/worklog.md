@@ -4681,3 +4681,20 @@ This document records coordination notes for work done with Codex and Claude Cod
   reports via text similarity is deferred to the report-content track.
 - Documented in `docs/just_do_prd.md` (Goal & Pro Report) and
   `docs/next_steps.md` (Goal & Pro Report track relationship bullet).
+
+## 2026-06-03 Report content decisions (no code yet)
+
+- Keep the existing stepped report (완료율/평균 진행률 → 활동 → 목표별 진행 →
+  이야기) and refine content:
+  - 목표별 진행 is the centerpiece: auto progress + target (`운동 7/10`);
+    qualitative goals show %.
+  - Round out 활동 to completion rate, category completion, habit achievement,
+    best streak, most-slipped tasks.
+  - Narrative stays template but filled with real data (best / most-behind goal).
+  - Add a single non-stored retrospective question; journaling deferred.
+- **Free gating changes from preview to blur**: Free still sees the banner and can
+  open the report, but the real content is blurred with a Pro CTA (replace the
+  clean preview teaser). Trial/Pro see it unblurred. Goal input stays free.
+- Yearly monthly-grouping (text similarity) deferred to v2.
+- Documented in `docs/just_do_prd.md` (기간 종료 리포트) and `docs/next_steps.md`
+  "Report Content". Implementation deferred with the goal-progress pass.

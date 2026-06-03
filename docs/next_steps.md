@@ -442,6 +442,35 @@ Recommended order for the next coding session:
   false-positive avoidance, and the no-match → no-fallback case in tests on both
   platforms.
 
+## Report Content (2026-06-03 decision, not yet implemented)
+
+> Refines the existing stepped report (web `GoalReportModal` /
+> `GoalReportPreviewModal`, iOS `GoalReportFullScreen`). The report already has
+> `완료율/평균 진행률 → 활동 → 목표별 진행 → 이야기` steps; this is the agreed
+> content + gating, to implement alongside the goal-progress work.
+
+- **목표별 진행 = centerpiece**: show each goal's auto progress + target
+  (`운동 7/10`); qualitative goals show %. Optionally list the read-only items
+  that counted (never editable).
+- **활동 요약**: round out to Task 완료율, 카테고리별 완료율, Habit 달성률, 최고
+  스트릭, 가장 많이 밀린 작업 (some already present; fill the gaps).
+- **이야기 (narrative)**: keep the template (no AI yet) but **fill it with real
+  data** — name the best-progress and most-behind goal so it reads personal.
+- **회고 (reflection)**: append a single **non-stored** retrospective question
+  (e.g. `다음 기간엔 무엇을 바꿔볼까요?`). No journaling/storage in v1.
+- **Free gating = blur, not preview**: Free users still see the report banner and
+  can open the report, but the **actual report content is blurred with a Pro CTA**
+  overlay (replace the current clean `GoalReportPreviewModal` teaser with a
+  blurred render of the real report). Trial/Pro see it unblurred. Goal input
+  stays free.
+- **Yearly monthly-grouping = v2**: grouping monthly goals under related yearly
+  goals via text similarity is deferred. v1 yearly report = yearly goal progress
+  + 12-month trend.
+- Files: web `app-shell.tsx` (`GoalReportModal`, replace
+  `GoalReportPreviewModal` with the blur treatment), iOS
+  `GoalReportFullScreen` in `ContentView.swift`. Reuse the same progress/activity
+  selectors as the goal cards so numbers match.
+
 ## Where We Are (2026-05-30)
 
 - **Goal & Pro Report MVP first pass implemented**. Supabase migration
