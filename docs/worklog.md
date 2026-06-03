@@ -4655,3 +4655,17 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Documented in `docs/just_do_prd.md` (Goal & Pro Report 진행률 산정 원칙) and the
   concrete implementation plan in `docs/next_steps.md` "Goal Progress Accuracy".
   Implementation deferred to a later session.
+
+## 2026-06-03 Goal field decision — optional numeric target (no code yet)
+
+- Add only an optional numeric `target` to goals (e.g. `책 3권`); everything else
+  considered was excluded.
+- Fits the progress decision: the numerator (completed count) stays auto-derived;
+  `target` only replaces the denominator (`완료/target`), so it is a goal
+  definition, not a progress-manipulation lever. Qualitative goals leave target
+  unset and keep `완료/관련`.
+- Excluded: deadline (redundant with the period), category linkage (a softer
+  attribution lever — revisit with E3 ML), priority/color, manual "achieved"
+  toggle (achievement is auto from progress == 100%).
+- Ships in the same pass as E1 + A. Plan folded into `docs/next_steps.md` "Goal
+  Progress Accuracy" (Goal field addition) and the PRD progress principle.

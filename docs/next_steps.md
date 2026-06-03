@@ -392,12 +392,36 @@ Recommended order for the next coding session:
   title so habit-oriented goals (e.g. `매일 명상`) can earn progress.
 - Use normalized **token overlap** (plus an optional small synonym map) rather
   than raw substring, to cut false positives like `운동` ↔ `부동산`.
-- Relevance = token-overlap signal ≥ threshold. Progress =
-  related-completed / related-total over the matched set (NO all-tasks fallback).
+- Relevance = token-overlap signal ≥ threshold; `matched` = relevance-matched
+  items (tasks, plus habits per the sub-decision below) for the goal in the period.
+- Progress (with the optional target below):
+  - target set → `min(matchedCompleted, target) / target`.
+  - target unset → `matchedCompleted / matched.length` (NO all-tasks fallback; if
+    `matched.length == 0` show "관련 항목 없음").
 - Habits sub-decision to finalize at implementation: how a matched habit counts
   toward a goal for the period (e.g. its period log-completion ratio vs binary).
 - Read-only. A small "이 목표에 반영된 항목" list for transparency is optional and
   can be deferred; never make attribution user-editable.
+
+### Goal field addition: optional numeric target (2026-06-03 decision)
+
+- Add an **optional** numeric `target` to the goal (quantitative goals like
+  `책 3권`). Qualitative goals leave it unset.
+- The **numerator stays auto-derived** (matched completed items); `target` only
+  replaces the denominator. Setting a target defines the goal (like the title),
+  not the progress value, so it does not reintroduce a manipulation lever — a
+  higher target just makes the goal harder.
+- Display: with target → `matchedCompleted/target` (optionally with a `unit`
+  string, e.g. `2/3권`); without → percentage as today.
+- Schema: add `goals.target int null` (and optionally `goals.unit text null` for
+  display — `unit` may be deferred). Regenerate `database.types.ts`; thread the
+  field through web `supabase-mapping.ts` / domain / store and iOS shared `Goal`
+  model + Core Data mirror/mappers + REST sync; add an optional "목표 수치" input
+  to the goal editor on both platforms; show the count on the goal card.
+- This ships in the **same pass** as E1 + A. Excluded by the same decision:
+  deadline (redundant with the period), category linkage (a softer attribution
+  lever — revisit with E3), priority/color, and any manual "achieved" toggle
+  (achievement must be auto-derived from progress == 100%).
 
 ### Files / verification
 
