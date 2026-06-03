@@ -333,6 +333,83 @@ Recommended order for the next coding session:
   - Product spec: `docs/just_do_prd.md` Goal & Pro Report.
   - Implemented schema: `docs/just_do_db_schema.md` Goal & Pro Report schema.
 
+## Goal Progress Accuracy (2026-06-03 decision, not yet implemented)
+
+> Decision from a design discussion. Captures how goal progress (the donut %) is
+> computed and why. Implementation has not started; this is the plan.
+
+### Problem
+
+- Current progress in web `selectors.ts` (`goalProgressForPeriod` + `taskMatchesGoal`)
+  and iOS `GoalSelectors` (`progress` + `taskMatches`, in `ContentView.swift`)
+  uses a fragile substring matcher AND, when no task matches a goal, falls back to
+  ALL period tasks (`related = matched.length ? matched : periodTasks`). Two
+  unrelated goals with no matching tasks then show the SAME global completion
+  rate — a confident-looking but meaningless number.
+
+### Product stance (anti-tamper level 가)
+
+- Goal progress must be **auto-computed and not user-editable**. There is no
+  manual task↔goal linking UI, because manual attribution is a progress-
+  manipulation lever; the user could pad a goal with unrelated completed work.
+- Tags stay **calendar-filtering only** and are not reused for goal attribution.
+- Anti-tamper target is "block casual inflation" (level 가): relevance is judged
+  automatically from task/goal text, so the user cannot attribute arbitrary work.
+  Note the ceiling: the user still authors task text and marks completion, so a
+  determined user can still write on-topic tasks and check them. True objectivity
+  (level 나) needs external signals (HealthKit, Screen Time, Calendar attendance)
+  and is a separate future track, out of scope here.
+
+### Engine decision: E1 now, ML later
+
+- **E1 (improved deterministic matcher) — ship now.** One shared algorithm ported
+  identically to web `selectors.ts` and iOS `GoalSelectors` so progress matches
+  across devices. No schema change (computed client-side from existing task/goal
+  text). Tamper-resistant (auto, read-only), offline, no infra/cost/privacy.
+- **E3 (server ML embeddings) — later, only if E1 accuracy is insufficient.**
+  Sync-time embedding (e.g. pgvector cosine similarity) computed once on the
+  server and stored, read identically by both clients. Adds infra, online
+  dependency, cost (embeddings are cheap), and a privacy disclosure (task text
+  leaves the device). E1 and E3 share the same progress formula; only the matcher
+  source swaps, so the upgrade is contained.
+- **E2 (on-device ML) rejected** — iOS `NLEmbedding` and a web JS model are
+  different models, so per-device similarity scores diverge and break
+  cross-platform progress consistency.
+
+### A — immediate fix (ships with E1)
+
+- Remove the "fallback to all period tasks when no match" in both
+  `goalProgressForPeriod` (web) and `GoalSelectors.progress` (iOS). A goal with
+  zero related items shows "관련 항목 없음" / no donut %, not the global rate.
+
+### E1 matcher spec
+
+- Normalize text (lowercase, strip punctuation) for both goal and task text.
+- Korean-aware tokenization: do not blanket-drop <2-char tokens (keep meaningful
+  single-char nouns like `책`/`돈`); strip a small particle/stopword list where
+  feasible.
+- Match a goal against task **title + tags** (optionally note); also match habit
+  title so habit-oriented goals (e.g. `매일 명상`) can earn progress.
+- Use normalized **token overlap** (plus an optional small synonym map) rather
+  than raw substring, to cut false positives like `운동` ↔ `부동산`.
+- Relevance = token-overlap signal ≥ threshold. Progress =
+  related-completed / related-total over the matched set (NO all-tasks fallback).
+- Habits sub-decision to finalize at implementation: how a matched habit counts
+  toward a goal for the period (e.g. its period log-completion ratio vs binary).
+- Read-only. A small "이 목표에 반영된 항목" list for transparency is optional and
+  can be deferred; never make attribution user-editable.
+
+### Files / verification
+
+- Web: `selectors.ts` (`taskMatchesGoal`, `goalProgressForPeriod`) +
+  `selectors.test.ts`.
+- iOS: `GoalSelectors` (`taskMatches`, `progress`) — consider moving the pure
+  matcher into the testable `JustDoShared` package (like
+  `GoalReportSelectors`) — + tests.
+- Keep the two implementations algorithmically identical; cover synonyms,
+  false-positive avoidance, and the no-match → no-fallback case in tests on both
+  platforms.
+
 ## Where We Are (2026-05-30)
 
 - **Goal & Pro Report MVP first pass implemented**. Supabase migration

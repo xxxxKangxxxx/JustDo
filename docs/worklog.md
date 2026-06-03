@@ -4634,3 +4634,24 @@ This document records coordination notes for work done with Codex and Claude Cod
   tone (can be matched later if desired).
 - Verification: web lint clean, build pass, `git diff --check` clean. User
   confirmed on the running dev server.
+
+## 2026-06-03 Goal progress accuracy — design decision (no code yet)
+
+- Discussion only; captured the plan in docs. The current goal progress is
+  misleading because the substring matcher falls back to ALL period tasks when no
+  task matches a goal, so unrelated goals show the same global completion rate.
+- Decisions:
+  - Progress is auto-computed and NOT user-editable. No manual task↔goal linking
+    UI (it would be a manipulation lever). Tags stay calendar-only, not reused for
+    goal attribution.
+  - Anti-tamper target = level 가 (block casual inflation via automatic
+    text-relevance). Full objectivity (level 나, external signals like HealthKit)
+    is a separate future track.
+  - Engine: E1 (improved deterministic matcher, one shared algorithm on both
+    platforms) now; E3 (server ML embeddings) later only if E1 accuracy is
+    insufficient; E2 (on-device ML) rejected for cross-platform inconsistency.
+  - A (immediate, ships with E1): drop the all-tasks fallback; zero-related goals
+    show "관련 항목 없음" instead of the global rate.
+- Documented in `docs/just_do_prd.md` (Goal & Pro Report 진행률 산정 원칙) and the
+  concrete implementation plan in `docs/next_steps.md` "Goal Progress Accuracy".
+  Implementation deferred to a later session.
