@@ -2138,10 +2138,18 @@ function ReportSupportingBanner({
   const t = webTokens(mode);
   const title = `${periodLabel(report.periodType, report.periodKey)} 리포트 준비 완료`;
   return (
-    <button type="button" onClick={onOpen} className="mb-2 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left" style={{ borderColor: t.divider, background: t.bg2 }}>
-      <span aria-hidden className="text-[12px]">✨</span>
-      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold" style={{ color: t.text }}>{title}</span>
-      <span className="text-[12px] font-semibold" style={{ color: t.me.ink }}>보기 ›</span>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mb-2 flex w-full items-center gap-2.5 rounded-xl px-3.5 py-3 text-left shadow-[0_4px_14px_-4px_rgba(0,0,0,0.35)] transition-transform duration-150 hover:-translate-y-0.5"
+      style={{
+        background: `linear-gradient(115deg, ${t.me.solid} 0%, ${t.accent} 30%, ${t.ext.solid} 65%, ${t.habit.solid} 100%)`,
+        color: "#fff",
+      }}
+    >
+      <span aria-hidden className="text-[15px]">✨</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] font-bold" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.22)" }}>{title}</span>
+      <span className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: "rgba(255,255,255,0.22)" }}>보기 ›</span>
     </button>
   );
 }

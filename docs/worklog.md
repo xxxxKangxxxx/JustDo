@@ -4623,3 +4623,14 @@ This document records coordination notes for work done with Codex and Claude Cod
   bar).
 - Verification: web lint clean, test 122 pass, build pass, `git diff --check`
   clean. User confirmed on the running dev server.
+
+## 2026-06-03 Web report entry banner gradient
+
+- Settings → 목표 `ReportSupportingBanner` (the period-end report entry) was
+  blending into the panel (`bg2`). Restyled it as a vivid clickable CTA: a
+  115° multi-hue gradient across the palette solids (me/accent/ext/habit), white
+  bold text with a soft shadow, a translucent white `보기 ›` pill, and a drop
+  shadow + hover lift. The Home `ReportHomeBanner` was left on its single soft
+  tone (can be matched later if desired).
+- Verification: web lint clean, build pass, `git diff --check` clean. User
+  confirmed on the running dev server.
