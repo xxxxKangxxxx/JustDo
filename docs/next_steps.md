@@ -283,7 +283,8 @@ Recommended order for the next coding session:
 - First-time users should see an optional goal setup modal. It must include a
   bottom `나중에 할게요` action so onboarding is not blocked.
 - Monthly goals:
-  - Prompt can appear from day 1 through day 3 of each month.
+  - Prompt can appear from day 1 through day 7 of each month (2026-06-03: widened
+    from days 1-3 to match the yearly window and reduce missed prompts).
   - Do not prompt if goals for that month already exist.
   - If the user closes with `다시 보지 않기`, do not prompt again for that month.
   - Maximum 5 goals per month.
@@ -470,6 +471,25 @@ Recommended order for the next coding session:
   `GoalReportPreviewModal` with the blur treatment), iOS
   `GoalReportFullScreen` in `ContentView.swift`. Reuse the same progress/activity
   selectors as the goal cards so numbers match.
+
+## Prompt / Onboarding Policy (2026-06-03 decision)
+
+- **Monthly window widened to days 1-7** (was 1-3) to match the yearly window and
+  reduce missed prompts. Yearly stays Jan 1-7. Onboarding unchanged (optional,
+  non-blocking, asks yearly even outside Jan).
+- **Coexistence with report banners**: only **one modal prompt** per app entry;
+  when both yearly and monthly prompts qualify (January), **yearly takes
+  priority**. The report is a banner (passive), so it coexists with a prompt
+  modal, but no prompt modal opens while a report view is showing (existing guard
+  in iOS `presentGoalPromptIfNeeded` / web prompt effect).
+- **Frequency unchanged**: once per period, suppressed by `다시 보지 않기`; no extra
+  mid-period re-nudge. Push notifications stay future work.
+- **Applies to Free too** — goal input is free, so prompting everyone to set goals
+  feeds the blur-gated report conversion. Consistent with the Free gating
+  decision.
+- Code anchors: web prompt effect in `app-shell.tsx` (`JustDoViewport` useEffect,
+  the `parsed.day <= 3` / `<= 7` checks), iOS `presentGoalPromptIfNeeded` /
+  `nextGoalPrompt` in `ContentView.swift`. Implement with the goal-progress pass.
 
 ## Where We Are (2026-05-30)
 

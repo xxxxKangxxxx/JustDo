@@ -4698,3 +4698,18 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Yearly monthly-grouping (text similarity) deferred to v2.
 - Documented in `docs/just_do_prd.md` (기간 종료 리포트) and `docs/next_steps.md`
   "Report Content". Implementation deferred with the goal-progress pass.
+
+## 2026-06-03 Prompt / onboarding policy (no code yet)
+
+- Monthly prompt window widened from days 1-3 to **days 1-7** (matches yearly Jan
+  1-7, reduces missed prompts). Yearly and onboarding unchanged.
+- Coexistence with report banners: one modal prompt per entry; yearly > monthly
+  in January; report banner (passive) coexists, but no prompt modal while a report
+  view is open (existing guard).
+- Frequency unchanged (once per period, `다시 보지 않기` suppression, no re-nudge,
+  push deferred). Prompts apply to Free too (goal input is free → feeds blur-gated
+  report conversion).
+- Documented in `docs/just_do_prd.md` and `docs/next_steps.md` "Prompt /
+  Onboarding Policy". This closes the goal discussion series; all four topics
+  (progress accuracy, target field, monthly↔yearly relationship, report content,
+  prompt policy) are now recorded, implementation deferred.
