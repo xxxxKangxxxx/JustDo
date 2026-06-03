@@ -4669,3 +4669,15 @@ This document records coordination notes for work done with Codex and Claude Cod
   toggle (achievement is auto from progress == 100%).
 - Ships in the same pass as E1 + A. Plan folded into `docs/next_steps.md` "Goal
   Progress Accuracy" (Goal field addition) and the PRD progress principle.
+
+## 2026-06-03 Monthly↔yearly goal relationship — keep fully decoupled (no code)
+
+- Decision: monthly and yearly goals stay fully decoupled — no stored parent
+  link, no hard parent/child. Because progress is auto-derived per period, a
+  yearly goal computes its own progress directly, so rollup is unnecessary; the
+  relationship is UX-only.
+- Only UI to add: show that year's yearly goals as read-only **context** when
+  creating/viewing monthly goals (no selection, no link). Loose auto-grouping in
+  reports via text similarity is deferred to the report-content track.
+- Documented in `docs/just_do_prd.md` (Goal & Pro Report) and
+  `docs/next_steps.md` (Goal & Pro Report track relationship bullet).

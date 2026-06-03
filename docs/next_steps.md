@@ -294,9 +294,17 @@ Recommended order for the next coding session:
   - New users should still be asked about yearly goals during onboarding even
     outside January 1-7.
   - Maximum 5 goals per year.
-- Monthly and yearly goals do not need a hard parent/child relationship. A yearly
-  goal may be shown as context while setting monthly goals, but data should stay
-  loosely coupled.
+- Monthly and yearly goals stay **fully decoupled** (2026-06-03 decision): no
+  stored parent link, no hard parent/child. Because progress is auto-derived per
+  period, a yearly goal computes its own progress directly from the year's
+  relevant items, so rolling up monthly goals is unnecessary — the relationship
+  is a UX/organization concern only, not progress math.
+  - **Context display (the only UI to add)**: when creating/viewing monthly
+    goals, show that year's yearly goals as **read-only context** (inspiration /
+    alignment). No selection, no link.
+  - Optional later: in reports, loosely group monthly goals under related yearly
+    goals via **text similarity** (same E1 approach, no manual field). Defer to
+    the report-content track.
 - Goal fields for the first implementation: title, optional note, sort order,
   lock flag.
 - Goal lock is a confirmation UX, not permanent immutability:
