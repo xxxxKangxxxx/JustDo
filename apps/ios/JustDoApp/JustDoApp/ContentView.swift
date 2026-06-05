@@ -5158,7 +5158,7 @@ private struct GoalCard: View {
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         if !progress.relatedTasks.isEmpty {
-                            Text("task \(progress.completedTasks.count)/\(progress.relatedTasks.count)")
+                            Text("할 일 \(progress.completedTasks.count)/\(progress.relatedTasks.count)")
                                 .font(.system(size: 12.5, weight: .medium))
                                 .foregroundStyle(JDTheme.tertiaryText)
                                 .monospacedDigit()
@@ -5465,7 +5465,7 @@ private struct GoalReportFullScreen: View {
                     GoalMetricGrid(metrics: [
                         ("목표", "\(progress.count)", ""),
                         ("평균 진행", "\(Int((average * 100).rounded()))", "%"),
-                        ("완료 task", "\(progress.flatMap(\.completedTasks).count)", ""),
+                        ("완료 할 일", "\(progress.flatMap(\.completedTasks).count)", ""),
                         ("밀림", "\(progress.flatMap(\.slipped).count)", "")
                     ])
                 }

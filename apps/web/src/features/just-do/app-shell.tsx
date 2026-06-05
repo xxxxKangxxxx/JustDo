@@ -2609,7 +2609,7 @@ function GoalPeriodSection({
               ) : (
                 <>
                   {item.relatedTasks.length ? (
-                    <span><b className="text-[13px]" style={{ color: t.text }}>{item.completedTasks.length}/{item.relatedTasks.length}</b> task</span>
+                    <span>할 일 <b className="text-[13px]" style={{ color: t.text }}>{item.completedTasks.length}/{item.relatedTasks.length}</b></span>
                   ) : null}
                   {item.relatedHabits.length ? <span>습관 {item.relatedHabits.length}</span> : null}
                   {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
