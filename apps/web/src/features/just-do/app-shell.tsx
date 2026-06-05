@@ -2614,7 +2614,7 @@ function GoalPeriodSection({
             <div className="mt-3 flex items-baseline gap-3 text-[11px]" style={{ color: t.textTertiary }}>
               {item.target !== null ? (
                 <>
-                  <span>목표 <b className="text-[13px]" style={{ color: t.text }}>{Math.min(item.completedCount, item.target)}/{item.target}</b></span>
+                  <span>목표 {Math.min(item.completedCount, item.target)}/{item.target}</span>
                   {item.relatedHabits.length ? <span>습관 {item.relatedHabits.length}</span> : null}
                   {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
                 </>
@@ -2710,7 +2710,9 @@ function GoalEditModal({
           <div className="flex items-center gap-3 rounded-lg border px-3 py-2" style={{ borderColor: t.divider, background: t.bg2 }}>
             <div className="flex-1">
               <div className="text-[13px] font-semibold">목표 수치 <span style={{ color: t.textTertiary }}>(선택)</span></div>
-              <div className="text-[11px]" style={{ color: t.textTertiary }}>책 3권처럼 셀 수 있는 목표라면 숫자를 적어요.</div>
+              <div className="text-[11px]" style={{ color: t.textTertiary }}>
+                {draft.periodType === "yearly" ? "올해 몇 개를 목표로 하나요? 예: 책 12권 → 12" : "이번 달 몇 개를 목표로 하나요? 예: 책 3권 → 3"}
+              </div>
             </div>
             <input
               value={draft.target}

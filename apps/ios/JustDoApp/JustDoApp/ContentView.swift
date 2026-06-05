@@ -5170,8 +5170,8 @@ private struct GoalCard: View {
                 if let target = progress.target {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text("목표 \(min(progress.completedCount, target))/\(target)")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(JDTheme.primaryText)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(JDTheme.tertiaryText)
                             .monospacedDigit()
                         if !progress.relatedHabits.isEmpty {
                             Text("습관 \(progress.relatedHabits.count)")
@@ -5396,9 +5396,10 @@ private struct GoalEditorDialog: View {
                     Text("목표 수치 (선택)")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(JDTheme.primaryText)
-                    Text("책 3권처럼 셀 수 있는 목표라면 숫자를 적어요.")
+                    Text(draft.periodType == .yearly ? "올해 몇 개를 목표로 하나요? 예: 책 12권 → 12" : "이번 달 몇 개를 목표로 하나요? 예: 책 3권 → 3")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(JDTheme.tertiaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
                 TextField("—", text: targetBinding)
