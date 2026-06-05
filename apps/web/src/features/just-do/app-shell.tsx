@@ -2588,12 +2588,27 @@ function GoalPeriodSection({
                 <div className="truncate text-[16px] font-bold tracking-[-0.4px]">{item.goal.title}</div>
                 {item.goal.note ? <div className="mt-1 line-clamp-2 text-[11.5px] leading-5" style={{ color: t.textSecondary }}>{item.goal.note}</div> : null}
               </div>
-              <ProgressRing pct={item.progress} size={46} color={color.solid} bg={t.surfaceAlt} />
+              {item.related.length === 0 ? (
+                <div
+                  className="flex h-[46px] w-[46px] items-center justify-center rounded-full border text-[15px]"
+                  style={{ borderColor: t.divider, color: t.textTertiary }}
+                >
+                  —
+                </div>
+              ) : (
+                <ProgressRing pct={item.progress} size={46} color={color.solid} bg={t.surfaceAlt} />
+              )}
             </div>
             <div className="mt-3 flex items-baseline gap-3 text-[11px]" style={{ color: t.textTertiary }}>
-              <span><b className="text-[13px]" style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b> 진행</span>
-              <span>{item.completed.length}/{item.related.length} task</span>
-              {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
+              {item.related.length === 0 ? (
+                <span>관련 항목 없음</span>
+              ) : (
+                <>
+                  <span><b className="text-[13px]" style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b> 진행</span>
+                  <span>{item.completed.length}/{item.related.length} task</span>
+                  {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
+                </>
+              )}
             </div>
           </button>
         )) : (

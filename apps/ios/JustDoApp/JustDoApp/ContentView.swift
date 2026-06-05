@@ -4796,8 +4796,10 @@ private enum GoalSelectors {
         let range = range(type: type, periodKey: periodKey)
         let periodTasks = tasks.filter { $0.endDate >= range.start && $0.startDate <= range.end }
         return goalsForPeriod(goals, type: type, periodKey: periodKey).map { goal in
-            let matched = periodTasks.filter { taskMatches($0, goal: goal) }
-            let related = matched.isEmpty ? periodTasks : matched
+            // A goal with no matching tasks shows "관련 항목 없음" — never fall back
+            // to all period tasks, which would surface the same global completion
+            // rate for every unrelated goal.
+            let related = periodTasks.filter { taskMatches($0, goal: goal) }
             let completed = related.filter(\.isCompleted)
             let slipped = related.filter { !$0.isCompleted && $0.endDate < range.end }
             return GoalProgress(
@@ -5115,20 +5117,26 @@ private struct GoalCard: View {
 
                 Spacer(minLength: 16)
 
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("\(Int((progress.progress * 100).rounded()))%")
-                        .font(.system(size: 14.5, weight: .bold))
-                        .foregroundStyle(JDTheme.primaryText)
-                        .monospacedDigit()
-                    Text("\(progress.completed.count)/\(progress.related.count)")
+                if progress.related.isEmpty {
+                    Text("관련 항목 없음")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(JDTheme.tertiaryText)
-                        .monospacedDigit()
-                    if !progress.slipped.isEmpty {
-                        Text("\(progress.slipped.count) 밀림")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(JDTheme.external)
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text("\(Int((progress.progress * 100).rounded()))%")
+                            .font(.system(size: 14.5, weight: .bold))
+                            .foregroundStyle(JDTheme.primaryText)
                             .monospacedDigit()
+                        Text("\(progress.completed.count)/\(progress.related.count)")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(JDTheme.tertiaryText)
+                            .monospacedDigit()
+                        if !progress.slipped.isEmpty {
+                            Text("\(progress.slipped.count) 밀림")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(JDTheme.external)
+                                .monospacedDigit()
+                        }
                     }
                 }
             }
@@ -5136,7 +5144,18 @@ private struct GoalCard: View {
             .frame(minHeight: 92, alignment: .topLeading)
 
             VStack(alignment: .trailing, spacing: 0) {
-                GoalRingWithText(progress: progress.progress, tint: tint, size: 52, lineWidth: 5)
+                if progress.related.isEmpty {
+                    Circle()
+                        .strokeBorder(JDTheme.divider, lineWidth: 5)
+                        .frame(width: 52, height: 52)
+                        .overlay(
+                            Text("—")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(JDTheme.tertiaryText)
+                        )
+                } else {
+                    GoalRingWithText(progress: progress.progress, tint: tint, size: 52, lineWidth: 5)
+                }
 
                 Spacer(minLength: 22)
 

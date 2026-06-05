@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Goal, GoalPeriodType, GoalPromptDismissal, Habit, Task } from "@/types/domain";
 import {
   availableReports,
+  goalProgressForPeriod,
   habitActiveOn,
   habitStreak,
   homeBannerReport,
@@ -43,6 +44,53 @@ describe("tasksOnDate", () => {
 
   it("returns empty for dates outside any range", () => {
     expect(tasksOnDate(tasks, "2026-05-01")).toEqual([]);
+  });
+});
+
+describe("goalProgressForPeriod", () => {
+  const makeGoal = (over: Partial<Goal> = {}): Goal => ({
+    id: "g",
+    periodType: "monthly",
+    periodKey: "2026-04",
+    title: "운동",
+    note: null,
+    sortOrder: 0,
+    locked: false,
+    lockedAt: null,
+    ...over,
+  });
+
+  it("derives progress only from tasks matching the goal title", () => {
+    const goals = [makeGoal({ id: "g1", title: "운동" })];
+    const tasks = [
+      makeTask({ id: "m1", title: "아침 운동", isCompleted: true }),
+      makeTask({ id: "m2", title: "저녁 운동", isCompleted: false }),
+      makeTask({ id: "u1", title: "장보기", isCompleted: true }),
+    ];
+    const [progress] = goalProgressForPeriod(goals, tasks, "monthly", "2026-04");
+    expect(progress.related.map((task) => task.id)).toEqual(["m1", "m2"]);
+    expect(progress.completed.map((task) => task.id)).toEqual(["m1"]);
+    expect(progress.progress).toBe(0.5);
+  });
+
+  it("shows no related items instead of the global rate when nothing matches", () => {
+    const goals = [
+      makeGoal({ id: "g1", title: "독서" }),
+      makeGoal({ id: "g2", title: "명상" }),
+    ];
+    // None of these tasks match either goal; previously both goals fell back to
+    // all period tasks and reported the same global completion rate.
+    const tasks = [
+      makeTask({ id: "u1", title: "장보기", isCompleted: true }),
+      makeTask({ id: "u2", title: "청소", isCompleted: true }),
+      makeTask({ id: "u3", title: "빨래", isCompleted: false }),
+    ];
+    const result = goalProgressForPeriod(goals, tasks, "monthly", "2026-04");
+    for (const progress of result) {
+      expect(progress.related).toEqual([]);
+      expect(progress.completed).toEqual([]);
+      expect(progress.progress).toBe(0);
+    }
   });
 });
 

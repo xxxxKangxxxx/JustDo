@@ -105,8 +105,10 @@ export const goalProgressForPeriod = (
   const range = rangeForGoalPeriod(type, periodKey);
   const periodTasks = tasksInRange(tasks, range.start, range.end);
   return goalsForPeriod(goals, type, periodKey).map((goal) => {
-    const matched = periodTasks.filter((task) => taskMatchesGoal(task, goal));
-    const related = matched.length ? matched : periodTasks;
+    // A goal with no matching tasks shows "관련 항목 없음" — never fall back to all
+    // period tasks, which would surface the same global completion rate for every
+    // unrelated goal.
+    const related = periodTasks.filter((task) => taskMatchesGoal(task, goal));
     const completed = related.filter((task) => task.isCompleted);
     const slipped = related.filter((task) => !task.isCompleted && task.endDate < range.end);
     return {
