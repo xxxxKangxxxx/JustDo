@@ -138,6 +138,7 @@ export const goalRowToDomain = (row: GoalRow): Goal => ({
   sortOrder: row.sort_order,
   locked: row.locked,
   lockedAt: row.locked_at,
+  target: row.target,
 });
 
 export const goalDomainToInsert = (goal: Goal, userId: string): GoalInsert => ({
@@ -150,6 +151,7 @@ export const goalDomainToInsert = (goal: Goal, userId: string): GoalInsert => ({
   sort_order: goal.sortOrder,
   locked: goal.locked,
   locked_at: goal.locked ? (goal.lockedAt ?? new Date().toISOString()) : null,
+  target: goal.target ?? null,
 });
 
 export const goalPromptDismissalRowToDomain = (

@@ -212,6 +212,8 @@ export type GoalProgress = {
   slipped: Task[];
   relatedCount: number;
   completedCount: number;
+  /** Resolved positive numeric target, or null for qualitative goals. */
+  target: number | null;
   progress: number;
 };
 
@@ -239,6 +241,13 @@ export const goalProgressForPeriod = (
     // tasks score 0/1; habits score their fractional period ratio.
     const score = completedTasks.length + habitScores.reduce((sum, value) => sum + value, 0);
     const completedCount = completedTasks.length + habitScores.filter((value) => value >= 1).length;
+    // An optional target only replaces the denominator (the numerator stays the
+    // auto-derived score), so a quantitative goal like 책 3권 reads progress
+    // toward its target instead of toward the count of matched items.
+    const target = typeof goal.target === "number" && goal.target > 0 ? goal.target : null;
+    const progress = target
+      ? Math.min(score, target) / target
+      : relatedCount ? score / relatedCount : 0;
     return {
       goal,
       relatedTasks,
@@ -247,7 +256,8 @@ export const goalProgressForPeriod = (
       slipped,
       relatedCount,
       completedCount,
-      progress: relatedCount ? score / relatedCount : 0,
+      target,
+      progress,
     };
   });
 };

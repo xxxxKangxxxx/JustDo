@@ -54,6 +54,8 @@ export type Goal = {
   sortOrder: number;
   locked: boolean;
   lockedAt?: string | null;
+  /** Optional numeric target for quantitative goals (e.g. 책 3권). */
+  target?: number | null;
 };
 
 export type GoalPromptType =

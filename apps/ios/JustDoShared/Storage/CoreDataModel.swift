@@ -82,6 +82,7 @@ public enum CoreDataModelFactory {
                 attribute("sortOrder", .integer64AttributeType, optional: false),
                 attribute("locked", .booleanAttributeType, optional: false),
                 attribute("lockedAt", .stringAttributeType, optional: true),
+                attribute("target", .integer64AttributeType, optional: true),
                 attribute("updatedAt", .dateAttributeType, optional: true),
                 attribute("createdAt", .dateAttributeType, optional: true),
             ]

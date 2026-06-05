@@ -1295,7 +1295,8 @@ private struct HomeRootView: View {
             note: draft.note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank,
             sortOrder: currentGoals.count,
             locked: draft.locked,
-            lockedAt: draft.locked ? JDDate.nowISODateTime : nil
+            lockedAt: draft.locked ? JDDate.nowISODateTime : nil,
+            target: draft.target
         )
 
         do {
@@ -4652,6 +4653,7 @@ private struct GoalDraft {
     var title: String = ""
     var note: String = ""
     var locked: Bool = true
+    var target: Int? = nil
 }
 
 private struct ReportBanner: View {
@@ -4752,6 +4754,7 @@ private struct GoalProgress: Identifiable {
     var slipped: [Task]
     var relatedCount: Int
     var completedCount: Int
+    var target: Int?
     var progress: Double
 
     var id: UUID { goal.id }
@@ -4816,6 +4819,16 @@ private enum GoalSelectors {
             // tasks score 0/1; habits score their fractional period ratio.
             let score = Double(completedTasks.count) + habitScores.reduce(0, +)
             let completedCount = completedTasks.count + habitScores.filter { $0 >= 1 }.count
+            // An optional target only replaces the denominator (the numerator stays
+            // the auto-derived score), so a quantitative goal like 책 3권 reads
+            // progress toward its target instead of toward the matched-item count.
+            let target = (goal.target ?? 0) > 0 ? goal.target : nil
+            let progress: Double
+            if let target {
+                progress = min(score, Double(target)) / Double(target)
+            } else {
+                progress = relatedCount == 0 ? 0 : score / Double(relatedCount)
+            }
             return GoalProgress(
                 goal: goal,
                 relatedTasks: relatedTasks,
@@ -4824,7 +4837,8 @@ private enum GoalSelectors {
                 slipped: slipped,
                 relatedCount: relatedCount,
                 completedCount: completedCount,
-                progress: relatedCount == 0 ? 0 : score / Double(relatedCount)
+                target: target,
+                progress: progress
             )
         }
     }
@@ -5029,6 +5043,7 @@ private struct GoalManagementSheet: View {
             goal.title = draft.title
             goal.note = draft.note
             goal.locked = draft.locked
+            goal.target = draft.parsedTarget
             onSaveGoal(goal)
         } else {
             onAddGoal(
@@ -5037,7 +5052,8 @@ private struct GoalManagementSheet: View {
                     periodKey: draft.periodKey,
                     title: draft.title,
                     note: draft.note ?? "",
-                    locked: draft.locked
+                    locked: draft.locked,
+                    target: draft.parsedTarget
                 )
             )
         }
@@ -5151,7 +5167,26 @@ private struct GoalCard: View {
 
                 Spacer(minLength: 16)
 
-                if progress.relatedCount == 0 {
+                if let target = progress.target {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text("목표 \(min(progress.completedCount, target))/\(target)")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(JDTheme.primaryText)
+                            .monospacedDigit()
+                        if !progress.relatedHabits.isEmpty {
+                            Text("습관 \(progress.relatedHabits.count)")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(JDTheme.tertiaryText)
+                                .monospacedDigit()
+                        }
+                        if !progress.slipped.isEmpty {
+                            Text("\(progress.slipped.count)개 밀림")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(JDTheme.external)
+                                .monospacedDigit()
+                        }
+                    }
+                } else if progress.relatedCount == 0 {
                     Text("관련 항목 없음")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(JDTheme.tertiaryText)
@@ -5182,7 +5217,7 @@ private struct GoalCard: View {
             .frame(minHeight: 92, alignment: .topLeading)
 
             VStack(alignment: .trailing, spacing: 0) {
-                if progress.relatedCount == 0 {
+                if progress.relatedCount == 0 && progress.target == nil {
                     Circle()
                         .strokeBorder(JDTheme.divider, lineWidth: 5)
                         .frame(width: 52, height: 52)
@@ -5271,6 +5306,7 @@ private struct GoalEditorDraft: Identifiable {
     var title: String
     var note: String?
     var locked: Bool
+    var targetText: String
 
     init(draft: GoalDraft) {
         periodType = draft.periodType
@@ -5278,6 +5314,7 @@ private struct GoalEditorDraft: Identifiable {
         title = draft.title
         note = draft.note
         locked = draft.locked
+        targetText = draft.target.map(String.init) ?? ""
     }
 
     init(goal: Goal) {
@@ -5287,6 +5324,13 @@ private struct GoalEditorDraft: Identifiable {
         title = goal.title
         note = goal.note
         locked = goal.locked
+        targetText = goal.target.map(String.init) ?? ""
+    }
+
+    /// Parsed positive target, or nil when blank/invalid.
+    var parsedTarget: Int? {
+        guard let value = Int(targetText.trimmingCharacters(in: .whitespaces)), value > 0 else { return nil }
+        return value
     }
 }
 
@@ -5347,6 +5391,31 @@ private struct GoalEditorDialog: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("목표 수치 (선택)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(JDTheme.primaryText)
+                    Text("책 3권처럼 셀 수 있는 목표라면 숫자를 적어요.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                }
+                Spacer(minLength: 8)
+                TextField("—", text: targetBinding)
+                    .font(.system(size: 14, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                    .keyboardType(.numberPad)
+                    .frame(width: 56, height: 34)
+                    .background(JDTheme.surface)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(JDTheme.divider, lineWidth: 0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 48)
+            .background(JDTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
             HStack(spacing: 8) {
                 Spacer()
                 if draft.goal != nil {
@@ -5390,6 +5459,13 @@ private struct GoalEditorDialog: View {
         Binding(
             get: { draft.note ?? "" },
             set: { draft.note = $0 }
+        )
+    }
+
+    private var targetBinding: Binding<String> {
+        Binding(
+            get: { draft.targetText },
+            set: { draft.targetText = $0.filter(\.isNumber) }
         )
     }
 }

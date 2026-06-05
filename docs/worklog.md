@@ -4781,3 +4781,38 @@ Follow-up to the A1 matcher commit, driven by a real-usage test (goals
 - Next: A2 (optional numeric `goals.target`, needs a migration + `db push`), then
   A3 (report blur gating + real-data narrative + reflection + prompt window 1-7 /
   yearly priority). E3 embeddings tracked as a follow-up.
+
+## 2026-06-06 A2: optional numeric goal target
+
+### Claude Code
+
+Adds the optional numeric `target` from the 2026-06-03 plan. The progress
+numerator stays auto-derived (matched completed score); `target` only
+replaces the denominator, so it defines the goal (like the title) rather
+than the progress value and is not a manipulation lever.
+
+- **Migration** `supabase/migrations/20260606000000_goal_target.sql`:
+  `alter table public.goals add column target integer` + check
+  `target is null or target > 0`. NOT yet pushed — user runs `supabase db
+  push`. `database.types.ts` hand-edited to add the column (local stack
+  was down; regenerate with `supabase gen types` after push if desired).
+- **Web**: `Goal.target?: number|null` threaded through `domain.ts`,
+  `supabase-mapping.ts` (read/write), `GoalDraft` + editor `목표 수치`
+  numeric input + save parsing, and `goalProgressForPeriod`. With a target,
+  `progress = min(score, target)/target` and the card leads with
+  `목표 {min(done,target)}/{target}` (donut always shown, no "관련 항목 없음").
+- **iOS**: `Goal.target: Int?` threaded through `JustDoModels`,
+  `CoreDataModel` (new optional int64 attr) + `CoreDataMappers`,
+  `SupabaseGoalRow`/`SupabaseGoalMutationRow` (+ select string + encodeNil),
+  `GoalDraft`/`GoalEditorDraft` (`targetText`/`parsedTarget`) + editor
+  `목표 수치` field, `GoalSelectors.progress`, and the goal card.
+- Tests: web target denominator + 100% cap cases (130 total); iOS goal
+  Core Data round-trip now carries `target` (64 total).
+- Verification: web lint + test (130) + build; iOS swift test (64) + generic
+  xcodebuild; git diff --check clean.
+- **Action required**: `supabase db push` against hosted Supabase so cloud
+  goal writes accept the `target` column, then a device/browser smoke of
+  creating a goal with a target (e.g. 책 3권) and seeing `목표 n/3`.
+- Next: A3 (report blur gating + real-data narrative + reflection + prompt
+  window 1-7 / yearly priority). E3 embeddings still tracked as the
+  matcher follow-up.

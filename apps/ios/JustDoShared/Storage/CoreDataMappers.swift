@@ -139,6 +139,7 @@ public enum CoreDataMappers {
         object.setValue(Int64(goal.sortOrder), forKey: "sortOrder")
         object.setValue(goal.locked, forKey: "locked")
         object.setValue(goal.lockedAt, forKey: "lockedAt")
+        object.setValue(goal.target.map { Int64($0) }, forKey: "target")
     }
 
     public static func goal(from object: NSManagedObject) throws -> Goal {
@@ -155,7 +156,8 @@ public enum CoreDataMappers {
             note: object.value(forKey: "note") as? String,
             sortOrder: Int(object.value(forKey: "sortOrder") as! Int64),
             locked: object.value(forKey: "locked") as! Bool,
-            lockedAt: object.value(forKey: "lockedAt") as? String
+            lockedAt: object.value(forKey: "lockedAt") as? String,
+            target: (object.value(forKey: "target") as? Int64).map(Int.init)
         )
     }
 

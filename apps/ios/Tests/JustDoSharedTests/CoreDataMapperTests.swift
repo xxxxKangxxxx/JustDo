@@ -94,7 +94,8 @@ final class CoreDataMapperTests: XCTestCase {
             note: "자료 정리",
             sortOrder: 1,
             locked: true,
-            lockedAt: "2026-04-01T00:00:00Z"
+            lockedAt: "2026-04-01T00:00:00Z",
+            target: 3
         )
 
         let object = try CoreDataMappers.insertGoal(goal, in: context)

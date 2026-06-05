@@ -145,6 +145,30 @@ describe("goalProgressForPeriod", () => {
     expect(progress.progress).toBe(0.5);
   });
 
+  it("uses the numeric target as the denominator when set", () => {
+    const goals = [makeGoal({ id: "g1", title: "책", target: 3 })];
+    const tasks = [
+      makeTask({ id: "b1", title: "책 한 권", isCompleted: true }),
+      makeTask({ id: "b2", title: "독서 완료", isCompleted: true }),
+    ];
+    const [progress] = goalProgressForPeriod(goals, tasks, [], "monthly", "2026-04", END);
+    // 2 completed matched items toward a target of 3 → 2/3.
+    expect(progress.target).toBe(3);
+    expect(progress.completedCount).toBe(2);
+    expect(progress.progress).toBeCloseTo(2 / 3);
+  });
+
+  it("caps target progress at 100% when overachieved", () => {
+    const goals = [makeGoal({ id: "g1", title: "책", target: 2 })];
+    const tasks = [
+      makeTask({ id: "b1", title: "책 1", isCompleted: true }),
+      makeTask({ id: "b2", title: "책 2", isCompleted: true }),
+      makeTask({ id: "b3", title: "책 3", isCompleted: true }),
+    ];
+    const [progress] = goalProgressForPeriod(goals, tasks, [], "monthly", "2026-04", END);
+    expect(progress.progress).toBe(1);
+  });
+
   it("blends task and habit scores into one progress value", () => {
     const goals = [makeGoal({ id: "g1", title: "운동" })];
     const tasks = [makeTask({ id: "t1", title: "운동 가기", isCompleted: true })];

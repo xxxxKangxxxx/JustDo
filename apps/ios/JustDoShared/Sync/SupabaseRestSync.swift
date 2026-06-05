@@ -416,7 +416,7 @@ public final class SupabaseSnapshotClient {
     private func fetchGoals() async throws -> [SupabaseGoalRow] {
         try await fetch(
             "goals",
-            select: "id,period_type,period_key,title,note,sort_order,locked,locked_at",
+            select: "id,period_type,period_key,title,note,sort_order,locked,locked_at,target",
             filteredByUser: true
         )
     }
@@ -739,6 +739,7 @@ struct SupabaseGoalRow: Decodable, Equatable {
     var sortOrder: Int
     var locked: Bool
     var lockedAt: String?
+    var target: Int?
 
     var domain: Goal {
         Goal(
@@ -749,7 +750,8 @@ struct SupabaseGoalRow: Decodable, Equatable {
             note: note,
             sortOrder: sortOrder,
             locked: locked,
-            lockedAt: lockedAt
+            lockedAt: lockedAt,
+            target: target
         )
     }
 
@@ -762,6 +764,7 @@ struct SupabaseGoalRow: Decodable, Equatable {
         case sortOrder = "sort_order"
         case locked
         case lockedAt = "locked_at"
+        case target
     }
 }
 
@@ -775,6 +778,7 @@ private struct SupabaseGoalMutationRow: Encodable {
     var sortOrder: Int
     var locked: Bool
     var lockedAt: String?
+    var target: Int?
 
     init(goal: Goal, userID: UUID) {
         self.id = goal.id
@@ -786,6 +790,7 @@ private struct SupabaseGoalMutationRow: Encodable {
         self.sortOrder = goal.sortOrder
         self.locked = goal.locked
         self.lockedAt = goal.locked ? goal.lockedAt : nil
+        self.target = goal.target
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -798,6 +803,7 @@ private struct SupabaseGoalMutationRow: Encodable {
         case sortOrder = "sort_order"
         case locked
         case lockedAt = "locked_at"
+        case target
     }
 
     func encode(to encoder: Encoder) throws {
@@ -818,6 +824,11 @@ private struct SupabaseGoalMutationRow: Encodable {
             try container.encode(lockedAt, forKey: .lockedAt)
         } else {
             try container.encodeNil(forKey: .lockedAt)
+        }
+        if let target {
+            try container.encode(target, forKey: .target)
+        } else {
+            try container.encodeNil(forKey: .target)
         }
     }
 }

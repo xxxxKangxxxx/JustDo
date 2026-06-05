@@ -100,6 +100,7 @@ export type Database = {
           period_key: string
           period_type: string
           sort_order: number
+          target: number | null
           title: string
           updated_at: string
           user_id: string
@@ -113,6 +114,7 @@ export type Database = {
           period_key: string
           period_type: string
           sort_order?: number
+          target?: number | null
           title: string
           updated_at?: string
           user_id: string
@@ -126,6 +128,7 @@ export type Database = {
           period_key?: string
           period_type?: string
           sort_order?: number
+          target?: number | null
           title?: string
           updated_at?: string
           user_id?: string

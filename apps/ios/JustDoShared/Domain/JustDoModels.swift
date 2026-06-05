@@ -138,6 +138,8 @@ public struct Goal: Identifiable, Codable, Equatable, Sendable {
     public var sortOrder: Int
     public var locked: Bool
     public var lockedAt: String?
+    /// Optional numeric target for quantitative goals (e.g. 책 3권).
+    public var target: Int?
 
     public init(
         id: UUID,
@@ -147,7 +149,8 @@ public struct Goal: Identifiable, Codable, Equatable, Sendable {
         note: String?,
         sortOrder: Int,
         locked: Bool,
-        lockedAt: String?
+        lockedAt: String?,
+        target: Int? = nil
     ) {
         self.id = id
         self.periodType = periodType
@@ -157,6 +160,7 @@ public struct Goal: Identifiable, Codable, Equatable, Sendable {
         self.sortOrder = sortOrder
         self.locked = locked
         self.lockedAt = lockedAt
+        self.target = target
     }
 }
 

@@ -2081,6 +2081,7 @@ type GoalDraft = {
   title: string;
   note: string;
   locked: boolean;
+  target: string;
 };
 
 type ReportTarget = { periodType: GoalPeriodType; periodKey: string } | null;
@@ -2180,6 +2181,7 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
       title: "",
       note: "",
       locked: false,
+      target: "",
     });
   };
 
@@ -2195,6 +2197,7 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
       title: goal.title,
       note: goal.note ?? "",
       locked: goal.locked,
+      target: goal.target != null ? String(goal.target) : "",
     });
   };
 
@@ -2208,6 +2211,7 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
       title: lockedGoal.title,
       note: lockedGoal.note ?? "",
       locked: false,
+      target: lockedGoal.target != null ? String(lockedGoal.target) : "",
     });
     setLockedGoal(null);
   };
@@ -2273,11 +2277,14 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
           onSave={() => {
             const title = editing.title.trim();
             if (!title) return;
+            const parsedTarget = Number.parseInt(editing.target, 10);
+            const target = Number.isFinite(parsedTarget) && parsedTarget > 0 ? parsedTarget : null;
             if (editing.id) {
               s.updateGoal(editing.id, {
                 title,
                 note: editing.note,
                 locked: editing.locked,
+                target,
               });
             } else {
               const current = goalsForPeriod(s.state.goals, editing.periodType, editing.periodKey);
@@ -2290,6 +2297,7 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
                 sortOrder: current.length,
                 locked: editing.locked,
                 lockedAt: editing.locked ? new Date().toISOString() : null,
+                target,
               });
             }
             setEditing(null);
@@ -2592,7 +2600,7 @@ function GoalPeriodSection({
                 <div className="truncate text-[16px] font-bold tracking-[-0.4px]">{item.goal.title}</div>
                 {item.goal.note ? <div className="mt-1 line-clamp-2 text-[11.5px] leading-5" style={{ color: t.textSecondary }}>{item.goal.note}</div> : null}
               </div>
-              {item.relatedCount === 0 ? (
+              {item.relatedCount === 0 && item.target === null ? (
                 <div
                   className="flex h-[46px] w-[46px] items-center justify-center rounded-full border text-[15px]"
                   style={{ borderColor: t.divider, color: t.textTertiary }}
@@ -2604,7 +2612,13 @@ function GoalPeriodSection({
               )}
             </div>
             <div className="mt-3 flex items-baseline gap-3 text-[11px]" style={{ color: t.textTertiary }}>
-              {item.relatedCount === 0 ? (
+              {item.target !== null ? (
+                <>
+                  <span>목표 <b className="text-[13px]" style={{ color: t.text }}>{Math.min(item.completedCount, item.target)}/{item.target}</b></span>
+                  {item.relatedHabits.length ? <span>습관 {item.relatedHabits.length}</span> : null}
+                  {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
+                </>
+              ) : item.relatedCount === 0 ? (
                 <span>관련 항목 없음</span>
               ) : (
                 <>
@@ -2693,6 +2707,20 @@ function GoalEditModal({
             className="min-h-[88px] resize-none rounded-lg border bg-transparent px-3 py-2 text-[13px] outline-none"
             style={{ borderColor: t.divider, color: t.text }}
           />
+          <div className="flex items-center gap-3 rounded-lg border px-3 py-2" style={{ borderColor: t.divider, background: t.bg2 }}>
+            <div className="flex-1">
+              <div className="text-[13px] font-semibold">목표 수치 <span style={{ color: t.textTertiary }}>(선택)</span></div>
+              <div className="text-[11px]" style={{ color: t.textTertiary }}>책 3권처럼 셀 수 있는 목표라면 숫자를 적어요.</div>
+            </div>
+            <input
+              value={draft.target}
+              onChange={(event) => onChange({ ...draft, target: event.target.value.replace(/[^0-9]/g, "") })}
+              inputMode="numeric"
+              placeholder="—"
+              className="w-16 rounded-md border bg-transparent px-2 py-1.5 text-center text-[14px] font-semibold outline-none"
+              style={{ borderColor: t.divider, color: t.text }}
+            />
+          </div>
           <label className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2" style={{ borderColor: t.divider, background: t.bg2 }}>
             <Switch mode={mode} on={draft.locked} onChange={(locked) => onChange({ ...draft, locked })} />
             <div>
