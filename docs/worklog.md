@@ -4713,3 +4713,38 @@ This document records coordination notes for work done with Codex and Claude Cod
   Onboarding Policy". This closes the goal discussion series; all four topics
   (progress accuracy, target field, monthly↔yearly relationship, report content,
   prompt policy) are now recorded, implementation deferred.
+
+## 2026-06-05 Goal progress: fallback removal (B) + E1 matcher (A1)
+
+### Claude Code
+
+- **B — drop the all-period-tasks fallback** (commit `8e266e4`). Web
+  `goalProgressForPeriod` and iOS `GoalSelectors.progress` fell back to ALL period
+  tasks when no task matched a goal, so two unrelated goals with no matches both
+  reported the same global completion rate. Removed the fallback; a goal with zero
+  matched items now shows "관련 항목 없음" with a `—` ring instead of a misleading
+  0%/global rate. Web/iOS goal cards render the empty state; added web selector
+  tests for the no-match case.
+- **A1 — E1 token-overlap matcher + habit log-completion scoring**. Replaced the
+  raw-substring matcher (false positives like 운동 ↔ 부동산) with normalized token
+  overlap: lowercase, strip a small trailing-particle list (only when the stem
+  stays ≥2 chars so 추가 keeps its 가), collapse a minimal synonym seed
+  (헬스→운동, 독서→책, …), drop filler stopwords (매일/오늘/…), then match on any
+  shared token.
+  - The pure matcher moved into the testable shared package as
+    `apps/ios/JustDoShared/Domain/GoalTextMatcher.swift`, ported byte-for-byte from
+    web `selectors.ts` so progress is identical cross-device.
+    `GoalTextMatcherTests` covers synonyms, particle inflection, substring
+    false-positive rejection, stopwords, and short-noun preservation.
+  - `goalProgressForPeriod` now also matches **habits** and threads `habits` +
+    `today`. Decision (this session): a matched habit contributes its **period
+    log-completion ratio** (logged active days / active days up to today), tasks
+    score 0/1; progress is the blended mean. Synonym map = minimal seed.
+  - `GoalProgress` reshaped to `relatedTasks` / `relatedHabits` / `completedTasks`
+    / `slipped` / `relatedCount` / `completedCount` / `progress`; card and report
+    surfaces show `completedCount/relatedCount 항목` with % carrying the precision.
+- Verification: web `lint` + `test` (127) + `build`; iOS `swift test` (61) +
+  generic `xcodebuild`; `git diff --check` clean.
+- Next: A2 (optional numeric `goals.target` field, needs a migration + `db push`),
+  then A3 (report blur gating + real-data narrative + reflection + prompt window
+  1-7 / yearly priority). See `docs/next_steps.md` Goal Progress Accuracy.

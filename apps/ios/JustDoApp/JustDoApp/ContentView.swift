@@ -4746,10 +4746,13 @@ private struct GoalReportPresentation: Identifiable, Equatable {
 
 private struct GoalProgress: Identifiable {
     var goal: Goal
-    var related: [Task]
-    var completed: [Task]
-    var progress: Double
+    var relatedTasks: [Task]
+    var relatedHabits: [Habit]
+    var completedTasks: [Task]
     var slipped: [Task]
+    var relatedCount: Int
+    var completedCount: Int
+    var progress: Double
 
     var id: UUID { goal.id }
 }
@@ -4792,24 +4795,62 @@ private enum GoalSelectors {
         )
     }
 
-    static func progress(goals: [Goal], tasks: [Task], type: GoalPeriodType, periodKey: String) -> [GoalProgress] {
+    static func progress(goals: [Goal], tasks: [Task], habits: [Habit], type: GoalPeriodType, periodKey: String, today: String) -> [GoalProgress] {
         let range = range(type: type, periodKey: periodKey)
         let periodTasks = tasks.filter { $0.endDate >= range.start && $0.startDate <= range.end }
         return goalsForPeriod(goals, type: type, periodKey: periodKey).map { goal in
-            // A goal with no matching tasks shows "관련 항목 없음" — never fall back
+            let goalTokens = GoalTextMatcher.tokenize(goal.title)
+            // A goal with no matching items shows "관련 항목 없음" — never fall back
             // to all period tasks, which would surface the same global completion
             // rate for every unrelated goal.
-            let related = periodTasks.filter { taskMatches($0, goal: goal) }
-            let completed = related.filter(\.isCompleted)
-            let slipped = related.filter { !$0.isCompleted && $0.endDate < range.end }
+            let relatedTasks = periodTasks.filter {
+                GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize("\($0.title) \($0.tags.joined(separator: " "))"))
+            }
+            let relatedHabits = habits.filter {
+                GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize($0.title))
+            }
+            let completedTasks = relatedTasks.filter(\.isCompleted)
+            let slipped = relatedTasks.filter { !$0.isCompleted && $0.endDate < range.end }
+            let habitScores = relatedHabits.map { habitPeriodScore($0, start: range.start, end: range.end, today: today) }
+            let relatedCount = relatedTasks.count + relatedHabits.count
+            // tasks score 0/1; habits score their fractional period ratio.
+            let score = Double(completedTasks.count) + habitScores.reduce(0, +)
+            let completedCount = completedTasks.count + habitScores.filter { $0 >= 1 }.count
             return GoalProgress(
                 goal: goal,
-                related: related,
-                completed: completed,
-                progress: related.isEmpty ? 0 : Double(completed.count) / Double(related.count),
-                slipped: slipped
+                relatedTasks: relatedTasks,
+                relatedHabits: relatedHabits,
+                completedTasks: completedTasks,
+                slipped: slipped,
+                relatedCount: relatedCount,
+                completedCount: completedCount,
+                progress: relatedCount == 0 ? 0 : score / Double(relatedCount)
             )
         }
+    }
+
+    /// A matched habit contributes its period log-completion ratio (logged active
+    /// days / active days up to today), mirroring web `habitPeriodScore`.
+    private static func habitPeriodScore(_ habit: Habit, start: String, end: String, today: String) -> Double {
+        let last = today < end ? today : end
+        if last < start { return 0 }
+        var active = 0
+        var done = 0
+        var iso = start
+        while iso <= last {
+            if habitActiveOn(habit, iso: iso) {
+                active += 1
+                if habit.log[iso] == 1 { done += 1 }
+            }
+            iso = JDDate.addDays(iso, 1)
+        }
+        return active == 0 ? 0 : Double(done) / Double(active)
+    }
+
+    private static func habitActiveOn(_ habit: Habit, iso: String) -> Bool {
+        guard habit.recurType == .weekly else { return true }
+        guard let days = habit.recurDays, !days.isEmpty else { return false }
+        return days.contains(JDDate.weekday(iso))
     }
 
     static func heatmap(tasks: [Task], habits: [Habit], type: GoalPeriodType, periodKey: String) -> [Int] {
@@ -4830,13 +4871,6 @@ private enum GoalSelectors {
         }
     }
 
-    private static func taskMatches(_ task: Task, goal: Goal) -> Bool {
-        let text = "\(task.title) \(task.tags.joined(separator: " "))".lowercased()
-        return goal.title
-            .split(separator: " ")
-            .filter { $0.count >= 2 }
-            .contains { text.contains($0.lowercased()) }
-    }
 }
 
 private struct GoalManagementSheet: View {
@@ -4889,7 +4923,7 @@ private struct GoalManagementSheet: View {
                     GoalPeriodCards(
                         title: "연간 · \(yearlyKey)",
                         tint: JDTheme.me,
-                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, type: .yearly, periodKey: yearlyKey),
+                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, habits: habits, type: .yearly, periodKey: yearlyKey, today: JDDate.todayISO),
                         onAdd: { startAdd(.yearly, yearlyKey) },
                         onEdit: startEdit(_:),
                         onToggleLock: toggleGoalLock(_:)
@@ -4903,7 +4937,7 @@ private struct GoalManagementSheet: View {
                     GoalPeriodCards(
                         title: "월간 · \(GoalSelectors.periodLabel(.monthly, periodKey: monthlyKey))",
                         tint: JDTheme.habit,
-                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, type: .monthly, periodKey: monthlyKey),
+                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, habits: habits, type: .monthly, periodKey: monthlyKey, today: JDDate.todayISO),
                         onAdd: { startAdd(.monthly, monthlyKey) },
                         onEdit: startEdit(_:),
                         onToggleLock: toggleGoalLock(_:)
@@ -5117,7 +5151,7 @@ private struct GoalCard: View {
 
                 Spacer(minLength: 16)
 
-                if progress.related.isEmpty {
+                if progress.relatedCount == 0 {
                     Text("관련 항목 없음")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(JDTheme.tertiaryText)
@@ -5127,7 +5161,7 @@ private struct GoalCard: View {
                             .font(.system(size: 14.5, weight: .bold))
                             .foregroundStyle(JDTheme.primaryText)
                             .monospacedDigit()
-                        Text("\(progress.completed.count)/\(progress.related.count)")
+                        Text("\(progress.completedCount)/\(progress.relatedCount)")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(JDTheme.tertiaryText)
                             .monospacedDigit()
@@ -5144,7 +5178,7 @@ private struct GoalCard: View {
             .frame(minHeight: 92, alignment: .topLeading)
 
             VStack(alignment: .trailing, spacing: 0) {
-                if progress.related.isEmpty {
+                if progress.relatedCount == 0 {
                     Circle()
                         .strokeBorder(JDTheme.divider, lineWidth: 5)
                         .frame(width: 52, height: 52)
@@ -5370,8 +5404,10 @@ private struct GoalReportFullScreen: View {
         GoalSelectors.progress(
             goals: goals,
             tasks: tasks,
+            habits: habits,
             type: presentation.target.periodType,
-            periodKey: presentation.target.periodKey
+            periodKey: presentation.target.periodKey,
+            today: JDDate.todayISO
         )
     }
     private var average: Double {
@@ -5425,7 +5461,7 @@ private struct GoalReportFullScreen: View {
                     GoalMetricGrid(metrics: [
                         ("목표", "\(progress.count)", ""),
                         ("평균 진행", "\(Int((average * 100).rounded()))", "%"),
-                        ("완료 task", "\(progress.flatMap(\.completed).count)", ""),
+                        ("완료 task", "\(progress.flatMap(\.completedTasks).count)", ""),
                         ("밀림", "\(progress.flatMap(\.slipped).count)", "")
                     ])
                 }

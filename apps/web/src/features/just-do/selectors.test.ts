@@ -59,6 +59,17 @@ describe("goalProgressForPeriod", () => {
     lockedAt: null,
     ...over,
   });
+  const makeHabit = (over: Partial<Habit> = {}): Habit => ({
+    id: "h",
+    title: "운동",
+    emoji: "🏃",
+    category: "habit",
+    startedAt: "2026-04-01",
+    recurType: "daily",
+    log: {},
+    ...over,
+  });
+  const END = "2026-05-01"; // a "today" past the period so habit days are not capped
 
   it("derives progress only from tasks matching the goal title", () => {
     const goals = [makeGoal({ id: "g1", title: "운동" })];
@@ -67,10 +78,23 @@ describe("goalProgressForPeriod", () => {
       makeTask({ id: "m2", title: "저녁 운동", isCompleted: false }),
       makeTask({ id: "u1", title: "장보기", isCompleted: true }),
     ];
-    const [progress] = goalProgressForPeriod(goals, tasks, "monthly", "2026-04");
-    expect(progress.related.map((task) => task.id)).toEqual(["m1", "m2"]);
-    expect(progress.completed.map((task) => task.id)).toEqual(["m1"]);
+    const [progress] = goalProgressForPeriod(goals, tasks, [], "monthly", "2026-04", END);
+    expect(progress.relatedTasks.map((task) => task.id)).toEqual(["m1", "m2"]);
+    expect(progress.completedTasks.map((task) => task.id)).toEqual(["m1"]);
+    expect(progress.relatedCount).toBe(2);
+    expect(progress.completedCount).toBe(1);
     expect(progress.progress).toBe(0.5);
+  });
+
+  it("matches inflected tokens and synonyms but not substring false positives", () => {
+    const goals = [makeGoal({ id: "g1", title: "운동" })];
+    const tasks = [
+      makeTask({ id: "particle", title: "운동을 했다", isCompleted: true }),
+      makeTask({ id: "synonym", title: "헬스 가기", isCompleted: true }),
+      makeTask({ id: "falsePositive", title: "부동산 계약", isCompleted: true }),
+    ];
+    const [progress] = goalProgressForPeriod(goals, tasks, [], "monthly", "2026-04", END);
+    expect(progress.relatedTasks.map((task) => task.id).sort()).toEqual(["particle", "synonym"]);
   });
 
   it("shows no related items instead of the global rate when nothing matches", () => {
@@ -85,12 +109,41 @@ describe("goalProgressForPeriod", () => {
       makeTask({ id: "u2", title: "청소", isCompleted: true }),
       makeTask({ id: "u3", title: "빨래", isCompleted: false }),
     ];
-    const result = goalProgressForPeriod(goals, tasks, "monthly", "2026-04");
+    const result = goalProgressForPeriod(goals, tasks, [], "monthly", "2026-04", END);
     for (const progress of result) {
-      expect(progress.related).toEqual([]);
-      expect(progress.completed).toEqual([]);
+      expect(progress.relatedCount).toBe(0);
+      expect(progress.completedCount).toBe(0);
       expect(progress.progress).toBe(0);
     }
+  });
+
+  it("scores a matched habit by its period log-completion ratio", () => {
+    const goals = [makeGoal({ id: "g1", title: "명상" })];
+    // 2 of 4 elapsed April days logged → habit contributes 0.5.
+    const habit = makeHabit({
+      id: "h1",
+      title: "매일 명상",
+      log: { "2026-04-01": 1, "2026-04-02": 1, "2026-04-03": 0, "2026-04-04": 0 },
+    });
+    const [progress] = goalProgressForPeriod(goals, [], [habit], "monthly", "2026-04", "2026-04-04");
+    expect(progress.relatedHabits.map((h) => h.id)).toEqual(["h1"]);
+    expect(progress.relatedCount).toBe(1);
+    expect(progress.completedCount).toBe(0); // ratio < 1
+    expect(progress.progress).toBe(0.5);
+  });
+
+  it("blends task and habit scores into one progress value", () => {
+    const goals = [makeGoal({ id: "g1", title: "운동" })];
+    const tasks = [makeTask({ id: "t1", title: "운동 가기", isCompleted: true })];
+    const habit = makeHabit({
+      id: "h1",
+      title: "운동",
+      log: { "2026-04-01": 1, "2026-04-02": 0 },
+    });
+    const [progress] = goalProgressForPeriod(goals, tasks, [habit], "monthly", "2026-04", "2026-04-02");
+    // task 1.0 + habit 0.5 over 2 items = 0.75.
+    expect(progress.relatedCount).toBe(2);
+    expect(progress.progress).toBe(0.75);
   });
 });
 

@@ -2237,6 +2237,7 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
               periodKey={yearlyKey}
               goals={s.state.goals}
               tasks={s.state.tasks}
+              habits={s.state.habits}
               onAdd={() => startAdd("yearly", yearlyKey)}
               onEdit={startEdit}
             />
@@ -2252,6 +2253,7 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
               periodKey={monthlyKey}
               goals={s.state.goals}
               tasks={s.state.tasks}
+              habits={s.state.habits}
               onAdd={() => startAdd("monthly", monthlyKey)}
               onEdit={startEdit}
             />
@@ -2544,6 +2546,7 @@ function GoalPeriodSection({
   periodKey,
   goals,
   tasks,
+  habits,
   onAdd,
   onEdit,
 }: {
@@ -2553,11 +2556,12 @@ function GoalPeriodSection({
   periodKey: string;
   goals: Goal[];
   tasks: Task[];
+  habits: Habit[];
   onAdd: () => void;
   onEdit: (goal: Goal) => void;
 }) {
   const t = webTokens(mode);
-  const progress = goalProgressForPeriod(goals, tasks, periodType, periodKey);
+  const progress = goalProgressForPeriod(goals, tasks, habits, periodType, periodKey, todayISO());
   const color = periodType === "yearly" ? t.me : t.habit;
   return (
     <section className="rounded-xl border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
@@ -2588,7 +2592,7 @@ function GoalPeriodSection({
                 <div className="truncate text-[16px] font-bold tracking-[-0.4px]">{item.goal.title}</div>
                 {item.goal.note ? <div className="mt-1 line-clamp-2 text-[11.5px] leading-5" style={{ color: t.textSecondary }}>{item.goal.note}</div> : null}
               </div>
-              {item.related.length === 0 ? (
+              {item.relatedCount === 0 ? (
                 <div
                   className="flex h-[46px] w-[46px] items-center justify-center rounded-full border text-[15px]"
                   style={{ borderColor: t.divider, color: t.textTertiary }}
@@ -2600,12 +2604,12 @@ function GoalPeriodSection({
               )}
             </div>
             <div className="mt-3 flex items-baseline gap-3 text-[11px]" style={{ color: t.textTertiary }}>
-              {item.related.length === 0 ? (
+              {item.relatedCount === 0 ? (
                 <span>관련 항목 없음</span>
               ) : (
                 <>
                   <span><b className="text-[13px]" style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b> 진행</span>
-                  <span>{item.completed.length}/{item.related.length} task</span>
+                  <span>{item.completedCount}/{item.relatedCount} 항목</span>
                   {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
                 </>
               )}
@@ -2731,10 +2735,10 @@ function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: N
   const s = useJustDo();
   const t = webTokens(mode);
   const [step, setStep] = useState(0);
-  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, target.periodType, target.periodKey);
+  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, s.state.habits, target.periodType, target.periodKey, todayISO());
   const heatmap = periodActivityHeatmap(s.state.tasks, s.state.habits, target.periodType, target.periodKey);
-  const totalRelated = progress.reduce((sum, item) => sum + item.related.length, 0);
-  const totalCompleted = progress.reduce((sum, item) => sum + item.completed.length, 0);
+  const totalRelated = progress.reduce((sum, item) => sum + item.relatedCount, 0);
+  const totalCompleted = progress.reduce((sum, item) => sum + item.completedCount, 0);
   const pct = totalRelated ? totalCompleted / totalRelated : 0;
   const isYear = target.periodType === "yearly";
   const labels = isYear
@@ -2785,7 +2789,7 @@ function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: N
                     <span className="text-[13.5px] font-semibold">{item.goal.title}</span>
                     {item.goal.locked ? <span className="text-[10px]" style={{ color: t.textTertiary }}>고정</span> : null}
                     <div className="flex-1" />
-                    <span className="text-[11.5px]" style={{ color: t.textTertiary }}>{item.completed.length}/{item.related.length} · <b style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b></span>
+                    <span className="text-[11.5px]" style={{ color: t.textTertiary }}>{item.relatedCount === 0 ? "관련 항목 없음 · " : `${item.completedCount}/${item.relatedCount} · `}<b style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b></span>
                   </div>
                   <ProgressBar pct={item.progress} color={isYear ? t.me.solid : t.habit.solid} bg={t.surfaceAlt} />
                 </div>
@@ -2819,8 +2823,8 @@ function GoalReportPreviewModal({ mode, target, onClose, onUpgrade }: { mode: Th
   const s = useJustDo();
   const t = webTokens(mode);
   const goals = goalsForPeriod(s.state.goals, target.periodType, target.periodKey);
-  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, target.periodType, target.periodKey);
-  const active = progress.filter((item) => item.related.length > 0).length;
+  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, s.state.habits, target.periodType, target.periodKey, todayISO());
+  const active = progress.filter((item) => item.relatedCount > 0).length;
   const complete = progress.filter((item) => item.progress >= 1).length;
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
