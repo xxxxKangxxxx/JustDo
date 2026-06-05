@@ -385,6 +385,30 @@ Recommended order for the next coding session:
   different models, so per-device similarity scores diverge and break
   cross-platform progress consistency.
 
+#### 2026-06-05 status: E1 implemented, E3 confirmed as the fast-follow
+
+- **E1 is implemented and shipping for v1.** Shared `GoalTextMatcher`
+  (`apps/ios/JustDoShared/Domain/GoalTextMatcher.swift`) is ported byte-for-byte to
+  web `selectors.ts`; matching is normalized token overlap with a particle
+  stripper, a domain synonym map (exercise/책/공부/영어 clusters), filler/counter
+  stopwords, and quantity-token dropping. Matching uses the goal **title + note**,
+  and progress blends matched tasks (0/1) with matched habits (period
+  log-completion ratio).
+- **A real-usage test exposed the E1 ceiling**: a hand-maintained synonym map
+  cannot cover arbitrary user vocabulary (e.g. 클라이밍, 포트폴리오, 토익). The
+  user accepted shipping E1 for v1 with **E3 as the next track** rather than
+  blocking launch.
+- **E3 plan (fast-follow)**: add `embedding vector` columns to goals/tasks/habits
+  (pgvector), compute embeddings on write via a server route/edge function calling
+  an **embedding API** (OpenAI `text-embedding-3` / Voyage / Cohere — note Claude
+  has no embeddings endpoint; a new provider key is required), and swap the
+  relevance signal in `goalProgressForPeriod` / `GoalSelectors.progress` from
+  token overlap to cosine-similarity ≥ threshold. Keep E1 as the offline / not-yet-
+  embedded fallback (the matcher is already isolated behind one function, so the
+  swap is contained). Tradeoffs: online dependency at write time, embedding cost
+  (a few cents/month at this scale), and a privacy disclosure (task text leaves the
+  device) for the Pro report feature.
+
 ### A — immediate fix (ships with E1)
 
 - Remove the "fallback to all period tasks when no match" in both

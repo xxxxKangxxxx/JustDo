@@ -86,14 +86,43 @@ export const rangeForGoalPeriod = (type: GoalPeriodType, periodKey: string) => {
 // matches across devices. Replaces the old raw-substring matcher (which scored
 // false positives like 운동 ↔ 부동산) with normalized token overlap.
 
-// Variant tokens collapsed to one canonical token. Keep this seed minimal.
+// Variant tokens collapsed to one canonical token. Domain clusters (esp.
+// exercise) bridge same-meaning-different-word cases like 헬스장 ↔ 운동 that pure
+// token overlap can never catch. Still heuristic: words not listed here stay
+// unmatched (the E1 ceiling; true semantic matching is the future E3 track).
 const GOAL_SYNONYMS: Record<string, string> = {
+  // 운동 cluster
   헬스: "운동",
+  헬스장: "운동",
   운동하기: "운동",
+  웨이트: "운동",
+  홈트: "운동",
+  홈트레이닝: "운동",
+  피티: "운동",
+  pt: "운동",
+  크로스핏: "운동",
+  스트레칭: "운동",
+  산책: "운동",
+  걷기: "운동",
+  조깅: "운동",
+  러닝: "운동",
+  런닝: "운동",
+  달리기: "운동",
+  등산: "운동",
+  요가: "운동",
+  필라테스: "운동",
+  수영: "운동",
+  // 책 cluster
   독서: "책",
   책읽기: "책",
-  러닝: "달리기",
+  도서: "책",
+  // 공부 cluster
   공부하기: "공부",
+  학습: "공부",
+  스터디: "공부",
+  // 영어 cluster
+  영어공부: "영어",
+  영단어: "영어",
 };
 
 // Trailing Korean particles, longest first. Stripped once per token, and only
@@ -104,11 +133,19 @@ const GOAL_PARTICLES = [
   "을", "를", "은", "는", "이", "가", "에", "의", "로", "도", "만", "과", "와",
 ];
 
-// Common filler tokens dropped entirely.
-const GOAL_STOPWORDS = new Set(["매일", "매주", "주말", "꾸준히", "열심히", "그리고", "하루", "오늘", "및"]);
+// Common filler tokens dropped entirely. The counter/unit words (주/회/번/…) keep
+// noisy goal-note phrases like "주 3회 이상" from creating false matches now that
+// the goal note is part of the matched text.
+const GOAL_STOPWORDS = new Set([
+  "매일", "매주", "주말", "꾸준히", "열심히", "그리고", "하루", "오늘", "및",
+  "주", "회", "번", "개", "이상", "이하", "정도", "매월", "매년",
+]);
 
 const normalizeGoalToken = (raw: string): string | null => {
   const lowered = raw.toLowerCase();
+  // Drop quantity tokens like 3회 / 30분 / 5개 so a goal note's "주 3회" never
+  // matches an unrelated task's "회의 3회".
+  if (/^[0-9]/.test(lowered)) return null;
   const synonym = GOAL_SYNONYMS[lowered];
   let token = synonym ?? lowered;
   if (!synonym) {
@@ -140,7 +177,15 @@ const tokensOverlap = (a: Set<string>, b: Set<string>): boolean => {
   return false;
 };
 
-const goalTokenSet = (goal: Goal) => tokenize(goal.title);
+// Match against the goal title plus its note, so a note like "주 3회 운동 루틴"
+// lets a 헬스장 task count even when the title (e.g. 체력 키우기) shares no token.
+const goalTokenSet = (goal: Goal) => {
+  const tokens = tokenize(goal.title);
+  if (goal.note) {
+    for (const token of tokenize(goal.note)) tokens.add(token);
+  }
+  return tokens;
+};
 const taskTokenSet = (task: Task) => tokenize(`${task.title} ${task.tags.join(" ")}`);
 const habitTokenSet = (habit: Habit) => tokenize(habit.title);
 

@@ -2600,7 +2600,7 @@ function GoalPeriodSection({
                   —
                 </div>
               ) : (
-                <ProgressRing pct={item.progress} size={46} color={color.solid} bg={t.surfaceAlt} />
+                <ProgressRing pct={item.progress} size={46} color={color.solid} bg={t.surfaceAlt} label={`${Math.round(item.progress * 100)}%`} labelColor={t.text} />
               )}
             </div>
             <div className="mt-3 flex items-baseline gap-3 text-[11px]" style={{ color: t.textTertiary }}>
@@ -2608,8 +2608,10 @@ function GoalPeriodSection({
                 <span>관련 항목 없음</span>
               ) : (
                 <>
-                  <span><b className="text-[13px]" style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b> 진행</span>
-                  <span>{item.completedCount}/{item.relatedCount} 항목</span>
+                  {item.relatedTasks.length ? (
+                    <span><b className="text-[13px]" style={{ color: t.text }}>{item.completedTasks.length}/{item.relatedTasks.length}</b> task</span>
+                  ) : null}
+                  {item.relatedHabits.length ? <span>습관 {item.relatedHabits.length}</span> : null}
                   {item.slipped.length ? <span style={{ color: t.ext.ink }}>{item.slipped.length}개 밀림</span> : null}
                 </>
               )}
@@ -2625,15 +2627,20 @@ function GoalPeriodSection({
   );
 }
 
-function ProgressRing({ pct, size, color, bg }: { pct: number; size: number; color: string; bg: string }) {
+function ProgressRing({ pct, size, color, bg, label, labelColor }: { pct: number; size: number; color: string; bg: string; label?: string; labelColor?: string }) {
   const stroke = Math.max(3, Math.round(size * 0.09));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle cx={size / 2} cy={size / 2} r={r} stroke={bg} strokeWidth={stroke} fill="none" />
-      <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - c * pct} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-    </svg>
+    <span className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={bg} strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - c * pct} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      </svg>
+      {label ? (
+        <span className="absolute font-bold tabular-nums" style={{ color: labelColor ?? color, fontSize: Math.max(10, Math.round(size * 0.26)) }}>{label}</span>
+      ) : null}
+    </span>
   );
 }
 

@@ -24,6 +24,26 @@ final class GoalTextMatcherTests: XCTestCase {
         XCTAssertTrue(matches("책", "독서 30분"))
     }
 
+    func testMatchesExerciseClusterCompoundWords() {
+        // The reported real-world case: 헬스장 / 산책 should count toward 운동하기.
+        XCTAssertTrue(matches("운동하기", "헬스장 다녀옴"))
+        XCTAssertTrue(matches("운동하기", "산책 30분"))
+        XCTAssertTrue(matches("운동하기", "요가 클래스"))
+    }
+
+    func testMatchesViaGoalNote() {
+        // Title shares no token with 헬스장; the note bridges them.
+        let goalTokens = GoalTextMatcher.goalTokens(title: "체력 키우기", note: "주 3회 운동 루틴 실행")
+        XCTAssertTrue(GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize("헬스장 다녀옴")))
+        // "주 3회" in the note must not match "회의 3회" (counter words / quantities dropped).
+        XCTAssertFalse(GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize("주간 회의 3회")))
+    }
+
+    func testDropsQuantityTokens() {
+        XCTAssertEqual(GoalTextMatcher.tokenize("운동 30분"), ["운동"])
+        XCTAssertEqual(GoalTextMatcher.tokenize("주 3회"), [])
+    }
+
     func testRejectsSubstringFalsePositive() {
         // The old raw-substring matcher scored these as a match.
         XCTAssertFalse(matches("운동", "부동산 계약"))

@@ -4799,7 +4799,7 @@ private enum GoalSelectors {
         let range = range(type: type, periodKey: periodKey)
         let periodTasks = tasks.filter { $0.endDate >= range.start && $0.startDate <= range.end }
         return goalsForPeriod(goals, type: type, periodKey: periodKey).map { goal in
-            let goalTokens = GoalTextMatcher.tokenize(goal.title)
+            let goalTokens = GoalTextMatcher.goalTokens(title: goal.title, note: goal.note)
             // A goal with no matching items shows "관련 항목 없음" — never fall back
             // to all period tasks, which would surface the same global completion
             // rate for every unrelated goal.
@@ -5157,16 +5157,20 @@ private struct GoalCard: View {
                         .foregroundStyle(JDTheme.tertiaryText)
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text("\(Int((progress.progress * 100).rounded()))%")
-                            .font(.system(size: 14.5, weight: .bold))
-                            .foregroundStyle(JDTheme.primaryText)
-                            .monospacedDigit()
-                        Text("\(progress.completedCount)/\(progress.relatedCount)")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(JDTheme.tertiaryText)
-                            .monospacedDigit()
+                        if !progress.relatedTasks.isEmpty {
+                            Text("task \(progress.completedTasks.count)/\(progress.relatedTasks.count)")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(JDTheme.tertiaryText)
+                                .monospacedDigit()
+                        }
+                        if !progress.relatedHabits.isEmpty {
+                            Text("습관 \(progress.relatedHabits.count)")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(JDTheme.tertiaryText)
+                                .monospacedDigit()
+                        }
                         if !progress.slipped.isEmpty {
-                            Text("\(progress.slipped.count) 밀림")
+                            Text("\(progress.slipped.count)개 밀림")
                                 .font(.system(size: 12.5, weight: .medium))
                                 .foregroundStyle(JDTheme.external)
                                 .monospacedDigit()

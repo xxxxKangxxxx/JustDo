@@ -4748,3 +4748,36 @@ This document records coordination notes for work done with Codex and Claude Cod
 - Next: A2 (optional numeric `goals.target` field, needs a migration + `db push`),
   then A3 (report blur gating + real-data narrative + reflection + prompt window
   1-7 / yearly priority). See `docs/next_steps.md` Goal Progress Accuracy.
+
+## 2026-06-05 Goal matcher tuning + card breakdown (E1 ship; E3 deferred)
+
+### Claude Code
+
+Follow-up to the A1 matcher commit, driven by a real-usage test (goals
+체력 키우기 / 취업하기 / 운동하기 with 헬스장 task + 산책/독서 habits).
+
+- **Synonym map expanded to domain clusters** (web `selectors.ts` +
+  `GoalTextMatcher.swift`, kept identical). Exercise cluster (헬스/헬스장/웨이트/
+  홈트/피티/크로스핏/스트레칭/산책/걷기/조깅/러닝/달리기/등산/요가/필라테스/수영 →
+  운동) plus 책/공부/영어 clusters, so 헬스장·산책 count toward 운동 goals.
+- **Goal note is now matched** alongside the title (`goalTokenSet` /
+  `GoalTextMatcher.goalTokens(title:note:)`), so a note like "주 3회 운동 루틴"
+  lets a 헬스장 task count even when the title (체력 키우기) shares no token.
+- **Quantity tokens dropped** (leading-digit tokens like 3회 / 30분 / 5개) and
+  counter stopwords added (주/회/번/개/이상/…), so a note's "주 3회" cannot match an
+  unrelated task's "회의 3회".
+- **Donut now shows the % inside** the ring on web (`ProgressRing` gained an
+  optional centered `label`), matching iOS `GoalRingWithText`.
+- **Goal card breakdown** clarified on both platforms: instead of one blended
+  `n/m 항목`, show `task {done}/{count}` + `습관 {count}` separately, plus
+  `N개 밀림` when an incomplete task is past due. "task" is accurate again because
+  habits are counted under their own label.
+- **Engine decision recorded**: the dictionary approach cannot generalize to
+  arbitrary user vocabulary (the E1 ceiling). Decision this session — **ship E1 for
+  v1, do E3 (embeddings) as the fast-follow** after A2/A3. Details in
+  `docs/next_steps.md` "Engine decision … 2026-06-05 status".
+- Verification: web lint + test (128) + build; iOS swift test (64) + generic
+  xcodebuild; live web check confirmed 운동하기 60% / 체력 키우기 51%.
+- Next: A2 (optional numeric `goals.target`, needs a migration + `db push`), then
+  A3 (report blur gating + real-data narrative + reflection + prompt window 1-7 /
+  yearly priority). E3 embeddings tracked as a follow-up.

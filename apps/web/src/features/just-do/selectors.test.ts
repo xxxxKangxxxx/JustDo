@@ -86,15 +86,28 @@ describe("goalProgressForPeriod", () => {
     expect(progress.progress).toBe(0.5);
   });
 
-  it("matches inflected tokens and synonyms but not substring false positives", () => {
-    const goals = [makeGoal({ id: "g1", title: "운동" })];
+  it("matches inflected tokens and exercise-cluster synonyms but not substring false positives", () => {
+    const goals = [makeGoal({ id: "g1", title: "운동하기" })];
     const tasks = [
       makeTask({ id: "particle", title: "운동을 했다", isCompleted: true }),
-      makeTask({ id: "synonym", title: "헬스 가기", isCompleted: true }),
+      makeTask({ id: "synonym", title: "헬스장 다녀옴", isCompleted: true }),
+      makeTask({ id: "walk", title: "산책 30분", isCompleted: true }),
       makeTask({ id: "falsePositive", title: "부동산 계약", isCompleted: true }),
     ];
     const [progress] = goalProgressForPeriod(goals, tasks, [], "monthly", "2026-04", END);
-    expect(progress.relatedTasks.map((task) => task.id).sort()).toEqual(["particle", "synonym"]);
+    expect(progress.relatedTasks.map((task) => task.id).sort()).toEqual(["particle", "synonym", "walk"]);
+  });
+
+  it("matches a task via a keyword in the goal note, not just the title", () => {
+    // Title "체력 키우기" shares no token with "헬스장"; the note bridges them.
+    const goals = [makeGoal({ id: "g1", title: "체력 키우기", note: "주 3회 운동 루틴 실행" })];
+    const tasks = [
+      makeTask({ id: "gym", title: "헬스장 다녀옴", isCompleted: true }),
+      makeTask({ id: "unrelated", title: "주간 회의 3회", isCompleted: true }),
+    ];
+    const [progress] = goalProgressForPeriod(goals, tasks, [], "monthly", "2026-04", END);
+    // "주 3회" in the note must not match the "회의 3회" task (counter words are stopwords).
+    expect(progress.relatedTasks.map((task) => task.id)).toEqual(["gym"]);
   });
 
   it("shows no related items instead of the global rate when nothing matches", () => {
