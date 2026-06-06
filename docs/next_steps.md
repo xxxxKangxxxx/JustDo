@@ -12,15 +12,24 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Active Track (2026-06-01)
+## Active Track (2026-06-06)
 
-> Just Do Mode iOS/Web implementation and smoke follow-up are complete. The
-> **Goal & Pro Report** MVP first pass is now implemented across Supabase
-> schema, Web, and native iOS. Settings → 목표 focused smoke is
-> user-confirmed, and destructive delete confirmation is implemented. The next
-> work is not a broad new build-out; it is the remaining iOS report-entry banner
-> pass, final real-device confirmation of the new full-screen Settings IA, and
-> TestFlight/App Store readiness. Web tag UX fixes are complete.
+> **Goal Progress A-track is DONE (web + iOS).** The 2026-06-03 decisions were
+> implemented end to end: B (drop the all-tasks progress fallback), A1 (E1
+> token-overlap matcher in the shared `GoalTextMatcher`, ported identically to
+> web, with habit log-completion scoring), A2 (optional numeric `goals.target`,
+> migration applied to hosted Supabase), and A3 (target-aware report rows,
+> real-data narrative + non-stored reflection, Free = blur gating, monthly prompt
+> window widened to days 1-7). Free-account feedback was also addressed: prompt
+> skip no longer re-opens (session suppression), the prompt lock is a toggle, and
+> the web add/detail date+time uses a calendar popover (portal) + 시간 포함 toggle.
+> See the 2026-06-06 handoff block.
+>
+> **Next**: (1) iOS real-device smoke of the A-track goal UI, then TestFlight/App
+> Store prep; (2) **E3 embeddings** to generalize goal matching beyond the
+> hand-maintained synonym dictionary (the E1 ceiling — user agreed to ship E1 and
+> follow up with E3); (3) the small report **활동 요약 rollups** (카테고리별
+> 완료율, Habit 달성률); (4) Toss merchant review / Pro checkout DLQ (external).
 
 Recommended order for the next coding session:
 

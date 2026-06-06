@@ -169,17 +169,56 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > Settings가 토글 즉시 live 갱신. 실기기 확인 완료. 자세한 경위: `worklog.md`
 > 2026-06-02 엔트리.
 
-> **다음 작업자가 픽업할 우선순위 (2026-06-02 갱신)**:
+> **2026-06-06 Goal Progress A-track DONE (web + iOS) + web add-modal UX** —
+> 목표 진행률/리포트 개편(2026-06-03 결정들)을 B→A1→A2→A3 순서로 모두 구현하고,
+> Free 계정 실사용 피드백 4건을 후속 수정했다.
+> - **B — 진행률 폴백 제거** (`8e266e4`): 매칭 task가 없을 때 전체 기간 task로
+>   떨어지던 폴백 제거. 관련 항목 0개면 "관련 항목 없음" 표시(전역 완료율 오표시 fix).
+> - **A1 — E1 매처** (`5fbba16`, `6ce693b`): substring → 정규화 토큰 오버랩.
+>   순수 매처를 `apps/ios/JustDoShared/Domain/GoalTextMatcher.swift`로 분리하고
+>   web `selectors.ts`와 **알고리즘 동일** 포팅. 동의어 클러스터(헬스장/산책→운동 등)
+>   + 목표 **note 매칭** + 수량토큰/불용어 제거. habit은 **기간 로그 완료율**로 부분
+>   점수, task는 0/1, 진행률 = 블렌드 평균. 카드 표기 `할 일 n/m · 습관 k` 한글 통일.
+> - **A2 — 숫자 target** (`f754ec9`, `d921f5f`): `goals.target int null`
+>   마이그레이션(`20260606000000_goal_target.sql`) + web/iOS 전체 스레딩(도메인·
+>   매핑·Core Data·REST·에디터 `목표 수치` 입력·카드). target 있으면
+>   `progress = min(score,target)/target`, 카드 `목표 n/target`. **hosted Supabase
+>   `supabase db push` 사용자 적용 완료.**
+> - **A3 — 리포트 개편** (`36c8b43`): 목표별 진행 target-aware, 실데이터 narrative
+>   (최고/최저 목표 호명), 비저장 회고 질문, **Free=blur 게이팅**(별도 teaser 폐기,
+>   실제 리포트 blur + Pro CTA; web `GoalReportModal` locked prop, iOS
+>   `GoalReportLockedOverlay`). 월간 프롬프트 창 1-3 → **1-7일**(연간 우선 유지).
+> - **Free 피드백 후속**: ① 월간 프롬프트 건너뛰기 시 즉시 재오픈되던 버그를 세션
+>   suppression으로 fix(`e8b3d78`), ② 프롬프트 고정 체크박스 → 자물쇠 토글, ③
+>   리포트 배너 미표시는 **정상**(회고형 — 직전 기간 목표 필요), ④ web add/편집 모달
+>   날짜/시간을 **캘린더 팝오버 + 시간 포함 토글 + 시/분 TimePicker**로 재설계
+>   (`3b7bd79`), 팝오버가 모달 푸터에 잘리던 것을 createPortal+fixed로 fix
+>   (`2943db0`), add 모달 크기 확대(`a723ec6`).
+> - 검증: web lint·test(130)·build / iOS `swift test`(64)·xcodebuild /
+>   `git diff --check` 전부 통과. 자세한 경위: `worklog.md` 2026-06-05~06 엔트리,
+>   결정 근거: `next_steps.md` "Goal Progress Accuracy" / "Report Content".
+> - **남은 follow-up**: (a) **E3 임베딩 매처** — 손수 만든 동의어 사전은 임의
+>   사용자 어휘 일반화 불가(E1 천장). 사용자가 E1 출시 / E3 후속에 합의. pgvector +
+>   임베딩 API(OpenAI/Voyage — Claude는 임베딩 없음) + 동기화 시 코사인. 매처가 이미
+>   한 함수로 격리돼 swap 가능. (b) 리포트 **활동 요약 롤업**(카테고리별 완료율,
+>   Habit 달성률). (c) 신규 goal target UI의 **iOS 실기기 smoke**.
+
+> **다음 작업자가 픽업할 우선순위 (2026-06-06 갱신)**:
 > 1. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
-> 2. **iOS TestFlight/App Store 준비**. Goal & Pro Report first pass가 포함된
->    상태로 archive/TestFlight 작업으로 이동. 현재 Auth landing, Home, Add
->    Sheet, editor-sheet routing, Just Do Mode, Stats/Settings, Widget
->    보정은 iPhone 14 Pro iOS 26.5 실기기 최종 smoke까지 통과. 세션 자동 refresh도
->    1시간+ 종료 후 재진입 smoke 통과. New full-screen Settings IA, 기간 종료
->    리포트 배너, 다크모드 회귀 fix까지 실기기 visual smoke 통과 완료.
-> 3. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
+> 2. **iOS 실기기 smoke (Goal Progress A-track)**. A1~A3 + 숫자 target 입력이
+>    iOS 빌드에 포함됨. 설정→목표에서 매칭 진행률/도넛, `목표 수치` 입력→`목표 n/3`,
+>    리포트 target/narrative/회고/Free blur, 프롬프트 1-7일 동작을 iPhone 14 Pro
+>    실기기에서 확인. 통과하면 TestFlight/App Store 준비로 진행.
+> 3. **E3 임베딩 매처 (목표 매칭 일반화)**. 위 follow-up (a). 사용자가 E3 진행
+>    신호를 줄 때 착수. 임베딩 제공자 키 선택(OpenAI/Voyage/Cohere) →
+>    pgvector 마이그레이션 → 동기화 시 임베딩 → `goalProgressForPeriod` /
+>    `GoalSelectors.progress`의 관련성 신호를 token-overlap → 코사인으로 swap,
+>    E1은 오프라인/미임베딩 폴백으로 유지.
+> 4. **리포트 활동 요약 롤업** (follow-up (b), 작은 작업). 카테고리별 완료율 +
+>    Habit 달성률을 리포트 활동 스텝에 추가.
+> 5. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
 >    남은 항목은 Toss test-key E2E smoke, Toss 공식 dashboard secret/header 확인
 >    후 webhook signature 검증, live billing 직전 `justdo-prod-billing-cron`
@@ -664,6 +703,10 @@ Applied migrations:
   brand-new Google signups in production)
 - `20260529120000_goal_report.sql` (2026-05-30 hosted state confirmed;
   adds `goals` and `goal_prompt_dismissals` for Goal & Pro Report MVP)
+- `20260601120000_report_banner_dismissal.sql` (2026-06-01 hosted applied;
+  relaxes the dismissal CHECK for `report_monthly`/`report_yearly`)
+- `20260606000000_goal_target.sql` (2026-06-06 `supabase db push` applied;
+  adds optional `goals.target int` for quantitative goals, check > 0)
 
 Realtime publication includes:
 

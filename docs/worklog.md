@@ -4876,3 +4876,21 @@ From a Free/Trial-account walkthrough:
    modal, habit reminder, and the task detail modal.
 
 Verification: web lint + test (130) + build. iOS untouched.
+
+## 2026-06-06 Calendar popover clip fix + add-modal resize
+
+### Claude Code
+
+Follow-ups after the date/time redesign:
+
+- **Popover clipped by modal footer** — the calendar popover was absolutely
+  positioned inside the modal's `overflow-auto`/`overflow-hidden` content, so
+  it was cut off by the footer. Now rendered via `createPortal` to
+  `document.body` with `fixed` coordinates from the trigger rect (flips above
+  the trigger when there's no room below), closing on outside click / scroll /
+  resize. Commit `2943db0`.
+- **Add modal enlarged** for breathing room: width 560 → 680, larger corner
+  radius, more header/content/footer padding, bigger title, wider row spacing,
+  and a taller shared `ModalRow` (also improves the task detail modal).
+  Commit `a723ec6`.
+- Verification: web lint + build.
