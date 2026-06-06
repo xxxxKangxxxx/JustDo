@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addDays,
   addMonths,
@@ -1586,24 +1587,53 @@ function CalendarPopover({ mode, value, min, onChange, tone = "habit" }: { mode:
   const t = webTokens(mode);
   const accent = tone === "me" ? t.me : t.habit;
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const parsed = parseISO(value);
   const [view, setView] = useState({ year: parsed.year, month: parsed.month });
-  const ref = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+
+  const PANEL_W = 244;
+  const PANEL_H = 296;
+
+  const place = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const openUp = window.innerHeight - rect.bottom < PANEL_H && rect.top > PANEL_H;
+    const top = openUp ? rect.top - PANEL_H - 6 : rect.bottom + 6;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_W - 8));
+    setCoords({ top, left });
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || popRef.current?.contains(target)) return;
+      setOpen(false);
     };
+    const onScroll = () => setOpen(false);
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [open]);
+
   const cells = monthCalendar(view.year, view.month);
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
-          if (!open) setView({ year: parsed.year, month: parsed.month });
+          if (!open) {
+            setView({ year: parsed.year, month: parsed.month });
+            place();
+          }
           setOpen((value) => !value);
         }}
         className="rounded-lg border px-3 py-1.5 text-[13px] font-semibold tabular-nums"
@@ -1611,43 +1641,46 @@ function CalendarPopover({ mode, value, min, onChange, tone = "habit" }: { mode:
       >
         {parsed.month}월 {parsed.day}일 ({weekdayLabels()[weekdayOfISO(value)]})
       </button>
-      {open ? (
-        <div className="absolute left-0 top-[calc(100%+6px)] z-[200] w-[244px] rounded-xl border p-3 shadow-2xl" style={{ background: t.surface, borderColor: t.divider }}>
-          <div className="mb-2 flex items-center justify-between">
-            <button type="button" onClick={() => setView(addMonths(view.year, view.month, -1))} className="flex h-6 w-6 items-center justify-center rounded-md text-[14px]" style={{ color: t.textSecondary }}>‹</button>
-            <div className="text-[12.5px] font-bold tabular-nums">{view.year}년 {view.month}월</div>
-            <button type="button" onClick={() => setView(addMonths(view.year, view.month, 1))} className="flex h-6 w-6 items-center justify-center rounded-md text-[14px]" style={{ color: t.textSecondary }}>›</button>
-          </div>
-          <div className="mb-1 grid grid-cols-7 text-center text-[10px] font-semibold" style={{ color: t.textTertiary }}>
-            {weekdayLabels().map((label) => <div key={label}>{label}</div>)}
-          </div>
-          <div className="grid grid-cols-7 gap-0.5">
-            {cells.map((cell, index) => {
-              if (cell.day === 0) return <div key={index} />;
-              const selected = cell.iso === value;
-              const isToday = cell.iso === todayISO();
-              const disabled = min ? cell.iso < min : false;
-              return (
-                <button
-                  key={cell.iso}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => { onChange(cell.iso); setOpen(false); }}
-                  className="flex h-7 items-center justify-center rounded-md text-[12px] font-medium tabular-nums disabled:opacity-30"
-                  style={{
-                    background: selected ? accent.solid : "transparent",
-                    color: selected ? "#fff" : isToday ? accent.ink : t.text,
-                    fontWeight: selected || isToday ? 700 : 500,
-                  }}
-                >
-                  {cell.day}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-    </div>
+      {open && coords
+        ? createPortal(
+            <div ref={popRef} className="fixed z-[300] rounded-xl border p-3 shadow-2xl" style={{ top: coords.top, left: coords.left, width: PANEL_W, background: t.surface, borderColor: t.divider }}>
+              <div className="mb-2 flex items-center justify-between">
+                <button type="button" onClick={() => setView(addMonths(view.year, view.month, -1))} className="flex h-6 w-6 items-center justify-center rounded-md text-[14px]" style={{ color: t.textSecondary }}>‹</button>
+                <div className="text-[12.5px] font-bold tabular-nums">{view.year}년 {view.month}월</div>
+                <button type="button" onClick={() => setView(addMonths(view.year, view.month, 1))} className="flex h-6 w-6 items-center justify-center rounded-md text-[14px]" style={{ color: t.textSecondary }}>›</button>
+              </div>
+              <div className="mb-1 grid grid-cols-7 text-center text-[10px] font-semibold" style={{ color: t.textTertiary }}>
+                {weekdayLabels().map((label) => <div key={label}>{label}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells.map((cell, index) => {
+                  if (cell.day === 0) return <div key={index} />;
+                  const selected = cell.iso === value;
+                  const isToday = cell.iso === todayISO();
+                  const disabled = min ? cell.iso < min : false;
+                  return (
+                    <button
+                      key={cell.iso}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => { onChange(cell.iso); setOpen(false); }}
+                      className="flex h-7 items-center justify-center rounded-md text-[12px] font-medium tabular-nums disabled:opacity-30"
+                      style={{
+                        background: selected ? accent.solid : "transparent",
+                        color: selected ? "#fff" : isToday ? accent.ink : t.text,
+                        fontWeight: selected || isToday ? 700 : 500,
+                      }}
+                    >
+                      {cell.day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
