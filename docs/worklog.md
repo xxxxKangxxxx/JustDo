@@ -4816,3 +4816,37 @@ than the progress value and is not a manipulation lever.
 - Next: A3 (report blur gating + real-data narrative + reflection + prompt
   window 1-7 / yearly priority). E3 embeddings still tracked as the
   matcher follow-up.
+
+## 2026-06-06 A3: report content + blur gating + prompt window
+
+### Claude Code
+
+Implements the 2026-06-03 report-content and prompt-policy decisions
+(web + iOS kept in sync).
+
+- **Prompt window**: monthly prompt widened from days 1-3 to **1-7**
+  (yearly already 1-7, yearly-before-monthly priority already in place) in
+  the web prompt effect and iOS `nextGoalPrompt`.
+- **목표별 진행 = target-aware**: report rows now show `n/target` for
+  quantitative goals (web `GoalReportModal` step 2, iOS `GoalProgressRow`)
+  and % for qualitative, matching the goal cards.
+- **Real-data narrative**: the 이야기 step now names the best-progress and
+  most-behind goal (ranked by progress among goals with related items)
+  instead of a generic template, on both platforms.
+- **회고 (reflection)**: a single non-stored retrospective question is
+  appended to the 이야기 step (`다음 달엔 무엇을 바꿔볼까요?` /
+  `내년엔 무엇을 다르게 해볼까요?`). No journaling/storage.
+- **Free gating = blur (not a separate teaser)**: Free users open the real
+  report, but its content is blurred with a Pro CTA overlay. Web folds the
+  two modals into one `GoalReportModal` with a `locked` prop (deleted
+  `GoalReportPreviewModal`); iOS blurs the real `reportFlow` and shows
+  `GoalReportLockedOverlay` (deleted `GoalFreePreview`). Trial/Pro see it
+  unblurred. Goal input stays free.
+- **Yearly monthly-grouping** stays deferred to v2 (unchanged).
+- Verification: web lint + test (130) + build; iOS swift test (64) +
+  generic xcodebuild; git diff --check clean.
+- **Deferred (small A3 follow-up)**: the deeper 활동 요약 metrics
+  (카테고리별 완료율, Habit 달성률 breakdown) — step 0 already shows
+  완료율/완료 할 일/밀림 and step 1 the heatmap, so the gap is just those two
+  rollups. Track with the report polish.
+- E3 embeddings (matcher generalization) remains the larger follow-up.

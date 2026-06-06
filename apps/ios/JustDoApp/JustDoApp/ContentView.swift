@@ -873,7 +873,7 @@ private struct HomeRootView: View {
             return GoalPromptPresentation(kind: .yearly, periodKey: yearlyKey)
         }
 
-        if (1...3).contains(today.day),
+        if (1...7).contains(today.day),
            monthlyGoals.isEmpty,
            !hasGoalPromptDismissal(loaded, promptType: .monthly, periodKey: monthlyKey) {
             return GoalPromptPresentation(kind: .monthly, periodKey: monthlyKey)
@@ -5499,18 +5499,24 @@ private struct GoalReportFullScreen: View {
     var body: some View {
         ZStack {
             JDTheme.background.ignoresSafeArea()
+            reportFlow
+                .blur(radius: presentation.isPreview ? 6 : 0)
+                .disabled(presentation.isPreview)
+                .accessibilityHidden(presentation.isPreview)
             if presentation.isPreview {
-                GoalFreePreview(
-                    target: presentation.target,
-                    progress: progress,
-                    average: average,
-                    onClose: onClose
-                )
-            } else {
-                reportFlow
+                GoalReportLockedOverlay(onClose: onClose)
             }
         }
     }
+
+    // Real-data narrative: name the best-progress and most-behind goals. Only
+    // goals with related items are ranked.
+    private var ranked: [GoalProgress] {
+        progress.filter { $0.relatedCount > 0 }.sorted { $0.progress > $1.progress }
+    }
+    private var bestGoal: GoalProgress? { ranked.first }
+    private var behindGoal: GoalProgress? { ranked.count > 1 ? ranked.last : nil }
+    private var isYear: Bool { presentation.target.periodType == .yearly }
 
     private var reportFlow: some View {
         VStack(spacing: 0) {
@@ -5563,14 +5569,29 @@ private struct GoalReportFullScreen: View {
                 .tag(2)
 
                 GoalReportPage(eyebrow: "이야기", title: presentation.target.periodType == .yearly ? "한 해의 이야기" : "한 달의 이야기", tint: tint) {
-                    Text(narrative)
-                        .font(.system(size: 14, weight: .medium))
-                        .lineSpacing(8)
-                        .foregroundStyle(JDTheme.primaryText)
-                        .padding(16)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(narrative)
+                            .font(.system(size: 14, weight: .medium))
+                            .lineSpacing(8)
+                            .foregroundStyle(JDTheme.primaryText)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(JDTheme.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("회고")
+                                .font(.system(size: 10.5, weight: .bold))
+                                .foregroundStyle(JDTheme.tertiaryText)
+                            Text(isYear ? "내년엔 무엇을 다르게 해볼까요?" : "다음 달엔 무엇을 바꿔볼까요?")
+                                .font(.system(size: 13.5, weight: .medium))
+                                .foregroundStyle(JDTheme.primaryText)
+                        }
+                        .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(JDTheme.surface)
+                        .background(JDTheme.surfaceAlt)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                 }
                 .tag(3)
             }
@@ -5583,11 +5604,24 @@ private struct GoalReportFullScreen: View {
     }
 
     private var narrative: String {
-        let percent = Int((average * 100).rounded())
+        let completed = progress.flatMap(\.completedTasks).count
         if progress.isEmpty {
             return "아직 기록된 목표가 없어요. 다음 기간에는 작은 약속 하나부터 쌓아볼 수 있습니다."
         }
-        return "이번 기간에는 \(progress.count)개의 목표를 두고 \(percent)%까지 도착했어요. 완료된 task와 남은 항목을 보면, 꾸준히 반복된 흐름과 다음에 줄여볼 밀림이 함께 보입니다."
+        var lines = ["이번 기간에는 \(progress.count)개의 목표를 중심으로 \(completed)개의 항목이 완료됐어요."]
+        if let best = bestGoal {
+            var line = "가장 멀리 간 목표는 \(best.goal.title)(으)로 \(Int((best.progress * 100).rounded()))%까지 왔어요."
+            if let behind = behindGoal {
+                line += " 반대로 \(behind.goal.title)은(는) \(Int((behind.progress * 100).rounded()))%에 머물렀습니다."
+            }
+            lines.append(line)
+        } else {
+            lines.append("이번 기간에는 목표와 이어진 활동이 아직 많지 않았어요. 목표와 맞닿은 일을 하나씩 적어보면 흐름이 보일 거예요.")
+        }
+        if let behind = behindGoal {
+            lines.append("\(behind.goal.title)처럼 더딘 목표 하나를 먼저 작게 쪼개보세요.")
+        }
+        return lines.joined(separator: "\n\n")
     }
 }
 
@@ -5617,10 +5651,7 @@ private struct GoalReportPage<Content: View>: View {
     }
 }
 
-private struct GoalFreePreview: View {
-    let target: GoalReportTarget
-    let progress: [GoalProgress]
-    let average: Double
+private struct GoalReportLockedOverlay: View {
     let onClose: () -> Void
 
     var body: some View {
@@ -5629,8 +5660,10 @@ private struct GoalFreePreview: View {
                 Button(action: onClose) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(JDTheme.accent)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
-                .foregroundStyle(JDTheme.accent)
                 Spacer()
                 Text("FREE")
                     .font(.system(size: 10, weight: .bold))
@@ -5639,57 +5672,36 @@ private struct GoalFreePreview: View {
                     .padding(.vertical, 4)
                     .background(JDTheme.tertiaryText.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .padding(.trailing, 14)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
-            .padding(.bottom, 8)
+            .padding(.top, 8)
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("\(GoalSelectors.periodLabel(target.periodType, periodKey: target.periodKey))의 한 달 요약")
-                        .font(.system(size: 22, weight: .bold))
-                    GoalMetricGrid(metrics: [
-                        ("목표", "\(progress.count)", ""),
-                        ("진행", "\(progress.filter { $0.progress > 0 }.count)", ""),
-                        ("달성", "\(progress.filter { $0.progress >= 1 }.count)", "")
-                    ])
-                    ZStack {
-                        VStack(spacing: 8) {
-                            ForEach(progress.prefix(3)) { item in
-                                GoalProgressRow(item: item, tint: JDTheme.habit)
-                            }
-                        }
-                        .blur(radius: 5)
-                        .opacity(0.45)
+            Spacer()
 
-                        VStack(spacing: 8) {
-                            Image(systemName: "lock.open")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(JDTheme.secondaryText)
-                            Text("Pro에서 펼쳐져요")
-                                .font(.system(size: 15, weight: .bold))
-                            Text("목표별 완료율, 히트맵, 한 달의 이야기까지.")
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(JDTheme.secondaryText)
-                                .multilineTextAlignment(.center)
-                            Button("Pro로 펼치기") {}
-                                .buttonStyle(.borderedProminent)
-                                .tint(JDTheme.primaryText)
-                                .disabled(true)
-                        }
-                        .padding(18)
-                        .frame(width: 280)
-                        .background(JDTheme.surface)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(JDTheme.divider, lineWidth: 0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 8)
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 10)
+            VStack(spacing: 8) {
+                Image(systemName: "lock")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(JDTheme.secondaryText)
+                Text("전체 리포트는 Pro에서 펼쳐져요")
+                    .font(.system(size: 16, weight: .bold))
+                    .multilineTextAlignment(.center)
+                Text("목표별 진행, 활동 흐름, 이번 기간의 이야기까지\nTrial 또는 Pro에서 볼 수 있어요.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(JDTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+                Button("닫기") { onClose() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(JDTheme.primaryText)
+                    .padding(.top, 4)
             }
+            .padding(22)
+            .frame(maxWidth: 300)
+            .background(JDTheme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(JDTheme.divider, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.16), radius: 22, y: 10)
+
+            Spacer()
         }
     }
 }
@@ -5734,9 +5746,16 @@ private struct GoalProgressRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                 Spacer()
-                Text("\(Int((item.progress * 100).rounded()))%")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(JDTheme.tertiaryText)
+                if let target = item.target {
+                    Text("\(min(item.completedCount, target))/\(target) · \(Int((item.progress * 100).rounded()))%")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                        .monospacedDigit()
+                } else {
+                    Text("\(Int((item.progress * 100).rounded()))%")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                }
             }
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {

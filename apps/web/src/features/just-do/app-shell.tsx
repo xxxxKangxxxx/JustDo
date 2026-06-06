@@ -339,7 +339,7 @@ function JustDoViewport() {
     }
     if (
       !nextPrompt &&
-      parsed.day <= 3 &&
+      parsed.day <= 7 &&
       !hasGoals("monthly", monthlyKey) &&
       !hasDismissal("monthly", monthlyKey)
     ) {
@@ -489,19 +489,16 @@ function JustDoViewport() {
           />
         ) : null}
         {reportTarget ? (
-          canSeeReportDetail ? (
-            <GoalReportModal mode={mode} target={reportTarget} onClose={() => setReportTarget(null)} />
-          ) : (
-            <GoalReportPreviewModal
-              mode={mode}
-              target={reportTarget}
-              onClose={() => setReportTarget(null)}
-              onUpgrade={() => {
-                setReportTarget(null);
-                setReportUpgradePlan("monthly");
-              }}
-            />
-          )
+          <GoalReportModal
+            mode={mode}
+            target={reportTarget}
+            locked={!canSeeReportDetail}
+            onClose={() => setReportTarget(null)}
+            onUpgrade={() => {
+              setReportTarget(null);
+              setReportUpgradePlan("monthly");
+            }}
+          />
         ) : null}
         {reportUpgradePlan ? (
           <UpgradeModal mode={mode} plan={reportUpgradePlan} onClose={() => setReportUpgradePlan(null)} />
@@ -2313,20 +2310,13 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
         />
       ) : null}
       {report ? (
-        canSeeReportDetail ? (
-          <GoalReportModal
-            mode={mode}
-            target={report}
-            onClose={() => setReport(null)}
-          />
-        ) : (
-          <GoalReportPreviewModal
-            mode={mode}
-            target={report}
-            onClose={() => setReport(null)}
-            onUpgrade={() => onUpgrade("monthly")}
-          />
-        )
+        <GoalReportModal
+          mode={mode}
+          target={report}
+          locked={!canSeeReportDetail}
+          onClose={() => setReport(null)}
+          onUpgrade={() => onUpgrade("monthly")}
+        />
       ) : null}
     </>
   );
@@ -2768,7 +2758,7 @@ function LockedGoalModal({ mode, goal, onClose, onUnlock }: { mode: ThemeMode; g
   );
 }
 
-function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: NonNullable<ReportTarget>; onClose: () => void }) {
+function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: ThemeMode; target: NonNullable<ReportTarget>; locked: boolean; onClose: () => void; onUpgrade: () => void }) {
   const s = useJustDo();
   const t = webTokens(mode);
   const [step, setStep] = useState(0);
@@ -2778,6 +2768,11 @@ function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: N
   const totalCompleted = progress.reduce((sum, item) => sum + item.completedCount, 0);
   const pct = totalRelated ? totalCompleted / totalRelated : 0;
   const isYear = target.periodType === "yearly";
+  // Real-data narrative: name the best-progress and most-behind goals so the
+  // template reads personal. Only goals with related items are ranked.
+  const ranked = progress.filter((item) => item.relatedCount > 0).slice().sort((a, b) => b.progress - a.progress);
+  const bestGoal = ranked[0] ?? null;
+  const behindGoal = ranked.length > 1 ? ranked[ranked.length - 1] : null;
   const labels = isYear
     ? ["요약", "월별 흐름", "연간 목표", "이야기"]
     : ["완료율", "활동", "목표별 진행", "이야기"];
@@ -2795,7 +2790,8 @@ function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: N
             <button key={label} type="button" onClick={() => setStep(index)} className="h-1 flex-1 rounded-full" style={{ background: index <= step ? t.accent : t.surfaceAlt }} aria-label={label} />
           ))}
         </div>
-        <div className="min-h-0 flex-1 px-6 pt-5">
+        <div className="relative min-h-0 flex-1">
+          <div className={`h-full px-6 pt-5 ${locked ? "pointer-events-none select-none blur-[6px]" : ""}`} aria-hidden={locked}>
           <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>{periodLabel(target.periodType, target.periodKey)} · {labels[step]}</div>
           {step === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
@@ -2826,7 +2822,7 @@ function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: N
                     <span className="text-[13.5px] font-semibold">{item.goal.title}</span>
                     {item.goal.locked ? <span className="text-[10px]" style={{ color: t.textTertiary }}>고정</span> : null}
                     <div className="flex-1" />
-                    <span className="text-[11.5px]" style={{ color: t.textTertiary }}>{item.relatedCount === 0 ? "관련 항목 없음 · " : `${item.completedCount}/${item.relatedCount} · `}<b style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b></span>
+                    <span className="text-[11.5px]" style={{ color: t.textTertiary }}>{item.target !== null ? `${Math.min(item.completedCount, item.target)}/${item.target} · ` : item.relatedCount === 0 ? "관련 항목 없음 · " : `${item.completedCount}/${item.relatedCount} · `}<b style={{ color: t.text }}>{Math.round(item.progress * 100)}%</b></span>
                   </div>
                   <ProgressBar pct={item.progress} color={isYear ? t.me.solid : t.habit.solid} bg={t.surfaceAlt} />
                 </div>
@@ -2837,74 +2833,50 @@ function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: N
               <ReportIllustration mode={mode} tone={isYear ? "cool" : "warm"} />
               <div className="mt-5 text-[22px] font-bold leading-tight tracking-[-0.7px]">{isYear ? "한 해의 방향이 남긴 흔적." : "이번 달의 약속이 만든 흐름."}</div>
               <div className="mt-4 flex flex-col gap-3 text-[14px] leading-7">
-                <p>이번 기간에는 {progress.length}개의 목표를 중심으로 {totalCompleted}개의 task가 완료됐습니다.</p>
-                <p>완료된 항목과 남은 항목이 함께 보여주는 것은 속도보다 방향입니다. 다음 기간에는 가장 진행률이 낮은 목표 하나를 먼저 작게 쪼개보세요.</p>
+                <p>이번 기간에는 {progress.length}개의 목표를 중심으로 {totalCompleted}개의 항목이 완료됐습니다.</p>
+                {bestGoal ? (
+                  <p>가장 멀리 간 목표는 <b style={{ color: t.text }}>{bestGoal.goal.title}</b>(으)로 {Math.round(bestGoal.progress * 100)}%까지 왔어요.{behindGoal ? <> 반대로 <b style={{ color: t.text }}>{behindGoal.goal.title}</b>은(는) {Math.round(behindGoal.progress * 100)}%에 머물렀습니다.</> : null}</p>
+                ) : (
+                  <p>이번 기간에는 목표와 이어진 활동이 아직 많지 않았어요. 다음 기간엔 목표와 맞닿은 일을 하나씩 적어보면 흐름이 보일 거예요.</p>
+                )}
+                <p>{behindGoal ? <><b style={{ color: t.text }}>{behindGoal.goal.title}</b>처럼 더딘 목표 하나를 먼저 작게 쪼개보세요.</> : "완료된 항목과 남은 항목이 함께 보여주는 것은 속도보다 방향입니다."}</p>
+              </div>
+              <div className="mt-auto rounded-xl border px-4 py-3" style={{ borderColor: t.divider, background: t.bg2 }}>
+                <div className="text-[11px] font-bold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>회고</div>
+                <div className="mt-1 text-[13.5px] font-medium">{isYear ? "내년엔 무엇을 다르게 해볼까요?" : "다음 달엔 무엇을 바꿔볼까요?"}</div>
               </div>
             </div>
           )}
-        </div>
-        <div className="flex items-center border-t px-6 py-4" style={{ borderColor: t.divider }}>
-          <span className="text-[12px]" style={{ color: t.textTertiary }}>{step + 1} / 4</span>
-          <div className="flex-1" />
-          {step > 0 ? <button type="button" onClick={() => setStep(step - 1)} className="mr-4 text-[12.5px]" style={{ color: t.textSecondary }}>이전</button> : null}
-          <button type="button" onClick={step === 3 ? onClose : () => setStep(step + 1)} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: step === 3 ? t.text : t.accent, color: step === 3 ? t.bg : "#fff" }}>
-            {step === 3 ? "완료" : "다음"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GoalReportPreviewModal({ mode, target, onClose, onUpgrade }: { mode: ThemeMode; target: NonNullable<ReportTarget>; onClose: () => void; onUpgrade: () => void }) {
-  const s = useJustDo();
-  const t = webTokens(mode);
-  const goals = goalsForPeriod(s.state.goals, target.periodType, target.periodKey);
-  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, s.state.habits, target.periodType, target.periodKey, todayISO());
-  const active = progress.filter((item) => item.relatedCount > 0).length;
-  const complete = progress.filter((item) => item.progress >= 1).length;
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
-      <div className="w-[720px] max-w-[94vw] overflow-hidden rounded-2xl border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
-        <div className="border-b px-6 py-5" style={{ borderColor: t.divider }}>
-          <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>{periodLabel(target.periodType, target.periodKey)} · Free 미리보기</div>
-          <div className="flex items-center gap-3">
-            <div className="text-[26px] font-bold tracking-[-0.8px]">목표 리포트 요약</div>
-            <PlanBadge mode={mode} plan="free" />
           </div>
-        </div>
-        <div className="p-6">
-          <div className="mb-4 grid grid-cols-3 gap-3">
-            {[
-              ["목표 개수", goals.length],
-              ["진행한 목표", active],
-              ["달성한 목표", complete],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
-                <div className="text-[10.5px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>{label}</div>
-                <div className="mt-1 text-[28px] font-bold tracking-[-0.9px]">{value}</div>
-              </div>
-            ))}
-          </div>
-          <div className="relative min-h-[260px]">
-            <div className="flex flex-col gap-3 opacity-45 blur-sm">
-              {progress.slice(0, 3).map((item) => (
-                <div key={item.goal.id} className="rounded-xl border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
-                  <div className="mb-2 text-[13px] font-semibold">{item.goal.title}</div>
-                  <ProgressBar pct={item.progress} color={t.habit.solid} bg={t.surfaceAlt} />
-                </div>
-              ))}
-            </div>
+          {locked ? (
             <div className="absolute inset-0 flex items-center justify-center p-6">
-              <div className="max-w-[460px] rounded-2xl border p-6 text-center shadow-xl" style={{ borderColor: t.divider, background: t.surface }}>
+              <div className="max-w-[420px] rounded-2xl border p-6 text-center shadow-xl" style={{ borderColor: t.divider, background: t.surface }}>
                 <div className="text-[22px]" style={{ color: t.textSecondary }}>◇</div>
-                <div className="mt-2 text-[17px] font-bold tracking-[-0.4px]">이 아래는 Pro에서 펼쳐져요</div>
-                <div className="mt-2 text-[12.5px] leading-5" style={{ color: t.textSecondary }}>목표별 완료율, 활동 흐름, 한 달의 이야기까지 Trial 또는 Pro에서 볼 수 있습니다.</div>
+                <div className="mt-2 text-[17px] font-bold tracking-[-0.4px]">전체 리포트는 Pro에서 펼쳐져요</div>
+                <div className="mt-2 text-[12.5px] leading-5" style={{ color: t.textSecondary }}>목표별 진행, 활동 흐름, 이번 기간의 이야기까지 Trial 또는 Pro에서 볼 수 있어요.</div>
                 <button type="button" onClick={onUpgrade} className="mt-4 rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: t.text, color: t.bg }}>Pro로 펼치기</button>
                 <div className="mt-2 text-[11px]" style={{ color: t.textTertiary }}>7일 무료 체험 · 언제든 취소</div>
               </div>
             </div>
-          </div>
+          ) : null}
+        </div>
+        <div className="flex items-center border-t px-6 py-4" style={{ borderColor: t.divider }}>
+          {locked ? (
+            <>
+              <span className="text-[12px]" style={{ color: t.textTertiary }}>Pro에서 전체 리포트를 볼 수 있어요</span>
+              <div className="flex-1" />
+              <button type="button" onClick={onClose} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: t.surfaceAlt, color: t.text }}>닫기</button>
+            </>
+          ) : (
+            <>
+              <span className="text-[12px]" style={{ color: t.textTertiary }}>{step + 1} / 4</span>
+              <div className="flex-1" />
+              {step > 0 ? <button type="button" onClick={() => setStep(step - 1)} className="mr-4 text-[12.5px]" style={{ color: t.textSecondary }}>이전</button> : null}
+              <button type="button" onClick={step === 3 ? onClose : () => setStep(step + 1)} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: step === 3 ? t.text : t.accent, color: step === 3 ? t.bg : "#fff" }}>
+                {step === 3 ? "완료" : "다음"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
