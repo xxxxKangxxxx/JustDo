@@ -4894,3 +4894,38 @@ Follow-ups after the date/time redesign:
   and a taller shared `ModalRow` (also improves the task detail modal).
   Commit `a723ec6`.
 - Verification: web lint + build.
+
+## 2026-06-06 E3 phase 1: embedding pipeline (Gemini)
+
+### Claude Code
+
+Goal-matching E3 (semantic embeddings), phase 1 = server-side pipeline only
+(no client/behavior change yet; E1 token matcher still drives progress).
+
+- Provider: **Google Gemini** (`gemini-embedding-001`, `SEMANTIC_SIMILARITY`,
+  `outputDimensionality: 768`, L2-normalized) via an AI Studio API key in the
+  user's Just Do GCP project. Cost is negligible at this scale (cents/month even
+  at 10k users); free tier covers v1.
+- Migration `20260606010000_goal_embeddings.sql`: `create extension vector`,
+  `embedding vector(768)` on goals/tasks/habits, and BEFORE UPDATE triggers that
+  null the embedding when the embedded text changes (goals = title+note; tasks /
+  habits = title only, per the 2026-06-06 decision). New rows default to null.
+- Edge Function `supabase/functions/embed-pending/index.ts`: sweeps null-embedding
+  rows (batch 100/table), calls Gemini `batchEmbedContents`, normalizes, writes
+  vectors back via the service role. Idempotent and self-healing (nulls stay null
+  until embedded), so it doubles as the backfill for existing rows.
+- No client reads the column yet, so `database.types.ts` and app code are
+  untouched (server-only, safe to ship independently).
+
+**User actions to activate phase 1:**
+1. `supabase db push` (applies the embedding migration).
+2. `supabase secrets set GEMINI_API_KEY=<key>` (function secret; never in git).
+3. `supabase functions deploy embed-pending`.
+4. Test once: `curl -X POST "$SUPABASE_URL/functions/v1/embed-pending" -H
+   "Authorization: Bearer $SUPABASE_ANON_KEY"` → expect `{ok:true, embedded:{...}}`,
+   then confirm `select count(*) from goals where embedding is not null`.
+
+**Next (phase 2)**: schedule the sweep (1-min cron), add a matching RPC
+(cosine `<=>` ≥ threshold per goal/period), thread matched ids into web
+`goalProgressForPeriod` / iOS `GoalSelectors.progress` with the E1 token matcher
+as the offline / not-yet-embedded fallback, then tune the threshold on real data.
