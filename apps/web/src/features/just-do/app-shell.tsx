@@ -1773,8 +1773,8 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
   };
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/30 p-6 backdrop-blur-[2px]" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
-        <div className="border-b px-4 py-3" style={{ borderColor: t.divider }}>
+      <div className="flex max-h-[88vh] w-[680px] max-w-[94vw] flex-col overflow-hidden rounded-[18px] border shadow-2xl" style={{ background: t.surface, borderColor: t.divider }} onClick={(event) => event.stopPropagation()}>
+        <div className="border-b px-6 py-4" style={{ borderColor: t.divider }}>
           <div className="mb-3 flex items-center justify-between">
             <div className="text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>새 항목 · {dateRangeLabel(startDate, safeEndDate, scheduledTime || undefined)}</div>
             <IconShellButton mode={mode} title="닫기" onClick={onClose}><IconClose /></IconShellButton>
@@ -1793,7 +1793,7 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
             ))}
           </div>
         </div>
-        <div className="overflow-auto px-4 py-4">
+        <div className="overflow-auto px-6 py-5">
           <input
             ref={inputRef}
             value={title}
@@ -1803,11 +1803,11 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) submit();
             }}
             placeholder={type === "task" ? "무엇을 할까요?" : "어떤 습관을 만들까요?"}
-            className="mb-2 w-full border-b bg-transparent pb-3 text-[19px] font-semibold tracking-[-0.3px] outline-none"
+            className="mb-4 w-full border-b bg-transparent pb-4 text-[22px] font-semibold tracking-[-0.4px] outline-none"
             style={{ borderColor: t.divider, color: t.text }}
           />
           {type === "task" ? (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3.5">
               <ModalRow label="기간" mode={mode}>
                 <CalendarPopover mode={mode} value={startDate} onChange={(iso) => { setStartDate(iso); if (iso > endDate) setEndDate(iso); }} />
                 <span style={{ color: t.textTertiary }}>–</span>
@@ -1867,7 +1867,7 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
               </ModalRow>
             </div>
           ) : (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3.5">
               <ModalRow label="이모지" mode={mode}>
                 <div className="flex flex-wrap gap-1.5">
                   {habitEmojis.map((item) => (
@@ -1900,7 +1900,7 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 border-t px-4 py-3" style={{ borderColor: t.divider }}>
+        <div className="flex items-center gap-2 border-t px-6 py-4" style={{ borderColor: t.divider }}>
           <span className="text-[11px]" style={{ color: t.textTertiary }}><Kbd mode={mode}>⌘↵</Kbd> 추가</span>
           <div className="flex-1" />
           <button type="button" onClick={onClose} className="px-3.5 py-2 text-[13px] font-medium" style={{ color: t.textSecondary }}>취소</button>
@@ -3886,9 +3886,9 @@ function SidebarChip({ active = false, color, onClick, mode, children }: { activ
 function ModalRow({ label, mode, children }: { label: string; mode: ThemeMode; children: React.ReactNode }) {
   const t = webTokens(mode);
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="w-[72px] text-[11.5px] font-semibold uppercase tracking-[0.2px]" style={{ color: t.textTertiary }}>{label}</div>
-      <div className="flex flex-1 items-center gap-1.5 text-[12.5px]">{children}</div>
+    <div className="flex min-h-[36px] items-center gap-3">
+      <div className="w-[78px] text-[11.5px] font-semibold uppercase tracking-[0.2px]" style={{ color: t.textTertiary }}>{label}</div>
+      <div className="flex flex-1 flex-wrap items-center gap-1.5 text-[13px]">{children}</div>
     </div>
   );
 }
