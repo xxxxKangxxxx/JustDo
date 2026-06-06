@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
+  addMonths,
   daysInMonth,
   formatTime,
   isoOf,
+  monthCalendar,
   parseISO,
   todayISO,
   weekdayLabels,
@@ -1509,13 +1511,17 @@ function TaskModalBody({
         </div>
         <div className="flex flex-col gap-2.5 overflow-auto px-[18px] py-4">
           <ModalRow label="기간" mode={mode}>
-            <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); if (event.target.value > endDate) setEndDate(event.target.value); }} onBlur={save} style={dateInputStyle(t)} />
-            <span style={{ color: t.textTertiary }}>-</span>
-            <input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} onBlur={save} style={dateInputStyle(t)} />
+            <CalendarPopover mode={mode} value={startDate} onChange={(iso) => { const nextEnd = iso > endDate ? iso : endDate; setStartDate(iso); setEndDate(nextEnd); s.updateTask(task.id, { startDate: iso, endDate: nextEnd }); }} />
+            <span style={{ color: t.textTertiary }}>–</span>
+            <CalendarPopover mode={mode} value={endDate < startDate ? startDate : endDate} min={startDate} onChange={(iso) => { setEndDate(iso); s.updateTask(task.id, { endDate: iso }); }} />
           </ModalRow>
           <ModalRow label="시간" mode={mode}>
-            <input type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} onBlur={save} style={dateInputStyle(t)} />
-            {scheduledTime ? <button type="button" onClick={() => { setScheduledTime(""); s.updateTask(task.id, { scheduledTime: null }); }} className="text-[11px]" style={{ color: t.textTertiary }}>지우기</button> : null}
+            <Switch mode={mode} on={!!scheduledTime} onChange={(on) => { const next = on ? (scheduledTime || "09:00") : ""; setScheduledTime(next); s.updateTask(task.id, { scheduledTime: next || null }); }} />
+            {scheduledTime ? (
+              <TimePicker mode={mode} value={scheduledTime} onChange={(hhmm) => { setScheduledTime(hhmm); s.updateTask(task.id, { scheduledTime: hhmm }); }} />
+            ) : (
+              <span className="text-[12px]" style={{ color: t.textTertiary }}>하루 종일</span>
+            )}
           </ModalRow>
           <ModalRow label="카테고리" mode={mode}>
             <div className="flex flex-wrap gap-1">
@@ -1574,6 +1580,91 @@ function NewTaskInline({ mode, draft, onClose, onToast }: { mode: ThemeMode; dra
   const start = draft.range?.[0] ?? draft.date;
   const end = draft.range?.[1] ?? draft.date;
   return <NewTaskInlineBody key={`${start}-${end}-${draft.time ?? ""}`} mode={mode} draft={draft} onClose={onClose} onToast={onToast} />;
+}
+
+function CalendarPopover({ mode, value, min, onChange, tone = "habit" }: { mode: ThemeMode; value: string; min?: string; onChange: (iso: string) => void; tone?: "me" | "habit" }) {
+  const t = webTokens(mode);
+  const accent = tone === "me" ? t.me : t.habit;
+  const [open, setOpen] = useState(false);
+  const parsed = parseISO(value);
+  const [view, setView] = useState({ year: parsed.year, month: parsed.month });
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  const cells = monthCalendar(view.year, view.month);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => {
+          if (!open) setView({ year: parsed.year, month: parsed.month });
+          setOpen((value) => !value);
+        }}
+        className="rounded-lg border px-3 py-1.5 text-[13px] font-semibold tabular-nums"
+        style={{ borderColor: open ? accent.solid : t.divider, background: t.surface, color: t.text }}
+      >
+        {parsed.month}월 {parsed.day}일 ({weekdayLabels()[weekdayOfISO(value)]})
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-[200] w-[244px] rounded-xl border p-3 shadow-2xl" style={{ background: t.surface, borderColor: t.divider }}>
+          <div className="mb-2 flex items-center justify-between">
+            <button type="button" onClick={() => setView(addMonths(view.year, view.month, -1))} className="flex h-6 w-6 items-center justify-center rounded-md text-[14px]" style={{ color: t.textSecondary }}>‹</button>
+            <div className="text-[12.5px] font-bold tabular-nums">{view.year}년 {view.month}월</div>
+            <button type="button" onClick={() => setView(addMonths(view.year, view.month, 1))} className="flex h-6 w-6 items-center justify-center rounded-md text-[14px]" style={{ color: t.textSecondary }}>›</button>
+          </div>
+          <div className="mb-1 grid grid-cols-7 text-center text-[10px] font-semibold" style={{ color: t.textTertiary }}>
+            {weekdayLabels().map((label) => <div key={label}>{label}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {cells.map((cell, index) => {
+              if (cell.day === 0) return <div key={index} />;
+              const selected = cell.iso === value;
+              const isToday = cell.iso === todayISO();
+              const disabled = min ? cell.iso < min : false;
+              return (
+                <button
+                  key={cell.iso}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => { onChange(cell.iso); setOpen(false); }}
+                  className="flex h-7 items-center justify-center rounded-md text-[12px] font-medium tabular-nums disabled:opacity-30"
+                  style={{
+                    background: selected ? accent.solid : "transparent",
+                    color: selected ? "#fff" : isToday ? accent.ink : t.text,
+                    fontWeight: selected || isToday ? 700 : 500,
+                  }}
+                >
+                  {cell.day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TimePicker({ mode, value, onChange }: { mode: ThemeMode; value: string; onChange: (hhmm: string) => void }) {
+  const t = webTokens(mode);
+  const [hour, minute] = (value || "09:00").split(":");
+  const selectStyle = { borderColor: t.divider, background: t.surface, color: t.text } as const;
+  return (
+    <div className="flex items-center gap-1.5">
+      <select value={hour} onChange={(event) => onChange(`${event.target.value}:${minute}`)} className="rounded-lg border px-2 py-1.5 text-[13px] font-semibold tabular-nums" style={selectStyle}>
+        {Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0")).map((value) => <option key={value} value={value}>{value}시</option>)}
+      </select>
+      <select value={minute} onChange={(event) => onChange(`${hour}:${event.target.value}`)} className="rounded-lg border px-2 py-1.5 text-[13px] font-semibold tabular-nums" style={selectStyle}>
+        {Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, "0")).map((value) => <option key={value} value={value}>{value}분</option>)}
+      </select>
+    </div>
+  );
 }
 
 function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode; draft: NonNullable<NewTaskDraft>; onClose: () => void; onToast: (message: string) => void }) {
@@ -1685,13 +1776,17 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
           {type === "task" ? (
             <div className="flex flex-col gap-2.5">
               <ModalRow label="기간" mode={mode}>
-                <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); if (event.target.value > endDate) setEndDate(event.target.value); }} style={dateInputStyle(t)} />
-                <span style={{ color: t.textTertiary }}>-</span>
-                <input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} style={dateInputStyle(t)} />
+                <CalendarPopover mode={mode} value={startDate} onChange={(iso) => { setStartDate(iso); if (iso > endDate) setEndDate(iso); }} />
+                <span style={{ color: t.textTertiary }}>–</span>
+                <CalendarPopover mode={mode} value={safeEndDate} min={startDate} onChange={setEndDate} />
               </ModalRow>
               <ModalRow label="시간" mode={mode}>
-                <input type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} style={dateInputStyle(t)} />
-                {scheduledTime ? <button type="button" onClick={() => setScheduledTime("")} className="text-[11px]" style={{ color: t.textTertiary }}>지우기</button> : null}
+                <Switch mode={mode} on={!!scheduledTime} onChange={(on) => setScheduledTime(on ? (scheduledTime || "09:00") : "")} />
+                {scheduledTime ? (
+                  <TimePicker mode={mode} value={scheduledTime} onChange={setScheduledTime} />
+                ) : (
+                  <span className="text-[12px]" style={{ color: t.textTertiary }}>하루 종일</span>
+                )}
               </ModalRow>
               <ModalRow label="카테고리" mode={mode}>
                 <div className="flex flex-wrap gap-1">
@@ -1762,8 +1857,12 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
                 </ModalRow>
               ) : null}
               <ModalRow label="알림" mode={mode}>
-                <input type="time" value={habitReminderTime} onChange={(event) => setHabitReminderTime(event.target.value)} style={dateInputStyle(t)} />
-                {habitReminderTime ? <button type="button" onClick={() => setHabitReminderTime("")} className="text-[11px]" style={{ color: t.textTertiary }}>지우기</button> : null}
+                <Switch mode={mode} on={!!habitReminderTime} onChange={(on) => setHabitReminderTime(on ? (habitReminderTime || "09:00") : "")} />
+                {habitReminderTime ? (
+                  <TimePicker mode={mode} value={habitReminderTime} onChange={setHabitReminderTime} />
+                ) : (
+                  <span className="text-[12px]" style={{ color: t.textTertiary }}>없음</span>
+                )}
               </ModalRow>
             </div>
           )}

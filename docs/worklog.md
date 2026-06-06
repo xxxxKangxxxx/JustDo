@@ -4850,3 +4850,29 @@ Implements the 2026-06-03 report-content and prompt-policy decisions
   완료율/완료 할 일/밀림 and step 1 the heatmap, so the gap is just those two
   rollups. Track with the report polish.
 - E3 embeddings (matcher generalization) remains the larger follow-up.
+
+## 2026-06-06 Goal-prompt + add-modal fixes (Free-account feedback)
+
+### Claude Code
+
+From a Free/Trial-account walkthrough:
+
+1. **Goal prompt re-opened on skip (web)** — skipping a monthly/yearly
+   prompt without "다시 보지 않기" left no dismissal, so the prompt effect
+   immediately re-created the same modal. Added a session-level
+   `suppressedPrompts` set (mirrors iOS session suppression): a skipped
+   prompt stays closed until reload; "다시 보지 않기" still persists.
+2. **고정 checkbox → lock toggle (web)** — the prompt rows now use a
+   filled/outline `IconLock` toggle instead of a checkbox.
+3. **Report banner "missing" — not a bug.** Reports are retrospective:
+   the monthly banner needs a goal in the *previous* month and the yearly
+   banner only appears in January. A June account with only June goals has
+   no available report until July. Documented for clarity; no code change.
+4. **Web add/detail date+time redesign (calendar popover).** Replaced the
+   native `<input type=date/time>` with a `CalendarPopover` (month grid,
+   prev/next nav, today/selected highlight) for start/end dates and a
+   "시간 포함" / "알림" toggle + `TimePicker` (시/분 selects) so time is
+   optional and date-only save is the default. Applied to the task add
+   modal, habit reminder, and the task detail modal.
+
+Verification: web lint + test (130) + build. iOS untouched.
