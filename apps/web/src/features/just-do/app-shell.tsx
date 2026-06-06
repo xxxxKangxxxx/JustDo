@@ -236,6 +236,9 @@ function JustDoViewport() {
   const [reportUpgradePlan, setReportUpgradePlan] = useState<UpgradePlan | null>(null);
   const billing = useBillingSubscription();
   const searchRef = useRef<HTMLInputElement | null>(null);
+  // Prompts skipped this session: once closed without "다시 보지 않기", don't
+  // re-open the same one until reload (mirrors the iOS session suppression).
+  const suppressedPrompts = useRef<Set<string>>(new Set());
 
   const homeBanner = homeBannerReport(today, s.state.goals, s.state.goalPromptDismissals);
   const canSeeReportDetail = (() => {
@@ -346,6 +349,7 @@ function JustDoViewport() {
       nextPrompt = { kind: "monthly", periodKey: monthlyKey };
     }
     if (!nextPrompt) return;
+    if (suppressedPrompts.current.has(`${nextPrompt.kind}:${nextPrompt.periodKey}`)) return;
     const timer = window.setTimeout(() => setGoalPrompt(nextPrompt), 0);
     return () => window.clearTimeout(timer);
   }, [
@@ -485,7 +489,10 @@ function JustDoViewport() {
             mode={mode}
             prompt={goalPrompt}
             today={today}
-            onClose={() => setGoalPrompt(null)}
+            onClose={() => {
+              suppressedPrompts.current.add(`${goalPrompt.kind}:${goalPrompt.periodKey}`);
+              setGoalPrompt(null);
+            }}
           />
         ) : null}
         {reportTarget ? (
@@ -2485,14 +2492,21 @@ function GoalPromptModal({
                   className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold outline-none"
                   style={{ color: t.text }}
                 />
-                <label className="flex items-center gap-1.5 text-[11px]" style={{ color: t.textTertiary }}>
-                  <input
-                    type="checkbox"
-                    checked={draft.locked}
-                    onChange={(event) => updateDraft(index, { locked: event.target.checked })}
-                  />
-                  고정
-                </label>
+                <button
+                  type="button"
+                  onClick={() => updateDraft(index, { locked: !draft.locked })}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors"
+                  style={{
+                    borderColor: draft.locked ? t.text : t.divider,
+                    background: draft.locked ? t.text : "transparent",
+                    color: draft.locked ? t.bg : t.textTertiary,
+                  }}
+                  aria-pressed={draft.locked}
+                  aria-label={draft.locked ? "고정 해제" : "고정"}
+                  title={draft.locked ? "이번 기간 동안 고정됨" : "이번 기간 동안 고정"}
+                >
+                  <IconLock />
+                </button>
               </div>
               <input
                 value={draft.note}
