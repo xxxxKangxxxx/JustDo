@@ -5028,3 +5028,22 @@ noise (<=0.063), so the default RPC threshold was raised to **0.08** (migration
 `20260611020000`). This also drops two weak real matches (산책 0.032, 코엑스 0.060)
 — precision over recall, per the user's call. Tunable via the RPC default; revisit
 on broader real usage. (Per-user mean still computed at query time.)
+
+## 2026-06-11 E3 robustness: de-duplicate the mean corpus
+
+### Claude Code
+
+User added a 3rd 클라이밍 task and it stopped counting toward 운동하기. Root cause:
+per-user mean-centering is sensitive to corpus composition — 3 identical 클라이밍
+embeddings pulled the mean toward fitness, dropping 클라이밍↔운동하기 from 0.100 to
+0.048 (below the 0.08 threshold). Fixed by computing the mean over **distinct
+titles** (`distinct on (title)` per table) so the mean represents the concept
+distribution, not activity frequency. Verified: 클라이밍↔운동하기 back to 0.084
+(>0.08), no false positives. Migration `20260611030000`. Same winner-take-all +
+0.08 otherwise. (Watch item: a global stored mean would be even more stable but is
+identical to the per-user mean while there is one user.)
+
+Note: a brand-new item still has embedding latency (cron <=1 min) + the client
+match cache is fetched on screen open, so add+complete in the same session may not
+reflect until the goal screen is reopened. Acceptable for now; client refetch
+polish (focus/interval) is a follow-up.
