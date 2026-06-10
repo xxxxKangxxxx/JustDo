@@ -5015,3 +5015,16 @@ only to the single goal it is most similar to in the period (row_number()=1),
 still gated by the threshold. Embedded goals with no item still return a null row.
 No client change needed (same RPC shape). Verified assignment with a per-item
 best-goal SQL check.
+
+## 2026-06-11 E3 tuning: threshold 0.08 (drop weak false positives)
+
+### Claude Code
+
+After winner-take-all, weak false positives still counted at threshold 0
+(월세→책읽기 0.022, 2주년→체력 0.063). User confirmed those should be excluded.
+On the real data there is a clean gap between the strong-match cluster (>=0.10:
+클라이밍 0.100, 면접 0.172, 알바 0.160, 아이마켓 0.403, 독서 0.614) and the weak
+noise (<=0.063), so the default RPC threshold was raised to **0.08** (migration
+`20260611020000`). This also drops two weak real matches (산책 0.032, 코엑스 0.060)
+— precision over recall, per the user's call. Tunable via the RPC default; revisit
+on broader real usage. (Per-user mean still computed at query time.)
