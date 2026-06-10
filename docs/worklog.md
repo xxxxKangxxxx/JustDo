@@ -5002,3 +5002,16 @@ cron for the embed sweep.
 **E3 is functionally complete** across pipeline, matching, web, cron, and iOS.
 Follow-ups: tune the threshold on broader real usage; consider a stored global
 mean if new users with tiny corpora need it; iOS real-device smoke.
+
+## 2026-06-11 E3 fix: winner-take-all attribution
+
+### Claude Code
+
+User hit cross-attribution: with 체력 키우기 + 취업하기 goals, completing 클라이밍
+raised both, and 아이마켓 지원 raised both. Cause: threshold-0 credited an item to
+*every* goal above the (mean-centered) threshold. Fixed by **winner-take-all** in
+`goal_semantic_matches` (migration `20260611010000`): each task/habit is credited
+only to the single goal it is most similar to in the period (row_number()=1),
+still gated by the threshold. Embedded goals with no item still return a null row.
+No client change needed (same RPC shape). Verified assignment with a per-item
+best-goal SQL check.
