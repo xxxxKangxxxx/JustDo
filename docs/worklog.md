@@ -4977,3 +4977,28 @@ with E1 as the offline / not-yet-embedded fallback, then tune the threshold.
 **Next**: wire the RPC into web `goalProgressForPeriod` / iOS
 `GoalSelectors.progress` (E1 fallback when offline/unembedded), then the 1-min
 cron for the embed sweep.
+
+## 2026-06-11 E3 phase 2 complete: cron + iOS client
+
+### Claude Code
+
+- **Cron automation** (user-configured via Supabase dashboard): `embed-pending`
+  runs every minute. First attempt 401'd ("Missing authorization header") because
+  the dashboard job lacked the auth header; re-registered via SQL with
+  `cron.schedule` + `net.http_post` carrying `Authorization: Bearer <anon key>`
+  (anon is public, so no Vault needed). `net._http_response` now shows 200
+  `{"ok":true,...}`. New/edited goals/tasks/habits auto-embed within ~1 min;
+  unembedded items fall back to E1 in the meantime.
+- **iOS client**: new shared `GoalMatchClient` POSTs the `goal_semantic_matches`
+  RPC and groups rows into `[UUID: GoalMatchSet]`; app-side `GoalMatchProvider`
+  resolves the Keychain session (returns nil on offline/sign-out → E1 fallback).
+  `GoalSelectors.progress` takes an optional `matches` map (semantic when a goal
+  is embedded, else E1), and the goal management sheet + report screen fetch
+  matches via `.task`. Web and iOS now share the same RPC + threshold, so progress
+  matches across devices.
+- Verification: iOS `swift test` (66, incl. GoalMatchClient grouping/decoding) +
+  generic `xcodebuild`; web already done.
+
+**E3 is functionally complete** across pipeline, matching, web, cron, and iOS.
+Follow-ups: tune the threshold on broader real usage; consider a stored global
+mean if new users with tiny corpora need it; iOS real-device smoke.

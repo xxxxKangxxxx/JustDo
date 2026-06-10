@@ -469,3 +469,34 @@ struct AppSyncCoordinator {
         return storedSession.appSession(configuration: configuration)
     }
 }
+
+/// Fetches E3 semantic goal matches without the full sync coordinator (no
+/// snapshot/widget dependency). Returns nil on any failure (offline / signed out
+/// / RPC error) so the goal selectors fall back to the E1 token matcher.
+struct GoalMatchProvider {
+    var configurationLoader = SupabaseAppConfigurationLoader()
+    var sessionStore: SupabaseSessionStoring = KeychainSupabaseSessionStore()
+    var authClient = SupabaseAuthClient()
+
+    func fetch(periodType: GoalPeriodType, periodKey: String) async -> [UUID: GoalMatchSet]? {
+        do {
+            guard
+                let configuration = configurationLoader.load(),
+                var stored = try sessionStore.load()
+            else {
+                return nil
+            }
+            if stored.isExpired(), let refreshToken = stored.refreshToken {
+                stored = try await authClient.refreshSession(configuration: configuration, refreshToken: refreshToken)
+                try sessionStore.save(stored)
+            }
+            guard let session = stored.appSession(configuration: configuration) else {
+                return nil
+            }
+            return try await GoalMatchClient(credentials: session.credentials)
+                .fetchMatches(periodType: periodType, periodKey: periodKey)
+        } catch {
+            return nil
+        }
+    }
+}

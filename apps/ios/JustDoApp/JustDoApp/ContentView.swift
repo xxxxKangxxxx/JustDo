@@ -4798,19 +4798,28 @@ private enum GoalSelectors {
         )
     }
 
-    static func progress(goals: [Goal], tasks: [Task], habits: [Habit], type: GoalPeriodType, periodKey: String, today: String) -> [GoalProgress] {
+    static func progress(goals: [Goal], tasks: [Task], habits: [Habit], type: GoalPeriodType, periodKey: String, today: String, matches: [UUID: GoalMatchSet]? = nil) -> [GoalProgress] {
         let range = range(type: type, periodKey: periodKey)
         let periodTasks = tasks.filter { $0.endDate >= range.start && $0.startDate <= range.end }
         return goalsForPeriod(goals, type: type, periodKey: periodKey).map { goal in
             let goalTokens = GoalTextMatcher.goalTokens(title: goal.title, note: goal.note)
-            // A goal with no matching items shows "관련 항목 없음" — never fall back
-            // to all period tasks, which would surface the same global completion
-            // rate for every unrelated goal.
-            let relatedTasks = periodTasks.filter {
-                GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize("\($0.title) \($0.tags.joined(separator: " "))"))
-            }
-            let relatedHabits = habits.filter {
-                GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize($0.title))
+            // Relevance source: E3 semantic matches when the goal is embedded
+            // (present in `matches`), else the E1 token matcher (offline /
+            // signed out / not-yet-embedded). Either way a goal with no matching
+            // items shows "관련 항목 없음" — never the global completion rate.
+            let semantic = matches?[goal.id]
+            let relatedTasks: [Task]
+            let relatedHabits: [Habit]
+            if let semantic {
+                relatedTasks = periodTasks.filter { semantic.taskIds.contains($0.id) }
+                relatedHabits = habits.filter { semantic.habitIds.contains($0.id) }
+            } else {
+                relatedTasks = periodTasks.filter {
+                    GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize("\($0.title) \($0.tags.joined(separator: " "))"))
+                }
+                relatedHabits = habits.filter {
+                    GoalTextMatcher.overlaps(goalTokens, GoalTextMatcher.tokenize($0.title))
+                }
             }
             let completedTasks = relatedTasks.filter(\.isCompleted)
             let slipped = relatedTasks.filter { !$0.isCompleted && $0.endDate < range.end }
@@ -4900,6 +4909,8 @@ private struct GoalManagementSheet: View {
     @State private var editingDraft: GoalEditorDraft?
     @State private var lockedGoal: Goal?
     @State private var reportPresentation: GoalReportPresentation?
+    @State private var yearlyMatches: [UUID: GoalMatchSet]?
+    @State private var monthlyMatches: [UUID: GoalMatchSet]?
 
     private var yearlyKey: String { GoalSelectors.periodKey(.yearly, iso: JDDate.todayISO) }
     private var monthlyKey: String { GoalSelectors.periodKey(.monthly, iso: JDDate.todayISO) }
@@ -4937,7 +4948,7 @@ private struct GoalManagementSheet: View {
                     GoalPeriodCards(
                         title: "연간 · \(yearlyKey)",
                         tint: JDTheme.me,
-                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, habits: habits, type: .yearly, periodKey: yearlyKey, today: JDDate.todayISO),
+                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, habits: habits, type: .yearly, periodKey: yearlyKey, today: JDDate.todayISO, matches: yearlyMatches),
                         onAdd: { startAdd(.yearly, yearlyKey) },
                         onEdit: startEdit(_:),
                         onToggleLock: toggleGoalLock(_:)
@@ -4951,7 +4962,7 @@ private struct GoalManagementSheet: View {
                     GoalPeriodCards(
                         title: "월간 · \(GoalSelectors.periodLabel(.monthly, periodKey: monthlyKey))",
                         tint: JDTheme.habit,
-                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, habits: habits, type: .monthly, periodKey: monthlyKey, today: JDDate.todayISO),
+                        progress: GoalSelectors.progress(goals: goals, tasks: tasks, habits: habits, type: .monthly, periodKey: monthlyKey, today: JDDate.todayISO, matches: monthlyMatches),
                         onAdd: { startAdd(.monthly, monthlyKey) },
                         onEdit: startEdit(_:),
                         onToggleLock: toggleGoalLock(_:)
@@ -4987,6 +4998,11 @@ private struct GoalManagementSheet: View {
                     habits: habits,
                     onClose: { reportPresentation = nil }
                 )
+            }
+            .task(id: goals.count + tasks.count + habits.count) {
+                let provider = GoalMatchProvider()
+                yearlyMatches = await provider.fetch(periodType: .yearly, periodKey: yearlyKey)
+                monthlyMatches = await provider.fetch(periodType: .monthly, periodKey: monthlyKey)
             }
     }
 
@@ -5479,6 +5495,7 @@ private struct GoalReportFullScreen: View {
     let onClose: () -> Void
 
     @State private var page = 0
+    @State private var matches: [UUID: GoalMatchSet]?
 
     private var tint: Color { presentation.target.periodType == .yearly ? JDTheme.me : JDTheme.habit }
     private var progress: [GoalProgress] {
@@ -5488,7 +5505,8 @@ private struct GoalReportFullScreen: View {
             habits: habits,
             type: presentation.target.periodType,
             periodKey: presentation.target.periodKey,
-            today: JDDate.todayISO
+            today: JDDate.todayISO,
+            matches: matches
         )
     }
     private var average: Double {
@@ -5506,6 +5524,12 @@ private struct GoalReportFullScreen: View {
             if presentation.isPreview {
                 GoalReportLockedOverlay(onClose: onClose)
             }
+        }
+        .task {
+            matches = await GoalMatchProvider().fetch(
+                periodType: presentation.target.periodType,
+                periodKey: presentation.target.periodKey
+            )
         }
     }
 
