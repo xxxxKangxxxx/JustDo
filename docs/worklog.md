@@ -4929,3 +4929,24 @@ Goal-matching E3 (semantic embeddings), phase 1 = server-side pipeline only
 (cosine `<=>` ≥ threshold per goal/period), thread matched ids into web
 `goalProgressForPeriod` / iOS `GoalSelectors.progress` with the E1 token matcher
 as the offline / not-yet-embedded fallback, then tune the threshold on real data.
+
+## 2026-06-10 E3 phase 1 verified working
+
+### Claude Code
+
+The embedding pipeline is live and confirmed end to end.
+- Deployed `embed-pending` via `supabase functions deploy --use-api` (Docker was
+  unavailable; `--use-api` bundles server-side, no Docker needed).
+- Provider reality check: Gemini's free embedding models (`text-embedding-004`)
+  are **retired**; only paid `gemini-embedding-001` / `gemini-embedding-2*` remain,
+  and the Korea Gemini API is **prepay** — so the key's GCP project needs a funded
+  prepay balance (a small top-up lasts effectively forever at cents/month). After
+  the user funded the JustDo project's billing account, the sweep succeeded:
+  `{"ok":true,"embedded":{"goals":5,"tasks":21,"habits":2}}`, and a second run
+  returned all zeros (idempotent — every row already embedded).
+- Function stays on `gemini-embedding-001` (SEMANTIC_SIMILARITY, 768-dim,
+  L2-normalized). `GEMINI_API_KEY` secret is set on the project.
+
+**Next (phase 2)**: schedule the sweep (1-min cron), add the cosine matching RPC,
+thread matched ids into web `goalProgressForPeriod` / iOS `GoalSelectors.progress`
+with E1 as the offline / not-yet-embedded fallback, then tune the threshold.

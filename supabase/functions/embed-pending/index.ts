@@ -10,6 +10,9 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// gemini-embedding-001 (GA). Gemini's free embedding models (text-embedding-004
+// etc.) were retired, so this requires billing on the key's GCP project — the
+// cost is still cents at this scale. Reduced to 768 dims and L2-normalized.
 const GEMINI_MODEL = "models/gemini-embedding-001";
 const OUTPUT_DIM = 768;
 const BATCH = 100; // rows per table per invocation (also Gemini's batch cap)
