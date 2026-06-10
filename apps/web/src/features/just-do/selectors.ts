@@ -217,6 +217,8 @@ export type GoalProgress = {
   progress: number;
 };
 
+export type GoalSemanticMatches = Map<string, { taskIds: Set<string>; habitIds: Set<string> }>;
+
 export const goalProgressForPeriod = (
   goals: Goal[],
   tasks: Task[],
@@ -224,16 +226,23 @@ export const goalProgressForPeriod = (
   type: GoalPeriodType,
   periodKey: string,
   today: string,
+  matches?: GoalSemanticMatches | null,
 ): GoalProgress[] => {
   const range = rangeForGoalPeriod(type, periodKey);
   const periodTasks = tasksInRange(tasks, range.start, range.end);
   return goalsForPeriod(goals, type, periodKey).map((goal) => {
     const goalTokens = goalTokenSet(goal);
-    // A goal with no matching items shows "관련 항목 없음" — never fall back to all
-    // period tasks, which would surface the same global completion rate for every
-    // unrelated goal.
-    const relatedTasks = periodTasks.filter((task) => tokensOverlap(goalTokens, taskTokenSet(task)));
-    const relatedHabits = habits.filter((habit) => tokensOverlap(goalTokens, habitTokenSet(habit)));
+    // Relevance source: E3 semantic matches when the goal is embedded (present in
+    // `matches`), else the E1 token matcher (offline / not-yet-embedded). Either
+    // way a goal with no matching items shows "관련 항목 없음" — never the global
+    // completion rate.
+    const semantic = matches?.get(goal.id);
+    const relatedTasks = semantic
+      ? periodTasks.filter((task) => semantic.taskIds.has(task.id))
+      : periodTasks.filter((task) => tokensOverlap(goalTokens, taskTokenSet(task)));
+    const relatedHabits = semantic
+      ? habits.filter((habit) => semantic.habitIds.has(habit.id))
+      : habits.filter((habit) => tokensOverlap(goalTokens, habitTokenSet(habit)));
     const completedTasks = relatedTasks.filter((task) => task.isCompleted);
     const slipped = relatedTasks.filter((task) => !task.isCompleted && task.endDate < range.end);
     const habitScores = relatedHabits.map((habit) => habitPeriodScore(habit, range.start, range.end, today));

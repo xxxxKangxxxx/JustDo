@@ -718,7 +718,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      goal_semantic_matches: {
+        Args: {
+          p_period_type: string
+          p_period_key: string
+          p_threshold?: number
+        }
+        Returns: {
+          goal_id: string
+          item_type: string | null
+          item_id: string | null
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

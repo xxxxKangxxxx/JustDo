@@ -35,6 +35,7 @@ import {
   periodKeyOf,
   tasksOnDate,
 } from "./selectors";
+import { useGoalMatches } from "./semantic-matches";
 import { JustDoProvider, useJustDo } from "./store";
 import { isTagCommitKey, mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
@@ -2705,7 +2706,9 @@ function GoalPeriodSection({
   onEdit: (goal: Goal) => void;
 }) {
   const t = webTokens(mode);
-  const progress = goalProgressForPeriod(goals, tasks, habits, periodType, periodKey, todayISO());
+  const auth = useAuth();
+  const matches = useGoalMatches(periodType, periodKey, !!auth.user, goals.length + tasks.length + habits.length);
+  const progress = goalProgressForPeriod(goals, tasks, habits, periodType, periodKey, todayISO(), matches);
   const color = periodType === "yearly" ? t.me : t.habit;
   return (
     <section className="rounded-xl border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
@@ -2906,9 +2909,11 @@ function LockedGoalModal({ mode, goal, onClose, onUnlock }: { mode: ThemeMode; g
 
 function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: ThemeMode; target: NonNullable<ReportTarget>; locked: boolean; onClose: () => void; onUpgrade: () => void }) {
   const s = useJustDo();
+  const auth = useAuth();
   const t = webTokens(mode);
   const [step, setStep] = useState(0);
-  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, s.state.habits, target.periodType, target.periodKey, todayISO());
+  const matches = useGoalMatches(target.periodType, target.periodKey, !!auth.user, s.state.goals.length + s.state.tasks.length + s.state.habits.length);
+  const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, s.state.habits, target.periodType, target.periodKey, todayISO(), matches);
   const heatmap = periodActivityHeatmap(s.state.tasks, s.state.habits, target.periodType, target.periodKey);
   const totalRelated = progress.reduce((sum, item) => sum + item.relatedCount, 0);
   const totalCompleted = progress.reduce((sum, item) => sum + item.completedCount, 0);
