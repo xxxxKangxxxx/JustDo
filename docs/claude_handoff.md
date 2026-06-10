@@ -169,6 +169,34 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > Settings가 토글 즉시 live 갱신. 실기기 확인 완료. 자세한 경위: `worklog.md`
 > 2026-06-02 엔트리.
 
+> **2026-06-11 E3 semantic goal matching LIVE (web + iOS)** — 손수 만든 동의어
+> 사전(E1)의 일반화 한계를 넘기 위해 **Gemini 임베딩 기반 의미 매칭(E3)**을
+> 전 플랫폼에 구현·배포 완료.
+> - **임베딩 파이프라인**: `goals/tasks/habits.embedding vector(768)` +
+>   텍스트 변경 시 NULL 트리거(`20260606010000`), `embed-pending` Edge Function이
+>   NULL 행을 batch로 Gemini `gemini-embedding-001`(SEMANTIC_SIMILARITY, 768,
+>   L2-normalize)로 임베딩. **pg_cron 1분 주기**로 자동(인증 헤더는 SQL의
+>   `net.http_post`에 anon 키 Bearer로; dashboard 잡은 헤더 누락으로 401 났던 것
+>   재등록으로 해결).
+> - **매칭**: RPC `goal_semantic_matches`(`20260611000000`)가 기간 내 임베딩된
+>   목표별 매칭 항목을 코사인으로 반환. **핵심 학습**: raw 코사인은 짧은 한국어
+>   제목에서 0.72~0.91로 압축(anisotropy)돼 고정 threshold 불가 → **mean-centering
+>   (사용자 평균 차감)** 으로 해결, threshold 0(재현율 우선). 이제 E1이 못 잡던
+>   클라이밍→운동·인턴/면접→취업·독서→책읽기가 잡힘.
+> - **클라이언트**: web `goalProgressForPeriod`/`semantic-matches.ts`, iOS
+>   `GoalMatchClient`+`GoalMatchProvider`+`GoalSelectors.progress`가 RPC 결과로
+>   matched 집합만 교체(임베딩 안 됐거나 오프라인이면 **E1 폴백**). web/iOS 동일
+>   RPC·threshold라 진행률 크로스플랫폼 일치.
+> - **운영 주의**: Gemini 무료 임베딩 모델(text-embedding-004) **retired**, 유료
+>   모델만 존재. 한국 Gemini API는 **선불(prepay)** 이라 키의 GCP 프로젝트
+>   (JustDo, `justdo-494804`)에 잔액 필요(센트/월). `GEMINI_API_KEY`는 Supabase
+>   Edge Function 시크릿. 마이그레이션: `20260606010000_goal_embeddings`,
+>   `20260610000000`/`20260611000000_goal_semantic_matches*` 적용 완료.
+> - 커밋: `b91dde3`(파이프라인) `503ea21`(centering RPC) `daf3e19`(web)
+>   `108d4ee`(iOS). 검증: web lint·test(130)·build / iOS swift test(66)·xcodebuild.
+> - **남은 follow-up**: threshold 광범위 튜닝, 신규 유저(소수 항목) 위해 저장형
+>   global mean 검토, iOS 실기기 smoke.
+
 > **2026-06-06 Goal Progress A-track DONE (web + iOS) + web add-modal UX** —
 > 목표 진행률/리포트 개편(2026-06-03 결정들)을 B→A1→A2→A3 순서로 모두 구현하고,
 > Free 계정 실사용 피드백 4건을 후속 수정했다.
@@ -707,6 +735,11 @@ Applied migrations:
   relaxes the dismissal CHECK for `report_monthly`/`report_yearly`)
 - `20260606000000_goal_target.sql` (2026-06-06 `supabase db push` applied;
   adds optional `goals.target int` for quantitative goals, check > 0)
+- `20260606010000_goal_embeddings.sql` (2026-06-11 applied; pgvector +
+  `embedding vector(768)` on goals/tasks/habits + null-on-text-change triggers)
+- `20260610000000_goal_semantic_matches.sql` +
+  `20260611000000_goal_semantic_matches_centered.sql` (2026-06-11 applied;
+  `goal_semantic_matches` RPC, mean-centered cosine, threshold 0)
 
 Realtime publication includes:
 

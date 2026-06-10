@@ -25,11 +25,15 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > the web add/detail date+time uses a calendar popover (portal) + 시간 포함 toggle.
 > See the 2026-06-06 handoff block.
 >
-> **Next**: (1) iOS real-device smoke of the A-track goal UI, then TestFlight/App
-> Store prep; (2) **E3 embeddings** to generalize goal matching beyond the
-> hand-maintained synonym dictionary (the E1 ceiling — user agreed to ship E1 and
-> follow up with E3); (3) the small report **활동 요약 rollups** (카테고리별
-> 완료율, Habit 달성률); (4) Toss merchant review / Pro checkout DLQ (external).
+> **E3 semantic matching is now LIVE (web + iOS, 2026-06-11)** — Gemini embeddings
+> + mean-centered cosine RPC + pg_cron sweep, with E1 as the offline/unembedded
+> fallback. See the 2026-06-11 handoff block.
+>
+> **Next**: (1) iOS real-device smoke of the goal UI (A-track + E3), then
+> TestFlight/App Store prep; (2) E3 threshold tuning on broader real usage (+ maybe
+> a stored global mean for tiny-corpus new users); (3) the small report **활동 요약
+> rollups** (카테고리별 완료율, Habit 달성률); (4) Toss merchant review / Pro
+> checkout DLQ (external).
 
 Recommended order for the next coding session:
 
