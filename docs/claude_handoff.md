@@ -181,8 +181,11 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > - **매칭**: RPC `goal_semantic_matches`(`20260611000000`)가 기간 내 임베딩된
 >   목표별 매칭 항목을 코사인으로 반환. **핵심 학습**: raw 코사인은 짧은 한국어
 >   제목에서 0.72~0.91로 압축(anisotropy)돼 고정 threshold 불가 → **mean-centering
->   (사용자 평균 차감)** 으로 해결, threshold 0(재현율 우선). 이제 E1이 못 잡던
->   클라이밍→운동·인턴/면접→취업·독서→책읽기가 잡힘.
+>   (사용자 평균 차감)** 으로 해결. 추가로 한 항목이 여러 목표에 동시 카운트되던
+>   문제는 **winner-take-all**(각 항목을 가장 유사한 목표 1개에만 귀속,
+>   `20260611010000`)로, 약한 오탐(월세·2주년)은 **threshold 0.08**
+>   (`20260611020000`)로 정리. 이제 E1이 못 잡던 클라이밍→운동·인턴/면접→취업·
+>   독서→책읽기가 잡히고 교차 귀속/오탐 없음.
 > - **클라이언트**: web `goalProgressForPeriod`/`semantic-matches.ts`, iOS
 >   `GoalMatchClient`+`GoalMatchProvider`+`GoalSelectors.progress`가 RPC 결과로
 >   matched 집합만 교체(임베딩 안 됐거나 오프라인이면 **E1 폴백**). web/iOS 동일
