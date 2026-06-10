@@ -4950,3 +4950,30 @@ The embedding pipeline is live and confirmed end to end.
 **Next (phase 2)**: schedule the sweep (1-min cron), add the cosine matching RPC,
 thread matched ids into web `goalProgressForPeriod` / iOS `GoalSelectors.progress`
 with E1 as the offline / not-yet-embedded fallback, then tune the threshold.
+
+## 2026-06-11 E3 phase 2: matching RPC + anisotropy fix (mean-centering)
+
+### Claude Code
+
+- Added `goal_semantic_matches(period_type, period_key, threshold)` RPC: per
+  embedded goal in a period, returns matched task/habit ids by cosine similarity.
+  Embedded goals with no match still return a row (null item) so the client can
+  tell "matched nothing" from "not embedded yet" (E1 fallback).
+- **Key finding from real data**: raw Gemini cosine on short Korean titles is
+  badly calibrated — every pair sits in a compressed 0.72-0.91 band (embedding
+  anisotropy), so 운동하기↔월세 (0.788) ≈ 운동하기↔클라이밍 (0.808). No global
+  threshold separates them; ranking works but absolute scores don't.
+- **Fix = mean-centering (whitening)**: subtract the user's mean embedding before
+  cosine. This dropped unrelated items to ~0/negative while real matches stayed
+  clearly positive (책읽기↔독서 0.607, 취업↔인턴지원 0.215, 운동↔클라이밍 0.090,
+  운동↔산책 0.015). E3 now catches matches E1 fundamentally can't (클라이밍→운동,
+  인턴/면접/알바→취업, 독서→책읽기) without the raw "everything matches" problem.
+- Decision: **threshold 0** (recall-leaning, "more similar than the user's
+  average") so weak-but-real matches like 산책→운동 count; a few low-score false
+  positives (월세, 2주년) are accepted. Tunable via the RPC param.
+- Note: per-user mean is computed at query time (fine for per-user scale; could
+  switch to a stored global mean later if it helps new users with tiny corpora).
+
+**Next**: wire the RPC into web `goalProgressForPeriod` / iOS
+`GoalSelectors.progress` (E1 fallback when offline/unembedded), then the 1-min
+cron for the embed sweep.
