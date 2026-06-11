@@ -222,8 +222,48 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 >   (c) **클라이언트 캐시/refetch** — 매칭은 목표 화면 열 때 fetch. 새 항목은 임베딩
 >   지연(cron≤1분)+캐시로 추가/완료 직후 반영 안 될 수 있고, 화면 재진입 시 갱신.
 >   또 goal 화면에서 `goal_semantic_matches` 요청이 8개+ 뜸(렌더마다 refetch) →
->   **디바운스/캐시 필요**.
+>   **디바운스/캐시 필요**. **→ 2026-06-11 해결**(아래 "E3 매칭 fetch 디바운스/캐시"
+>   블록, 커밋 `792eecb`: 모듈 캐시 TTL30s + in-flight 디듀프 + 디바운스250ms +
+>   focus refetch).
 >   (d) **iOS 실기기 smoke** 미완(Xcode 재빌드 후 확인 필요).
+
+> **2026-06-11 E3 매칭 fetch 디바운스/캐시 LIVE & DEPLOYED (web)** — E3 follow-up
+> (c) 해결. 운영 목표 화면이 진입 1회당 `goal_semantic_matches` RPC를 **8개+** 쏘던
+> 문제를 web에서 합쳤다. 커밋 `792eecb`, `origin/main` push 완료(Amplify 자동 배포).
+> - **원인**: `useGoalMatches`가 월간·연간 섹션(`GoalSection`) + 리포트
+>   모달(`GoalReportModal`) 3곳에서 호출되는데, `revision` 인자가
+>   `goals.length + tasks.length + habits.length` 합이라 **초기 sync가 항목을
+>   스트리밍하는 동안 0→5→12…로 churn**, effect가 매 tick 재실행되며 RPC를 재발사.
+>   여기에 섹션 2개가 곱해져 8개+.
+> - **해결 (단일 파일 `apps/web/src/features/just-do/semantic-matches.ts`)**:
+>   ① **모듈 레벨 캐시**(`cache: Map<key, {map, fetchedAt}>`, **TTL 30초**) +
+>   **in-flight 디듀프**(`inflight: Map<key, Promise>`) — 같은 period 키
+>   (`"${periodType}:${periodKey}"`)의 모든 reader가 **요청 1개를 공유**.
+>   순수 RPC 호출은 `rpcGoalMatches()`(구 `fetchGoalMatches`를 rename, 더 이상
+>   export 안 함), 캐시/디듀프 경유 진입점은 새 **`loadGoalMatches(type, key, force?)`**.
+>   ② **디바운스 250ms** — effect가 `setTimeout`으로 load를 지연, deps 변경 시
+>   타이머 리셋 → sync churn이 키당 load 1번으로 붕괴. ③ **창 focus 시 force refetch**
+>   (`loadGoalMatches(…, force=true)`, TTL 무시하되 in-flight는 공유) — pg_cron이
+>   ≤1분 지연으로 새 항목을 임베딩하므로 탭 복귀 시 최신 매칭 반영.
+>   ④ **표시값은 렌더 중 파생**(`useMemo`: 현재 키의 async 결과 → `cache.get(key)` →
+>   null) — E1 폴백으로 깜빡이지 않고, effect는 async 콜백에서만 `setResolved` 호출.
+> - **⚠️ lint 함정**: 처음엔 effect 본문에서 캐시를 동기 `setMatches`로 즉시 표시했더니
+>   `react-hooks/set-state-in-effect`(effect 내 동기 setState 금지)로 lint 실패. →
+>   상태는 `{key, map}` async 결과만 들고, 즉시 캐시 표시는 **렌더 단계 `useMemo`로
+>   이전**해서 해결. effect 안에서 절대 동기 setState 하지 말 것.
+> - **iOS는 변경 없음** — `GoalMatchProvider` 호출이 SwiftUI `.task(id: count합)` /
+>   `.task {}`라 id 변경 시 이전 task(URLSession 요청 포함)를 **취소 후 재시작**(supersede)
+>   하므로 web 같은 stampede가 구조적으로 없음. iOS에 actor 캐시 추가는 테스트 부담
+>   대비 실익이 적어 보류(두 화면이 같은 period를 각자 1회 fetch하는 정도의 중복만 남음 —
+>   거슬리면 후속으로 공유 actor 캐시 검토).
+> - **남은 한계/주의**: ⓐ `revision` 변화(항목 추가/완료 직후)는 **TTL 캐시로 게이팅**되어
+>   30초 내엔 즉시 refetch 안 함 — 의도된 동작(새 항목은 임베딩 지연이 있어 어차피
+>   focus/재진입 때 반영). 즉시 반영이 필요해지면 mutation 시 해당 키 캐시를 invalidate
+>   하는 훅을 추가할 것. ⓑ 캐시는 모듈 전역이라 **로그아웃 시 비워지지 않음** — 현재
+>   RPC가 `auth.uid()` 기반이고 계정 전환이 드물어 무해하지만, 멀티계정 시나리오가
+>   생기면 sign-out에서 `cache.clear()` 필요. ⓒ TTL/디바운스 상수는 파일 상단
+>   `CACHE_TTL_MS`/`DEBOUNCE_MS`.
+> - 검증: web lint / vitest **130 통과** / `next build` 통과. iOS 미변경(빌드 불필요).
 
 > **2026-06-06 Goal Progress A-track DONE (web + iOS) + web add-modal UX** —
 > 목표 진행률/리포트 개편(2026-06-03 결정들)을 B→A1→A2→A3 순서로 모두 구현하고,

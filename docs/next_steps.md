@@ -35,13 +35,23 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > history, operational gotchas (Gemini prepay billing, retired free models, deploy
 > gap), and the limitation/follow-up list.
 >
+> **E3 fetch 디바운스/캐시 DONE & DEPLOYED (web, 2026-06-11)** — 목표 화면이
+> 진입 1회당 `goal_semantic_matches`를 8개+ 쏘던 문제를 web에서 해결(커밋 `792eecb`,
+> origin/main 배포). 단일 파일 `apps/web/src/features/just-do/semantic-matches.ts`에
+> 모듈 캐시(TTL 30초) + in-flight 디듀프 + 디바운스 250ms + 창 focus force refetch를
+> 추가하고, 표시값을 렌더 중 `useMemo`로 파생(E1 폴백 깜빡임 방지 + effect 내 동기
+> setState 금지 lint 회피). iOS는 `.task(id:)` supersession으로 이미 합쳐져 미변경.
+> 자세한 내용·주의(TTL이 항목 추가 직후 즉시 refetch를 막음, 로그아웃 시 캐시 미클리어)는
+> 2026-06-11 handoff "E3 매칭 fetch 디바운스/캐시" 블록 참고.
+>
 > **Next**: (1) iOS real-device smoke of the goal UI (A-track + E3), then
-> TestFlight/App Store prep; (2) **debounce/cache the `goal_semantic_matches` fetch**
-> (the goal screen fires 8+ requests per visit; matches also don't auto-refresh
-> after a new item embeds — refetch on focus/interval); (3) E3 threshold tuning /
-> consider a stored global mean for stability, or merging near-duplicate goals;
-> (4) the small report **활동 요약 rollups** (카테고리별 완료율, Habit 달성률);
-> (5) Toss merchant review / Pro checkout DLQ (external).
+> TestFlight/App Store prep; (2) ~~debounce/cache the `goal_semantic_matches`
+> fetch~~ **DONE 2026-06-11 (web)** — follow-ups가 남으면: 항목 mutation 시 해당
+> period 키 캐시 invalidate(즉시 반영), sign-out에서 `cache.clear()`(멀티계정),
+> iOS 공유 actor 캐시(두 화면 중복 제거); (3) E3 threshold tuning / consider a
+> stored global mean for stability, or merging near-duplicate goals; (4) the small
+> report **활동 요약 rollups** (카테고리별 완료율, Habit 달성률); (5) Toss merchant
+> review / Pro checkout DLQ (external).
 
 Recommended order for the next coding session:
 

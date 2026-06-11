@@ -5089,3 +5089,42 @@ as a follow-up.
 - **Open follow-ups**: debounce/cache the goal_semantic_matches fetch (8+ per
   visit; no auto-refresh after embed); iOS device smoke; report 활동 요약 rollups;
   Toss external track.
+
+## 2026-06-11 E3 fetch debounce/cache (web)
+
+### Claude Code
+
+- Resolved E3 follow-up (c): the goal screen fired **8+ `goal_semantic_matches`
+  RPCs per visit**. Root cause — `useGoalMatches` is called from 3 readers
+  (monthly + yearly `GoalSection`, plus `GoalReportModal`) and its `revision`
+  arg is `goals.length + tasks.length + habits.length`, which churns 0→5→12… as
+  the initial sync streams items in, re-firing the effect each tick × 2 sections.
+- Fix in one file `apps/web/src/features/just-do/semantic-matches.ts`:
+  - **Module cache** `cache: Map<"type:key", {map, fetchedAt}>` with **30s TTL**
+    + **in-flight de-dup** `inflight: Map<key, Promise>`. New entry point
+    `loadGoalMatches(type, key, force?)` serves fresh cache / shares the in-flight
+    request; the raw RPC is `rpcGoalMatches()` (renamed from the old exported
+    `fetchGoalMatches`, no longer exported).
+  - **Debounce 250ms** in the effect (`setTimeout`, reset on dep change) so sync
+    churn collapses to one load per key.
+  - **Focus refetch** `window` `focus` → `loadGoalMatches(…, force=true)` (skips
+    TTL, still shares in-flight) so pg_cron-embedded items (≤1 min behind) appear
+    on tab return.
+  - **Displayed value derived in render** via `useMemo` (current key's async
+    result → `cache.get(key)` → null) to avoid flashing to the E1 fallback.
+- **Lint gotcha**: first version set the cached map synchronously inside the
+  effect → `react-hooks/set-state-in-effect` failure. Moved instant-cache display
+  to the render-phase `useMemo`; state now only holds the async `{key, map}` and
+  is set only from async callbacks. Never call setState synchronously in an effect.
+- **iOS untouched** — `GoalMatchProvider` is driven by SwiftUI `.task(id: count합)`
+  / `.task {}`, which cancels+restarts (supersedes, incl. the URLSession request)
+  on id change, so it has no web-style stampede. A shared actor cache was judged
+  not worth the test burden now; only minor cross-screen duplicate fetches remain.
+- **Remaining caveats** (also in handoff): TTL gates immediate refetch after an
+  item add/complete (intended — embedding is delayed anyway; add a per-key cache
+  invalidate on mutation if instant reflection is needed); module cache isn't
+  cleared on sign-out (harmless while single-account + `auth.uid()` RPC, but a
+  multi-account flow would need `cache.clear()`); constants are `CACHE_TTL_MS` /
+  `DEBOUNCE_MS` at the top of the file.
+- Verify: web lint / vitest **130 pass** / `next build` pass. Commit `792eecb`
+  pushed to origin/main → Amplify deploy to justdo.co.kr.
