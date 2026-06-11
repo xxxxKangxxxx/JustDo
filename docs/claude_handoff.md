@@ -169,36 +169,61 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > Settings가 토글 즉시 live 갱신. 실기기 확인 완료. 자세한 경위: `worklog.md`
 > 2026-06-02 엔트리.
 
-> **2026-06-11 E3 semantic goal matching LIVE (web + iOS)** — 손수 만든 동의어
-> 사전(E1)의 일반화 한계를 넘기 위해 **Gemini 임베딩 기반 의미 매칭(E3)**을
-> 전 플랫폼에 구현·배포 완료.
+> **2026-06-11 E3 semantic goal matching LIVE & DEPLOYED (web + iOS)** — 손수 만든
+> 동의어 사전(E1)의 일반화 한계를 넘기 위해 **Gemini 임베딩 기반 의미 매칭(E3)**을
+> 전 플랫폼에 구현하고 운영(justdo.co.kr)에 배포 완료. 24개 커밋이 origin/main에
+> push됨(Amplify 자동 배포). E1은 오프라인/미임베딩 폴백으로 유지.
 > - **임베딩 파이프라인**: `goals/tasks/habits.embedding vector(768)` +
->   텍스트 변경 시 NULL 트리거(`20260606010000`), `embed-pending` Edge Function이
+>   텍스트 변경 시 NULL 트리거(`20260606010000`). `embed-pending` Edge Function이
 >   NULL 행을 batch로 Gemini `gemini-embedding-001`(SEMANTIC_SIMILARITY, 768,
->   L2-normalize)로 임베딩. **pg_cron 1분 주기**로 자동(인증 헤더는 SQL의
->   `net.http_post`에 anon 키 Bearer로; dashboard 잡은 헤더 누락으로 401 났던 것
->   재등록으로 해결).
-> - **매칭**: RPC `goal_semantic_matches`(`20260611000000`)가 기간 내 임베딩된
->   목표별 매칭 항목을 코사인으로 반환. **핵심 학습**: raw 코사인은 짧은 한국어
->   제목에서 0.72~0.91로 압축(anisotropy)돼 고정 threshold 불가 → **mean-centering
->   (사용자 평균 차감)** 으로 해결. 추가로 한 항목이 여러 목표에 동시 카운트되던
->   문제는 **winner-take-all**(각 항목을 가장 유사한 목표 1개에만 귀속,
->   `20260611010000`)로, 약한 오탐(월세·2주년)은 **threshold 0.08**
->   (`20260611020000`)로 정리. 이제 E1이 못 잡던 클라이밍→운동·인턴/면접→취업·
->   독서→책읽기가 잡히고 교차 귀속/오탐 없음.
-> - **클라이언트**: web `goalProgressForPeriod`/`semantic-matches.ts`, iOS
->   `GoalMatchClient`+`GoalMatchProvider`+`GoalSelectors.progress`가 RPC 결과로
->   matched 집합만 교체(임베딩 안 됐거나 오프라인이면 **E1 폴백**). web/iOS 동일
->   RPC·threshold라 진행률 크로스플랫폼 일치.
-> - **운영 주의**: Gemini 무료 임베딩 모델(text-embedding-004) **retired**, 유료
->   모델만 존재. 한국 Gemini API는 **선불(prepay)** 이라 키의 GCP 프로젝트
->   (JustDo, `justdo-494804`)에 잔액 필요(센트/월). `GEMINI_API_KEY`는 Supabase
->   Edge Function 시크릿. 마이그레이션: `20260606010000_goal_embeddings`,
->   `20260610000000`/`20260611000000_goal_semantic_matches*` 적용 완료.
-> - 커밋: `b91dde3`(파이프라인) `503ea21`(centering RPC) `daf3e19`(web)
->   `108d4ee`(iOS). 검증: web lint·test(130)·build / iOS swift test(66)·xcodebuild.
-> - **남은 follow-up**: threshold 광범위 튜닝, 신규 유저(소수 항목) 위해 저장형
->   global mean 검토, iOS 실기기 smoke.
+>   L2-normalize)로 임베딩. 배포는 Docker 없이 `supabase functions deploy
+>   embed-pending --use-api`. **pg_cron 1분 주기** 자동 — 인증 헤더는 SQL
+>   `cron.schedule`의 `net.http_post`에 anon 키 Bearer로(대시보드 잡은 헤더 누락→401
+>   났던 것 재등록으로 fix). 검증은 `select * from net._http_response`(200) /
+>   `cron.job_run_details`.
+> - **매칭 RPC `goal_semantic_matches(period_type, period_key, threshold)`** —
+>   여러 번 튜닝하며 진화. **최종(`20260611040000`)**: ① **mean-centering**(사용자
+>   임베딩 평균 차감) — raw 코사인이 짧은 한국어에서 0.72~0.91로 압축(anisotropy)돼
+>   고정 threshold 불가한 걸 해결. ② **평균은 distinct title로 dedup** — 같은 제목
+>   항목(클라이밍 3개)이 평균을 흔들어 매칭이 threshold 아래로 떨어지던 취약점 fix.
+>   ③ **winner-take-all 제거**(=관련된 모든 목표에 매칭) — 한 task가 비슷한 두 목표
+>   (운동하기+체력키우기)에 둘 다 반영되게. ④ **threshold 0.04**(재현율 우선).
+>   ⚠️ **튜닝 변천 주의**(과거 마이그레이션이 남아있어 헷갈릴 수 있음):
+>   `20260611000000`(첫 centered, threshold 0) → `010000`(winner-take-all) →
+>   `020000`(threshold 0.08) → `030000`(dedup mean) → `040000`(**현재**: winner-take-all
+>   제거 + threshold 0.04). 최신 `create or replace`가 유효하니 **`040000`만 현재
+>   동작**임.
+> - **클라이언트**: web `goalProgressForPeriod`/`semantic-matches.ts`(`useGoalMatches`
+>   훅), iOS `GoalMatchClient`+`GoalMatchProvider`+`GoalSelectors.progress`가 RPC
+>   결과로 matched 집합만 교체. 임베딩 안 됐거나 오프라인이면 **E1 폴백**. web/iOS
+>   동일 RPC라 진행률 크로스플랫폼 일치. RPC는 `security invoker`+`auth.uid()`라
+>   로그인 세션 필요(같은 `getSupabaseClient()` 쿠키 세션 사용).
+> - **운영 함정(반드시 기억)**: ⓐ Gemini 무료 임베딩 모델(text-embedding-004)
+>   **retired**, 유료 모델만 존재. ⓑ 한국 Gemini API는 **선불(prepay)** 이라 키의
+>   GCP 프로젝트(JustDo, `justdo-494804`) 결제 계정에 **잔액 필요**(429
+>   "prepayment credits depleted"; 센트/월 수준). `GEMINI_API_KEY`는 Supabase Edge
+>   Function 시크릿(클라이언트/깃 금지). ⓒ **배포 갭** — 작업이 로컬 커밋만 되고
+>   push 안 되면 운영은 옛 코드(이번에 "task 하나 완료 시 모든 목표 올라가던" 증상은
+>   옛 폴백 버그였음). **운영 테스트 전 반드시 push/배포 확인**.
+> - 적용 마이그레이션: `20260606010000_goal_embeddings`,
+>   `20260610000000`/`20260611000000~040000_goal_semantic_matches*`(전부 적용됨).
+>   주요 커밋: `b91dde3`(파이프라인) `503ea21`(centering) `daf3e19`(web)
+>   `108d4ee`(iOS) `80ea694`(dedup) `fa977b2`(multi-goal+0.04, 최종).
+> - **알려진 한계 / follow-up**:
+>   (a) **매칭은 근본적으로 fuzzy** — 짧은 한국어 제목에선 약한 진짜 매칭(산책·축구↔
+>   운동 ~0.03~0.05)과 약한 오탐(2주년→체력 0.063)의 점수가 **겹쳐서 단일 threshold로
+>   완벽 분리 불가**. 강한 매칭(독서→책읽기 0.61, 면접→취업 0.25)은 잘 됨. 사용자는
+>   현재(재현율 우선 0.04)로 ok. 거슬리는 오탐 나오면 threshold 조정 또는 **비슷한
+>   목표 통합** 권장(운동하기+체력키우기, 취업하기+취업지원하기가 near-dup이라 매칭을
+>   어렵게 함). `축구↔운동하기`는 0.04 미만이라 안 잡힘(사용자 수용).
+>   (b) **per-user 평균은 데이터 변동에 민감** — 신규/소수 항목 유저엔 불안정. 저장형
+>   **global mean**(전 유저 평균을 테이블에 주기 저장)으로 가면 더 안정적이나 단일
+>   유저면 per-user와 동일이라 현재는 무의미.
+>   (c) **클라이언트 캐시/refetch** — 매칭은 목표 화면 열 때 fetch. 새 항목은 임베딩
+>   지연(cron≤1분)+캐시로 추가/완료 직후 반영 안 될 수 있고, 화면 재진입 시 갱신.
+>   또 goal 화면에서 `goal_semantic_matches` 요청이 8개+ 뜸(렌더마다 refetch) →
+>   **디바운스/캐시 필요**.
+>   (d) **iOS 실기기 smoke** 미완(Xcode 재빌드 후 확인 필요).
 
 > **2026-06-06 Goal Progress A-track DONE (web + iOS) + web add-modal UX** —
 > 목표 진행률/리포트 개편(2026-06-03 결정들)을 B→A1→A2→A3 순서로 모두 구현하고,
@@ -741,8 +766,13 @@ Applied migrations:
 - `20260606010000_goal_embeddings.sql` (2026-06-11 applied; pgvector +
   `embedding vector(768)` on goals/tasks/habits + null-on-text-change triggers)
 - `20260610000000_goal_semantic_matches.sql` +
-  `20260611000000_goal_semantic_matches_centered.sql` (2026-06-11 applied;
-  `goal_semantic_matches` RPC, mean-centered cosine, threshold 0)
+  `20260611000000_goal_semantic_matches_centered.sql` +
+  `20260611010000_goal_semantic_matches_argmax.sql` +
+  `20260611020000_goal_matches_threshold.sql` +
+  `20260611030000_goal_matches_dedup_mean.sql` +
+  `20260611040000_goal_matches_multi_goal.sql` (2026-06-11 모두 applied;
+  `goal_semantic_matches` RPC 튜닝 변천. **현재 동작 = `040000`**: mean-centered +
+  dedup mean + 관련 목표 전부 매칭(no winner-take-all) + threshold 0.04)
 
 Realtime publication includes:
 

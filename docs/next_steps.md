@@ -25,15 +25,23 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > the web add/detail date+time uses a calendar popover (portal) + 시간 포함 toggle.
 > See the 2026-06-06 handoff block.
 >
-> **E3 semantic matching is now LIVE (web + iOS, 2026-06-11)** — Gemini embeddings
-> + mean-centered cosine RPC + pg_cron sweep, with E1 as the offline/unembedded
-> fallback. See the 2026-06-11 handoff block.
+> **E3 semantic matching is LIVE & DEPLOYED (web + iOS, 2026-06-11)** — Gemini
+> embeddings + mean-centered, dedup-mean cosine RPC (`goal_semantic_matches`,
+> migration `20260611040000`: matches **all** related goals, threshold 0.04) +
+> pg_cron sweep, with E1 as the offline/unembedded fallback. Pushed to origin/main
+> (Amplify production). The user accepted the current recall-first behavior despite
+> the inherent fuzziness (weak real matches and weak false positives interleave on
+> short Korean titles). See the 2026-06-11 handoff E3 block for the full tuning
+> history, operational gotchas (Gemini prepay billing, retired free models, deploy
+> gap), and the limitation/follow-up list.
 >
 > **Next**: (1) iOS real-device smoke of the goal UI (A-track + E3), then
-> TestFlight/App Store prep; (2) E3 threshold tuning on broader real usage (+ maybe
-> a stored global mean for tiny-corpus new users); (3) the small report **활동 요약
-> rollups** (카테고리별 완료율, Habit 달성률); (4) Toss merchant review / Pro
-> checkout DLQ (external).
+> TestFlight/App Store prep; (2) **debounce/cache the `goal_semantic_matches` fetch**
+> (the goal screen fires 8+ requests per visit; matches also don't auto-refresh
+> after a new item embeds — refetch on focus/interval); (3) E3 threshold tuning /
+> consider a stored global mean for stability, or merging near-duplicate goals;
+> (4) the small report **활동 요약 rollups** (카테고리별 완료율, Habit 달성률);
+> (5) Toss merchant review / Pro checkout DLQ (external).
 
 Recommended order for the next coding session:
 

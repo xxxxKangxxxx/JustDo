@@ -5067,3 +5067,25 @@ possible; recall-first with occasional noise is the accepted trade-off.
 Also observed (not yet fixed): the goal screen fires many goal_semantic_matches
 requests (the hook refetches on every render/revision). Worth debouncing/caching
 as a follow-up.
+
+## 2026-06-11 E3 final state + production deploy + handoff refresh
+
+### Claude Code
+
+- Pushed the whole session (goal-progress B/A1/A2/A3, E3, UI fixes — 24 commits)
+  to origin/main → Amplify deployed to justdo.co.kr. **Lesson**: production ran the
+  old pre-B code until this push, which is why "completing one task raised every
+  goal" appeared (the old all-tasks fallback). Always confirm push/deploy before
+  testing on production.
+- E3 matching settled on **migration `20260611040000`** (mean-centered + dedup
+  mean + match all related goals, no winner-take-all, threshold 0.04). User
+  accepts the recall-first behavior; matching is inherently fuzzy on short Korean
+  titles (강한 매칭 good, 약한 매칭/오탐 interleave). `축구↔운동하기` stays below 0.04
+  (accepted).
+- Refreshed `docs/claude_handoff.md` (2026-06-11 E3 block: full tuning history,
+  the 6 RPC migrations with "040000 is current", Gemini prepay/retired-model and
+  deploy-gap gotchas, limitations + follow-ups) and `docs/next_steps.md` for the
+  next session (incl. Codex). Memory `e3_gemini_embeddings` updated.
+- **Open follow-ups**: debounce/cache the goal_semantic_matches fetch (8+ per
+  visit; no auto-refresh after embed); iOS device smoke; report 활동 요약 rollups;
+  Toss external track.
