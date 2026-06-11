@@ -5047,3 +5047,23 @@ Note: a brand-new item still has embedding latency (cron <=1 min) + the client
 match cache is fetched on screen open, so add+complete in the same session may not
 reflect until the goal screen is reopened. Acceptable for now; client refetch
 polish (focus/interval) is a follow-up.
+
+## 2026-06-11 E3 correction: drop winner-take-all (match all related goals)
+
+### Claude Code
+
+Winner-take-all (each item → one goal) was an over-correction for what was
+actually the old all-tasks fallback bug. With the fallback removed on the
+deployed client, unrelated goals already score negative, so an item only attaches
+to genuinely related goals. Winner-take-all wrongly hid items from similar goals
+(축구/클라이밍 counted toward 운동하기 but not 체력 키우기). Reverted to "match every
+goal above threshold" (migration `20260611040000`) and lowered the default
+threshold 0.08 → **0.04** (recall-leaning, per the user) so weak-but-real fitness
+matches count; dedup mean kept. DB-only change (RPC) — clients refetch the new
+behavior, no redeploy. Honest limitation noted: weak real matches and weak false
+positives interleave on short Korean titles, so a perfect threshold cut isn't
+possible; recall-first with occasional noise is the accepted trade-off.
+
+Also observed (not yet fixed): the goal screen fires many goal_semantic_matches
+requests (the hook refetches on every render/revision). Worth debouncing/caching
+as a follow-up.
