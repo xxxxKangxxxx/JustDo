@@ -1321,7 +1321,7 @@ Recommended order for the next coding session:
 - [x] Add production OAuth callback URLs in Supabase — Site URL `https://www.justdo.co.kr`, Redirect URLs allowlist 6개 (2026-05-16).
 - [x] Run production smoke test after deployment — 운영 도메인 LIVE, Google 로그인 / Task / Habit / Settings 구독 패널 정상 동작 (2026-05-17).
 - [ ] Toss webhook URL 등록 (`https://www.justdo.co.kr/api/webhook/toss`) — Toss 운영 심사 후.
-- [ ] Supabase Redirect URLs에서 `https://main.dcsdzu0ew3l2m.amplifyapp.com/callback` 제거 (smoke test용, 더 이상 불필요).
+- [x] Supabase Redirect URLs에서 `https://main.dcsdzu0ew3l2m.amplifyapp.com/callback` 제거 (smoke test용, 더 이상 불필요) — 2026-06-14 확인 완료. 현재 allowlist 6개: `www.justdo.co.kr/callback`, `justdo.co.kr/callback`, `localhost:3000/callback`, `127.0.0.1:3000/callback`, `192.168.219.101:3000/callback`, `justdo://auth-callback`(iOS 딥링크).
 
 ### Deployment 트랙에서 발견한 SSR 함정 (참고)
 
