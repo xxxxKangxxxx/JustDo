@@ -32,6 +32,8 @@ enum SupabaseAuthError: Error {
     case invalidResponse
     case httpStatus(Int, String)
     case missingUserID
+    case missingIdentityToken
+    case appleAuthorizationFailed(String)
 }
 
 struct SupabaseAuthClient {
@@ -47,6 +49,30 @@ struct SupabaseAuthClient {
 
     @MainActor
     func signIn(
+        provider: SupabaseAuthProvider,
+        configuration: SupabaseAppConfiguration,
+        presentationAnchor: ASPresentationAnchor
+    ) async throws -> SupabaseStoredSession {
+        switch provider {
+        case .apple:
+            // Apple requires a *native* Sign in with Apple flow (ASAuthorization,
+            // not the web OAuth redirect) for App Store compliance and UX. We get
+            // an identity token + nonce on-device and exchange it with Supabase.
+            return try await signInWithApple(
+                configuration: configuration,
+                presentationAnchor: presentationAnchor
+            )
+        case .google:
+            return try await signInWithWebOAuth(
+                provider: provider,
+                configuration: configuration,
+                presentationAnchor: presentationAnchor
+            )
+        }
+    }
+
+    @MainActor
+    private func signInWithWebOAuth(
         provider: SupabaseAuthProvider,
         configuration: SupabaseAppConfiguration,
         presentationAnchor: ASPresentationAnchor
@@ -67,6 +93,31 @@ struct SupabaseAuthClient {
             configuration: configuration,
             code: code,
             verifier: verifier.value
+        )
+    }
+
+    @MainActor
+    private func signInWithApple(
+        configuration: SupabaseAppConfiguration,
+        presentationAnchor: ASPresentationAnchor
+    ) async throws -> SupabaseStoredSession {
+        // Apple hashes the nonce in the credential; Supabase verifies the id_token
+        // against the *raw* nonce, so we keep both.
+        let rawNonce = Self.randomNonceString()
+        let credential = try await AppleAuthorizationRunner().start(
+            nonceHash: Self.sha256Hex(rawNonce),
+            presentationAnchor: presentationAnchor
+        )
+        guard
+            let tokenData = credential.identityToken,
+            let identityToken = String(data: tokenData, encoding: .utf8)
+        else {
+            throw SupabaseAuthError.missingIdentityToken
+        }
+        return try await exchangeIdToken(
+            configuration: configuration,
+            idToken: identityToken,
+            nonce: rawNonce
         )
     }
 
@@ -148,6 +199,39 @@ struct SupabaseAuthClient {
         return try response.storedSession()
     }
 
+    private func exchangeIdToken(
+        configuration: SupabaseAppConfiguration,
+        idToken: String,
+        nonce: String
+    ) async throws -> SupabaseStoredSession {
+        var components = URLComponents(
+            url: configuration.projectURL.appendingPathComponent("auth/v1/token"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [URLQueryItem(name: "grant_type", value: "id_token")]
+        guard let url = components?.url else {
+            throw SupabaseAuthError.invalidResponse
+        }
+
+        let response: TokenResponse = try await post(
+            url: url,
+            anonKey: configuration.anonKey,
+            body: IdTokenRequest(provider: "apple", idToken: idToken, nonce: nonce)
+        )
+        return try response.storedSession()
+    }
+
+    /// Random nonce for Sign in with Apple. The 64-char set divides 256 evenly so
+    /// `% 64` is unbiased.
+    private static func randomNonceString(length: Int = 32) -> String {
+        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_")
+        return String((0..<length).map { _ in charset[Int(UInt8.random(in: 0...255)) % charset.count] })
+    }
+
+    private static func sha256Hex(_ input: String) -> String {
+        SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     private func post<RequestBody: Encodable, ResponseBody: Decodable>(
         url: URL,
         anonKey: String,
@@ -223,6 +307,69 @@ private final class WebAuthenticationSessionRunner: NSObject, ASWebAuthenticatio
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         presentationAnchor ?? ASPresentationAnchor()
+    }
+}
+
+/// Drives a native Sign in with Apple request and bridges its delegate callbacks
+/// into async/await. Held alive by the awaiting `start(...)` call.
+@MainActor
+private final class AppleAuthorizationRunner: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private var presentationAnchor: ASPresentationAnchor?
+    private var continuation: CheckedContinuation<ASAuthorizationAppleIDCredential, Error>?
+    private var controller: ASAuthorizationController?
+
+    func start(
+        nonceHash: String,
+        presentationAnchor: ASPresentationAnchor
+    ) async throws -> ASAuthorizationAppleIDCredential {
+        self.presentationAnchor = presentationAnchor
+        return try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            let request = ASAuthorizationAppleIDProvider().createRequest()
+            request.requestedScopes = [.fullName, .email]
+            request.nonce = nonceHash
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            controller.delegate = self
+            controller.presentationContextProvider = self
+            self.controller = controller
+            controller.performRequests()
+        }
+    }
+
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithAuthorization authorization: ASAuthorization
+    ) {
+        defer { continuation = nil; self.controller = nil }
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            continuation?.resume(throwing: SupabaseAuthError.appleAuthorizationFailed("Unexpected credential type"))
+            return
+        }
+        continuation?.resume(returning: credential)
+    }
+
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithError error: Error
+    ) {
+        defer { continuation = nil; self.controller = nil }
+        continuation?.resume(throwing: error)
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        presentationAnchor ?? ASPresentationAnchor()
+    }
+}
+
+private struct IdTokenRequest: Encodable {
+    var provider: String
+    var idToken: String
+    var nonce: String
+
+    private enum CodingKeys: String, CodingKey {
+        case provider
+        case idToken = "id_token"
+        case nonce
     }
 }
 
