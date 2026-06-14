@@ -1245,44 +1245,50 @@ Recommended order for the next coding session:
 - [x] Define shared mutation event names that both web and iOS can implement.
 - [x] Design iOS mutation queue schema for widget/offline writes.
 
-## Apple Sign-In (애플 로그인) — TODO
+## Apple Sign-In (애플 로그인) — 코드 DONE, 외부 설정 + 검증 남음
 
-> **현재 상태 (2026-06-14)**: 실제 인증은 **Google 로그인만** 동작. Apple 로그인은
-> **UI만 노출된 placeholder**다. App Store는 서드파티 소셜 로그인을 제공하면
-> **네이티브 Sign in with Apple 제공을 사실상 강제**(Guideline 4.8)하므로, 이 작업은
-> **iOS App Store 출시 차단 항목**이다.
+> **App Store 출시 차단 항목** — Google 같은 서드파티 로그인을 제공하면 App Store는
+> 네이티브 Sign in with Apple을 사실상 강제(Guideline 4.8).
 >
-> - **iOS**: 로그인 화면(`ContentView.swift` `AuthLandingView`)에 "Apple로 계속하기"
->   버튼이 보이고 `signIn(.apple)` → `AuthViewModel.signIn` → `SupabaseAuthClient.signIn`
->   까지 연결돼 있으나, 이 경로는 Google과 동일한 **Supabase OAuth 웹 플로우**
->   (`auth/v1/authorize?provider=apple` + `ASWebAuthenticationSession`)다. Supabase에
->   **Apple provider가 미설정**이라 탭하면 실패하고, 설령 설정해도 웹 플로우는 App Store
->   가이드라인/UX상 부적합 — **네이티브 `ASAuthorizationAppleIDProvider` 플로우로 교체
->   필요**.
-> - **web**: `apps/web/src/lib/auth/providers.ts`의 apple 항목이
->   `enabled: NEXT_PUBLIC_AUTH_APPLE_ENABLED === "true"`라 **기본 비활성**
->   ("Apple 로그인 준비 중"). Supabase Apple OAuth 설정 후 플래그만 켜면 Google과 동일한
->   웹 OAuth 리다이렉트 플로우로 동작.
+> **2026-06-14 iOS 네이티브 SIWA 코드 구현 완료** (`SupabaseAuthClient.swift`):
+> `signIn(provider:)`를 **apple = 네이티브 / google = 웹 OAuth로 분기**. apple은
+> `ASAuthorizationController`(`AppleAuthorizationRunner`)로 identity token + nonce를
+> 받아 Supabase **`auth/v1/token?grant_type=id_token`**(`{provider:"apple",
+> id_token, nonce}`)로 교환 → 기존 `TokenResponse.storedSession()` 재사용. nonce는
+> raw를 Supabase로, **SHA256 hex를 Apple 요청에** 넣는다. 로그인 버튼은 이미
+> `signIn(.apple)`에 배선돼 있어 추가 배선 불필요. xcodebuild generic **BUILD
+> SUCCEEDED**. **단, 아래 외부 설정 전엔 런타임 동작 안 함**(엔타이틀먼트/공급자 미설정).
+>
+> **web은 코드 변경 불필요** — `useAuth.tsx`의 `signInWithSupabaseProvider`가
+> google/apple 공통으로 `signInWithOAuth({provider})`를 호출. `providers.ts`의
+> `NEXT_PUBLIC_AUTH_APPLE_ENABLED` 플래그(기본 off)만 켜면 노출된다.
 
-- [ ] **Apple Developer 설정**: App ID에 **Sign in with Apple** capability 추가,
-      web용 **Services ID** 생성, **Key(.p8)** + Key ID + Team ID 발급(Supabase client
-      secret용 JWT 재료).
-- [ ] **Supabase Apple provider 설정**: Apple 정보로 provider 활성화 + redirect URL
-      등록(운영/로컬). 기존 Google과 동일한 redirect allowlist 패턴.
-- [ ] **iOS 네이티브 Sign in with Apple**: Xcode에 **Sign in with Apple capability/
-      entitlement** 추가, `ASAuthorizationController`로 identity token + nonce 획득 →
-      Supabase **`signInWithIdToken`**(native, 웹 플로우 아님)로 세션 교환.
-      `SupabaseAuthClient`에 Apple 전용 경로 추가(현재 provider-agnostic 웹 authorize와 분리).
-- [ ] **web 활성화**: Supabase 설정 완료 후 `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true`
-      (Amplify env) → 웹 OAuth 플로우로 노출.
+- [x] **iOS 네이티브 Sign in with Apple 코드** (2026-06-14): `SupabaseAuthClient`에
+      `AppleAuthorizationRunner` + `signInWithApple` + `exchangeIdToken` + nonce 헬퍼
+      추가, signIn apple/google 분기.
+- [ ] **Xcode capability/entitlement**: **Signing & Capabilities → + Sign in with
+      Apple** 추가(이러면 `com.apple.developer.applesignin` 엔타이틀먼트 + App ID
+      capability가 자동 등록됨). ⚠️ **코드에 엔타이틀먼트를 미리 넣지 않았음** — App ID에
+      capability 없이 엔타이틀먼트만 추가하면 device 서명이 깨지므로, Xcode UI로 추가하는
+      게 안전(자동 서명이 App ID까지 갱신).
+- [ ] **Apple Developer 설정**: App ID에 Sign in with Apple capability, **web용
+      Services ID** 생성, **Key(.p8)** + Key ID + Team ID 발급(Supabase secret JWT 재료).
+- [ ] **Supabase Apple provider 설정**: 위 Apple 정보로 provider 활성화 + redirect URL
+      등록(운영/로컬). iOS native(id_token)와 web(OAuth) 모두 이 provider 설정이 필요.
+- [ ] **web 활성화**: Supabase 설정 후 `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true`
+      (Amplify env)로 버튼 노출(코드 변경 없음).
 - [ ] **계정 연결/이메일 정책**: 동일 사용자가 Google·Apple을 번갈아 쓰면 Supabase가
-      별도 identity를 만들 수 있음 — identity linking 또는 이메일 기준 병합 정책 결정.
-      Apple **"Hide My Email"** relay 주소(`@privaterelay.appleid.com`) 케이스도 고려.
-- [ ] **검증**: SIWA는 시뮬레이터 제약이 있으므로 **실기기**에서 신규/기존 계정,
-      취소/실패, 재로그인 세션 유지까지 smoke. App Store 심사 전 필수.
-- 관련 파일: iOS `ContentView.swift`(AuthLandingView/AuthProviderButton),
-  `AuthViewModel.swift`, `SupabaseAuthClient.swift`; web `lib/auth/providers.ts`,
-  `lib/auth/useAuth.tsx`; Supabase auth 설정.
+      별도 identity를 만들 수 있음 — identity linking 또는 이메일 병합 정책 결정.
+      Apple **"Hide My Email"** relay(`@privaterelay.appleid.com`) 케이스 고려.
+- [ ] **검증**: SIWA는 시뮬레이터 제약이 있어 **실기기**에서 신규/기존 계정,
+      취소/실패, 재로그인 세션 유지 smoke (다른 iOS 작업과 한 번에 진행 예정).
+- **알려진 한계**: Apple은 **첫 로그인 때만 이름(`fullName`)을 credential로** 주고
+  id_token에는 이름이 없음 → 현재 교환 경로는 **displayName 미수집**(이메일만).
+  필요하면 첫 로그인 `credential.fullName`을 잡아 Supabase user_metadata에 별도 업데이트하는
+  follow-up.
+- 관련 파일: iOS `SupabaseAuthClient.swift`(구현), `ContentView.swift`(버튼),
+  `AuthViewModel.swift`; web `lib/auth/providers.ts`, `lib/auth/useAuth.tsx`(무변경);
+  Supabase auth 설정.
 
 ## Android Roadmap (v3)
 

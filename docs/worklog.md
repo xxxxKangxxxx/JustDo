@@ -5167,3 +5167,36 @@ as a follow-up.
   the activity page layout + all report pages render correctly (numbers pending).
   Commit `689e9b6` (code) + docs commit. Not pushed to a deploy here — local app
   is the user-facing surface; web deploys when pushed.
+
+## 2026-06-14 Apple Sign-In: iOS native code
+
+### Claude Code
+
+- Implemented **native Sign in with Apple** on iOS (was a non-functional
+  placeholder; only Google authenticated). App Store effectively requires native
+  SIWA when a third-party login (Google) is offered, so this is an App Store
+  blocker being worked down.
+- `SupabaseAuthClient.swift`: `signIn(provider:)` now **branches** — `.apple` uses
+  a native `ASAuthorizationController` flow (`AppleAuthorizationRunner`, bridged to
+  async/await), `.google` keeps the existing web-OAuth/PKCE path (extracted to
+  `signInWithWebOAuth`). Apple flow: random raw nonce → SHA256 hex into the Apple
+  request, raw nonce kept → on credential, take `identityToken` → exchange via
+  Supabase **`auth/v1/token?grant_type=id_token`** (`IdTokenRequest{provider:
+  "apple", id_token, nonce}`) → reuse `TokenResponse.storedSession()`. Added error
+  cases `missingIdentityToken` / `appleAuthorizationFailed`.
+- The login button was **already wired** to `signIn(.apple)`, so no UI rewiring.
+- **web needs no code** — `useAuth.tsx` `signInWithSupabaseProvider` already calls
+  `signInWithOAuth({provider})` for both; only the `NEXT_PUBLIC_AUTH_APPLE_ENABLED`
+  flag + Supabase provider config gate it.
+- **Deliberately did NOT add the `com.apple.developer.applesignin` entitlement in
+  code** — adding it without the App ID capability breaks device signing. The user
+  adds it via Xcode Signing & Capabilities (auto-updates entitlement + App ID under
+  automatic signing).
+- **Known limit**: Apple only returns `fullName` on first authorization and not in
+  the id_token, so this exchange path leaves displayName empty (email only).
+  Follow-up: capture first-login name → Supabase user_metadata.
+- Verify: xcodebuild generic **BUILD SUCCEEDED**, `git diff --check` clean. Runtime
+  won't work until the external setup (Xcode capability + Apple Developer App
+  ID/Services ID/.p8 + Supabase Apple provider) is done; real-device smoke is
+  deferred to do with the other iOS device checks. Tracking: `next_steps.md`
+  "Apple Sign-In" + memory `apple_signin_todo`.
