@@ -1245,10 +1245,12 @@ Recommended order for the next coding session:
 - [x] Define shared mutation event names that both web and iOS can implement.
 - [x] Design iOS mutation queue schema for widget/offline writes.
 
-## Apple Sign-In (애플 로그인) — 코드 DONE, 외부 설정 + 검증 남음
+## Apple Sign-In (애플 로그인) — DONE & LIVE (web + iOS, 2026-06-14)
 
-> **App Store 출시 차단 항목** — Google 같은 서드파티 로그인을 제공하면 App Store는
-> 네이티브 Sign in with Apple을 사실상 강제(Guideline 4.8).
+> **App Store 출시 차단 항목 해소** — Google 같은 서드파티 로그인을 제공하면 App Store는
+> 네이티브 Sign in with Apple을 사실상 강제(Guideline 4.8). 코드 + 외부 설정 + 실기기
+> 검증까지 완료. web은 운영(justdo.co.kr) 배포됨, iOS는 실기기 동작 확인(엔타이틀먼트
+> 커밋 `fb93e1f`). 남은 건 App Store 심사 트랙 + Apple secret 6개월 갱신 운영.
 >
 > **2026-06-14 iOS 네이티브 SIWA 코드 구현 완료** (`SupabaseAuthClient.swift`):
 > `signIn(provider:)`를 **apple = 네이티브 / google = 웹 OAuth로 분기**. apple은
@@ -1276,8 +1278,15 @@ Recommended order for the next coding session:
       Secret Key(OAuth) = `supabase/scripts/generate-apple-secret.mjs`로 로컬 생성한
       ES256 JWT(Team ID/Key ID/Services ID/.p8). ⚠️ **secret은 Apple 제한상 ~6개월 만료** →
       스크립트 재실행 후 갱신 필요.
-- [ ] **web 활성화**: Amplify env `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true` 추가 + **재배포**
-      (NEXT_PUBLIC은 빌드 시 인라인이라 env 저장만으론 반영 안 됨). 코드 변경 없음.
+- [x] **web 활성화** (2026-06-14): Amplify env `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true` +
+      재배포. NEXT_PUBLIC은 빌드 시 인라인이라 env 저장만으론 반영 안 됨 — `.next/cache`가
+      옛 값을 유지할 수 있어 `providers.ts`를 touch(`fc8dc9a`)해 강제 재컴파일로 해결.
+- [x] **iOS 실기기 검증** (2026-06-14, 강영모 iPhone): Apple 버튼 로딩 → 네이티브 시트 →
+      로그인 → 홈 진입 정상, 취소 시 오류 없음 확인. 검증 중 발견한 2건 fix(`9434c68`):
+      ① `Status.working`이 provider 정보 없어 **로딩이 항상 Google 버튼**에 떴음 →
+      `working(provider)`로 누른 버튼에 표시. ② Apple/웹 시트 취소가 빨간 오류로 잠깐
+      떴음(취소 에러를 generic catch가 `.failed`로) → `ASAuthorizationError.canceled` /
+      `ASWebAuthenticationSessionError.canceledLogin`은 조용히 `.signedOut`.
 - [ ] **계정 연결/이메일 정책**: 동일 사용자가 Google·Apple을 번갈아 쓰면 Supabase가
       별도 identity를 만들 수 있음 — identity linking 또는 이메일 병합 정책 결정.
       Apple **"Hide My Email"** relay(`@privaterelay.appleid.com`) 케이스 고려.

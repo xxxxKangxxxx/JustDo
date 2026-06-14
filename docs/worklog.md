@@ -5200,3 +5200,38 @@ as a follow-up.
   ID/Services ID/.p8 + Supabase Apple provider) is done; real-device smoke is
   deferred to do with the other iOS device checks. Tracking: `next_steps.md`
   "Apple Sign-In" + memory `apple_signin_todo`.
+
+## 2026-06-14 Apple Sign-In: external setup + device verify + fixes (DONE/LIVE)
+
+### Claude Code (paired with user for the external steps)
+
+- Walked the user through the external config that the code needed:
+  - **Xcode**: added Sign in with Apple capability → it wrote
+    `com.apple.developer.applesignin` (["Default"]) into `JustDoApp.entitlements`
+    (committed `fb93e1f`; deliberately not added by hand earlier to avoid breaking
+    device signing before the App ID had the capability).
+  - **Apple Developer**: App ID capability, Services ID `kr.justdo.web` (web), Key
+    (.p8) + Key ID + Team ID.
+  - **Supabase Apple provider**: Client IDs = `kr.justdo.web,kr.justdo.app` (web
+    Services ID + iOS bundle ID — the bundle ID is what validates the native
+    id_token's `aud`), secret = ES256 JWT from the new helper
+    `supabase/scripts/generate-apple-secret.mjs` (runs locally, .p8 never leaves
+    the machine; secret expires ~6 months → re-run to rotate).
+  - **web flag**: `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true` in Amplify. First deploy
+    didn't enable the button — NEXT_PUBLIC is inlined at build time and `.next/cache`
+    can keep the stale value, so touched `providers.ts` (`fc8dc9a`) to force a
+    recompile; button then activated on justdo.co.kr.
+- **Device verify on 강영모's iPhone** surfaced two login-screen bugs, both fixed
+  (`9434c68`):
+  1. The working spinner was **hardcoded to the Google button** (`.working` case
+     passed `.google`). `AuthViewModel.Status.working` now carries the
+     `SupabaseAuthProvider`; ContentView shows the spinner on the tapped button.
+  2. **Cancelling** the Apple/web sheet flashed a red error (the cancel error hit
+     the generic `catch` → `.failed`, then the foreground `reload()` cleared it).
+     `signIn` now treats `ASAuthorizationError.canceled` /
+     `ASWebAuthenticationSessionError.canceledLogin` as a quiet `.signedOut`; real
+     failures still show the error.
+- **Result**: Apple login LIVE on web (justdo.co.kr) and working on the iOS device
+  (native sheet → home; cancel is silent). Pushed through `9434c68`. App Store
+  blocker resolved. Remaining: App Store submission track, the ~6-month Apple secret
+  rotation, and the displayName-not-captured follow-up.
