@@ -2979,13 +2979,13 @@ private struct SettingsRootTabView: View {
                     )
                 }
                 SettingGroup(label: "구독") {
-                    SettingsRow(title: "현재 플랜", detail: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free", chevron: true)
+                    SettingsRow(title: "현재 플랜", detail: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free")
                     SettingsRow(
                         title: "Just Do Mode",
                         pro: !isProPlan,
+                        isLast: true,
                         right: AnyView(ToggleSwitch(isOn: justDoModeBinding))
                     )
-                    SettingsRow(title: "Pro로 업그레이드", pro: true, chevron: true, isLast: true)
                 }
                 SettingGroup(label: "데이터") {
                     SyncStatusRow(status: syncStatus, actionMessage: actionMessage, onRetry: onRetrySync)

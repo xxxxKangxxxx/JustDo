@@ -5235,3 +5235,39 @@ as a follow-up.
   (native sheet → home; cancel is silent). Pushed through `9434c68`. App Store
   blocker resolved. Remaining: App Store submission track, the ~6-month Apple secret
   rotation, and the displayName-not-captured follow-up.
+
+## 2026-06-14 iOS App Store prep: Pro/IAP compliance (remove purchase CTA)
+
+### Claude Code (paired with user on the policy decision)
+
+- Started the **iOS App Store submission track**. Audited the iOS feature set: it
+  is functionally complete (the report-entry Home banner is implemented —
+  `ReportBanner` / `homeReportBanner` / `GoalReportSelectors.homeBannerReport` in
+  `ContentView.swift`; the open `[ ]` in `next_steps.md`/`ios_phase6_status.md` was
+  stale). Apple + Google login both LIVE. Bundle `kr.justdo.app`, automatic signing,
+  team `Y99467L298`, `MARKETING_VERSION 1.0` / build 1.
+- **Pro/payment policy decision (user chose)**: iOS v1 keeps Pro **gating** but
+  **removes the in-app purchase UI** — Pro is honored only for users who subscribed
+  via web Toss (multiplatform exception). No purchase prompt or external link in
+  iOS, so it doesn't trip **App Store Guideline 3.1.1**. Consistent with the
+  existing `payment_provider` decision (Apple IAP deferred to after v1). Apple IAP
+  remains a later track.
+- Audited every Pro touchpoint in `ContentView.swift`. Only one was a purchase CTA:
+  the **"Pro로 업그레이드" row** in the 구독 group (had `chevron` but no `action`, so
+  it already did nothing) — **removed**. Also dropped the dead `chevron` on the
+  "현재 플랜" row (no navigation target) and made the Just Do Mode row `isLast`. The
+  remaining Pro mentions are kept — they're feature-gating notices, not purchase
+  mechanisms and carry no external link: "Just Do Mode는 Pro 기능입니다" /
+  "데이터 내보내기는 Pro 버전에서…" (gate messages), the report-preview blur
+  ("전체 리포트는 Pro에서 펼쳐져요"), and the FAQ "Pro 기능과 결제 기능은 추후 별도
+  결제 정책과 함께 제공될 예정입니다".
+- Verify: `xcodebuild -scheme JustDoApp -destination 'generic/platform=iOS' build`
+  **BUILD SUCCEEDED** (first attempt failed only on Swift argument order —
+  `isLast` must precede `right` in `SettingsRow`; fixed). Not yet committed.
+- **Remaining App Store prep** (tracked in `next_steps.md`): app icon polish +
+  dark/tinted variants (only light 1024 shipped), release build config (move
+  production Supabase values out of `Local.xcconfig`, build number), App Store
+  Connect listing (metadata, screenshots, privacy nutrition labels, age rating;
+  privacy policy = justdo.co.kr), and a final user-run real-device visual smoke.
+  Minor: project-level `IPHONEOS_DEPLOYMENT_TARGET` is 26.2 but the app target
+  overrides to 17.0 (effective = 17.0).

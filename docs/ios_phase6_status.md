@@ -415,7 +415,9 @@ swift test
   - Still needs user-run real-device visual confirmation after the latest
     full-screen IA refinements.
 
-- [ ] **iOS report-entry follow-up (2026-06-01 결정)**.
+- [x] **iOS report-entry follow-up (2026-06-01 결정)** — Home 상단 리포트 배너
+  구현 완료 (`ReportBanner` / `homeReportBanner` / `GoalReportSelectors.homeBannerReport`
+  in `ContentView.swift`). 2026-06-14 확인.
   - Add Home top report banner when a previous month/year report becomes
     available.
   - Add smaller Settings → 목표 supporting report banners near the matching
