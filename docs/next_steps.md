@@ -49,9 +49,11 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > fetch~~ **DONE 2026-06-11 (web)** — follow-ups가 남으면: 항목 mutation 시 해당
 > period 키 캐시 invalidate(즉시 반영), sign-out에서 `cache.clear()`(멀티계정),
 > iOS 공유 actor 캐시(두 화면 중복 제거); (3) E3 threshold tuning / consider a
-> stored global mean for stability, or merging near-duplicate goals; (4) the small
-> report **활동 요약 rollups** (카테고리별 완료율, Habit 달성률); (5) Toss merchant
-> review / Pro checkout DLQ (external).
+> stored global mean for stability, or merging near-duplicate goals; (4)
+> ~~report **활동 요약 rollups**~~ **DONE 2026-06-14** (web+iOS, 커밋 `689e9b6`:
+> 할 일 완료율·카테고리별 완료율·Habit 달성률·최고 스트릭·가장 많이 밀린 작업,
+> 활동 스텝 스크롤화; web↔iOS 수치 cross-check + 실기기 수치확인은 follow-up);
+> (5) Toss merchant review / Pro checkout DLQ (external).
 
 Recommended order for the next coding session:
 
@@ -498,18 +500,22 @@ Recommended order for the next coding session:
   false-positive avoidance, and the no-match → no-fallback case in tests on both
   platforms.
 
-## Report Content (2026-06-03 decision, not yet implemented)
+## Report Content (2026-06-03 decision — DONE)
 
 > Refines the existing stepped report (web `GoalReportModal` /
 > `GoalReportPreviewModal`, iOS `GoalReportFullScreen`). The report already has
 > `완료율/평균 진행률 → 활동 → 목표별 진행 → 이야기` steps; this is the agreed
-> content + gating, to implement alongside the goal-progress work.
+> content + gating. **A3 (목표별/이야기/회고/Free blur) landed 2026-06-06; the
+> 활동 요약 rollups landed 2026-06-14 (commit `689e9b6`)** — this section is now
+> fully implemented. Remaining: web↔iOS number cross-check on a real account.
 
 - **목표별 진행 = centerpiece**: show each goal's auto progress + target
   (`운동 7/10`); qualitative goals show %. Optionally list the read-only items
-  that counted (never editable).
+  that counted (never editable). _(DONE 2026-06-06)_
 - **활동 요약**: round out to Task 완료율, 카테고리별 완료율, Habit 달성률, 최고
-  스트릭, 가장 많이 밀린 작업 (some already present; fill the gaps).
+  스트릭, 가장 많이 밀린 작업. _(DONE 2026-06-14 — all five rollups added to the
+  activity step on web + iOS; `period*` selectors in web `selectors.ts` +
+  mirrored in iOS `GoalSelectors`.)_
 - **이야기 (narrative)**: keep the template (no AI yet) but **fill it with real
   data** — name the best-progress and most-behind goal so it reads personal.
 - **회고 (reflection)**: append a single **non-stored** retrospective question

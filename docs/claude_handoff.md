@@ -265,6 +265,40 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 >   `CACHE_TTL_MS`/`DEBOUNCE_MS`.
 > - 검증: web lint / vitest **130 통과** / `next build` 통과. iOS 미변경(빌드 불필요).
 
+> **2026-06-14 리포트 활동 요약 롤업 DONE (web + iOS)** — 리포트 활동 스텝(web
+> `GoalReportModal` step 1 / iOS `GoalReportFullScreen` 활동 페이지)이 히트맵만
+> 보여주던 것을 5개 기간 롤업으로 채움. 커밋 `689e9b6`(아직 **未push**, 사용자
+> 실기기 레이아웃 확인 후 커밋 — 수치 cross-check는 미완).
+> - **5개 롤업(월간·연간 공통, 기간 전체 기준 = 목표와 무관)**: ① **할 일 완료율**
+>   (기간 task 완료/전체) ② **카테고리별 완료율**(카테고리별 그룹, 활동 많은 순, 무카테고리
+>   → "미분류" 한 줄) ③ **Habit 달성률**(평균 + habit별; 기간 내 활성일 0인 습관은 제외해
+>   평균을 0으로 끌어내리지 않음) ④ **최고 스트릭**(현재 스트릭 최댓값 습관) ⑤ **가장 많이
+>   밀린 작업**(미완료+기한 지난 기간 task 중 가장 오래 지연).
+> - **web**: `selectors.ts`에 순수 selector 5개(`periodTaskCompletion`,
+>   `periodCategoryCompletion`, `periodHabitAchievement`, `periodBestStreak`,
+>   `periodMostSlipped`) + `habitPeriodStats`(active/done/rate)를 기존
+>   `habitPeriodScore`에서 추출(달성률·활성일 판정 공유). `selectors.test.ts`로
+>   알고리즘 검증(완료율/null 카테고리/비활성 습관 제외/스트릭/지연 최댓값).
+>   `app-shell.tsx` 활동 스텝을 **스크롤 섹션**으로 재구성 — step 컨테이너를
+>   `flex flex-col`로 바꾸고 각 step을 `min-h-0 flex-1`(+활동/목표별/이야기는
+>   `overflow-y-auto`)로 전환(콘텐츠 길어도 내부 스크롤).
+> - **iOS**: 동일 selector를 app-target `GoalSelectors`에 미러(`habitPeriodStats`도
+>   추가). **`categories` threading** — `GoalManagementSheet` + `GoalReportFullScreen`
+>   **2개 호출부**(설정→목표 line ~3076, 홈 배너 line ~590) 모두 `snapshot?.categories`
+>   전달. `GoalActivitySummary`/`GoalRollupBar`/`GoalHighlightCard` 뷰로 렌더
+>   (`GoalReportPage`가 이미 ScrollView라 추가만으로 스크롤됨). Task 모델은
+>   **`categoryID: UUID?`**(web `categoryId`와 이름 다름), `JDCategory =
+>   JustDoShared.Category` 타입별칭 사용.
+> - **Free 게이팅**: 리포트 전체가 이미 blur라 **추가 게이팅 불필요**(자동 상속).
+> - **주의/한계**: ⓐ **최고 스트릭은 플랫폼 간 미세 차이 가능** — web `habitStreak`는
+>   주간 습관의 비활성일을 건너뛰지만 iOS `JDDate.habitStreak`는 `log==1`만 연속으로
+>   세 비활성일을 고려 안 함(앱 전역에서 쓰는 기존 정의 유지). 일반 daily 습관은 동일.
+>   ⓑ **수치 cross-check 미완** — 레이아웃/페이지만 실기기 확인. 같은 계정 web↔iOS 수치
+>   일치 확인은 follow-up. ⓒ 활동 요약 결정(`next_steps.md` Report Content)의 풀셋을
+>   모두 채움(Task 완료율/카테고리/Habit/스트릭/밀림).
+> - 검증: web lint / vitest **140** / `next build`; iOS `swift test` **66** /
+>   xcodebuild generic **BUILD SUCCEEDED** / `git diff --check` clean.
+
 > **2026-06-06 Goal Progress A-track DONE (web + iOS) + web add-modal UX** —
 > 목표 진행률/리포트 개편(2026-06-03 결정들)을 B→A1→A2→A3 순서로 모두 구현하고,
 > Free 계정 실사용 피드백 4건을 후속 수정했다.

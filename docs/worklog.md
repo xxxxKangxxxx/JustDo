@@ -5128,3 +5128,41 @@ as a follow-up.
   `DEBOUNCE_MS` at the top of the file.
 - Verify: web lint / vitest **130 pass** / `next build` pass. Commit `792eecb`
   pushed to origin/main → Amplify deploy to justdo.co.kr.
+
+## 2026-06-14 리포트 활동 요약 롤업 (web + iOS)
+
+### Claude Code
+
+- Filled the report **활동 step** (previously just the heatmap) with the five
+  rollups from the 2026-06-03 Report Content decision: 할 일 완료율, 카테고리별
+  완료율, Habit 달성률(평균 + per-habit), 최고 스트릭, 가장 많이 밀린 작업. All
+  period-wide (not goal-scoped), monthly + yearly.
+- **web** `selectors.ts`: added `periodTaskCompletion` / `periodCategoryCompletion`
+  / `periodHabitAchievement` / `periodBestStreak` / `periodMostSlipped`, and
+  extracted `habitPeriodStats` (active/done/rate) out of `habitPeriodScore` so the
+  achievement rollup can both rate a habit and tell whether it applies to the
+  period (active==0 → excluded). `selectors.test.ts` +5 describe blocks
+  (completion, null-category → 미분류, weekly-habit-with-no-active-day exclusion,
+  best streak, longest-overdue). vitest 130 → **140**.
+- **web** `app-shell.tsx`: activity step rebuilt as scrollable sections. The step
+  container (`B`) became `flex flex-col`; each step switched `h-full` →
+  `min-h-0 flex-1` (activity/goals/story also `overflow-y-auto`) so long content
+  scrolls inside the fixed-height modal instead of overflowing.
+- **iOS** `ContentView.swift`: mirrored the five selectors + `habitPeriodStats` in
+  the app-target `GoalSelectors`. **Threaded `categories`** into `GoalManagementSheet`
+  and **both** `GoalReportFullScreen` call sites (settings→목표 and the home banner).
+  New views `GoalActivitySummary` / `GoalRollupBar` / `GoalHighlightCard` render the
+  sections; `GoalReportPage` already wraps content in a `ScrollView`. Gotchas: iOS
+  Task is `categoryID: UUID?` (web is `categoryId`), and `JDCategory =
+  JustDoShared.Category`.
+- **Free gating**: rollups live inside the already-blurred report, so no new gating.
+- **Caveats**: 최고 스트릭 can differ slightly cross-platform — web `habitStreak`
+  skips a weekly habit's inactive days, iOS `JDDate.habitStreak` just walks back
+  while `log==1` (kept the app's existing definition). Numbers were **not yet
+  cross-checked** web↔iOS on a real account; only layout/pages were smoke-checked.
+- Verify: web lint / vitest **140** / `next build`; iOS `swift test` **66** /
+  xcodebuild generic **BUILD SUCCEEDED**; `git diff --check` clean. Installed the
+  build to 강영모의 iPhone (iPhone 14 Pro, iOS 26.5) via `devicectl`; user confirmed
+  the activity page layout + all report pages render correctly (numbers pending).
+  Commit `689e9b6` (code) + docs commit. Not pushed to a deploy here — local app
+  is the user-facing surface; web deploys when pushed.
