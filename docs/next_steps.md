@@ -1266,17 +1266,18 @@ Recommended order for the next coding session:
 - [x] **iOS 네이티브 Sign in with Apple 코드** (2026-06-14): `SupabaseAuthClient`에
       `AppleAuthorizationRunner` + `signInWithApple` + `exchangeIdToken` + nonce 헬퍼
       추가, signIn apple/google 분기.
-- [ ] **Xcode capability/entitlement**: **Signing & Capabilities → + Sign in with
-      Apple** 추가(이러면 `com.apple.developer.applesignin` 엔타이틀먼트 + App ID
-      capability가 자동 등록됨). ⚠️ **코드에 엔타이틀먼트를 미리 넣지 않았음** — App ID에
-      capability 없이 엔타이틀먼트만 추가하면 device 서명이 깨지므로, Xcode UI로 추가하는
-      게 안전(자동 서명이 App ID까지 갱신).
-- [ ] **Apple Developer 설정**: App ID에 Sign in with Apple capability, **web용
-      Services ID** 생성, **Key(.p8)** + Key ID + Team ID 발급(Supabase secret JWT 재료).
-- [ ] **Supabase Apple provider 설정**: 위 Apple 정보로 provider 활성화 + redirect URL
-      등록(운영/로컬). iOS native(id_token)와 web(OAuth) 모두 이 provider 설정이 필요.
-- [ ] **web 활성화**: Supabase 설정 후 `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true`
-      (Amplify env)로 버튼 노출(코드 변경 없음).
+- [x] **Xcode capability/entitlement** (2026-06-14, 사용자): Signing & Capabilities에
+      Sign in with Apple 추가(엔타이틀먼트는 코드에 미리 안 넣음 — App ID capability 없이
+      넣으면 device 서명 깨짐, Xcode UI 추가가 자동 서명으로 App ID까지 갱신).
+- [x] **Apple Developer 설정** (2026-06-14, 사용자): App ID Sign in with Apple capability,
+      **Services ID `kr.justdo.web`**(web), **Key(.p8)** + Key ID + Team ID 발급.
+- [x] **Supabase Apple provider 설정** (2026-06-14, 사용자): provider 활성화,
+      **Client IDs = `kr.justdo.web,kr.justdo.app`**(web Services ID + iOS 번들 ID),
+      Secret Key(OAuth) = `supabase/scripts/generate-apple-secret.mjs`로 로컬 생성한
+      ES256 JWT(Team ID/Key ID/Services ID/.p8). ⚠️ **secret은 Apple 제한상 ~6개월 만료** →
+      스크립트 재실행 후 갱신 필요.
+- [ ] **web 활성화**: Amplify env `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true` 추가 + **재배포**
+      (NEXT_PUBLIC은 빌드 시 인라인이라 env 저장만으론 반영 안 됨). 코드 변경 없음.
 - [ ] **계정 연결/이메일 정책**: 동일 사용자가 Google·Apple을 번갈아 쓰면 Supabase가
       별도 identity를 만들 수 있음 — identity linking 또는 이메일 병합 정책 결정.
       Apple **"Hide My Email"** relay(`@privaterelay.appleid.com`) 케이스 고려.
