@@ -17,7 +17,9 @@ final class AuthViewModel: ObservableObject {
         case missingConfiguration
         case signedOut
         case signedIn
-        case working
+        /// Carries the provider being signed in so the UI shows the spinner on the
+        /// right button (Apple vs Google).
+        case working(SupabaseAuthProvider)
         case failed(String)
     }
 
@@ -134,7 +136,7 @@ final class AuthViewModel: ObservableObject {
                 return
             }
 
-            status = .working
+            status = .working(provider)
             let session = try await authClient.signIn(
                 provider: provider,
                 configuration: configuration,
@@ -144,8 +146,22 @@ final class AuthViewModel: ObservableObject {
             profile = session.profile
             status = .signedIn
         } catch {
-            status = .failed(error.localizedDescription)
+            // Dismissing the Apple sheet / web auth session is a user cancel, not a
+            // failure — return quietly to the signed-out screen with no red error.
+            status = Self.isUserCancellation(error) ? .signedOut : .failed(error.localizedDescription)
         }
+    }
+
+    /// True when the error is the user backing out of the Apple (`ASAuthorization`)
+    /// or web-OAuth (`ASWebAuthenticationSession`) sheet.
+    private static func isUserCancellation(_ error: Error) -> Bool {
+        if let authError = error as? ASAuthorizationError, authError.code == .canceled {
+            return true
+        }
+        if let webError = error as? ASWebAuthenticationSessionError, webError.code == .canceledLogin {
+            return true
+        }
+        return false
     }
 
     func signOut() {

@@ -84,8 +84,8 @@ struct ContentView: View {
                     _Concurrency.Task { await onSessionChanged() }
                 }
             )
-        case .working:
-            AuthLandingView(workingProvider: .google, onSignIn: signIn(with:))
+        case .working(let provider):
+            AuthLandingView(workingProvider: provider, onSignIn: signIn(with:))
         case .failed(let message):
             AuthLandingView(
                 message: message,
