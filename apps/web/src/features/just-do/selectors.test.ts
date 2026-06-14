@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Goal, GoalPeriodType, GoalPromptDismissal, Habit, Task } from "@/types/domain";
+import type { Category, Goal, GoalPeriodType, GoalPromptDismissal, Habit, Task } from "@/types/domain";
 import {
   availableReports,
   goalProgressForPeriod,
@@ -9,6 +9,11 @@ import {
   isReportDismissed,
   justDoTaskSections,
   justDoTasksUntil,
+  periodBestStreak,
+  periodCategoryCompletion,
+  periodHabitAchievement,
+  periodMostSlipped,
+  periodTaskCompletion,
   tasksInRange,
   tasksOnDate,
 } from "./selectors";
@@ -365,5 +370,129 @@ describe("homeBannerReport / isReportDismissed", () => {
     const report = { periodType: "monthly" as const, periodKey: "2026-05" };
     expect(isReportDismissed(report, [dismissal("report_monthly", "2026-04")])).toBe(false);
     expect(isReportDismissed(report, [dismissal("report_monthly", "2026-05")])).toBe(true);
+  });
+});
+
+describe("activity summary rollups", () => {
+  const makeHabit = (over: Partial<Habit> = {}): Habit => ({
+    id: "h",
+    title: "운동",
+    emoji: "🏃",
+    category: "habit",
+    startedAt: "2026-04-01",
+    recurType: "daily",
+    log: {},
+    ...over,
+  });
+  const makeCategory = (over: Partial<Category> = {}): Category => ({
+    id: "cat_me",
+    name: "내 일",
+    color: "#111",
+    isDefault: true,
+    position: 0,
+    ...over,
+  });
+  const TYPE = "monthly" as const;
+  const KEY = "2026-04";
+  const AFTER = "2026-05-01"; // a "today" past the period (full month elapsed)
+
+  describe("periodTaskCompletion", () => {
+    it("counts completed over total period tasks", () => {
+      const tasks = [
+        makeTask({ id: "a", endDate: "2026-04-05", isCompleted: true }),
+        makeTask({ id: "b", endDate: "2026-04-10", isCompleted: false }),
+        makeTask({ id: "c", endDate: "2026-03-30", isCompleted: true }), // out of range
+      ];
+      expect(periodTaskCompletion(tasks, TYPE, KEY)).toEqual({ completed: 1, total: 2, rate: 0.5 });
+    });
+
+    it("is zero with no tasks", () => {
+      expect(periodTaskCompletion([], TYPE, KEY)).toEqual({ completed: 0, total: 0, rate: 0 });
+    });
+  });
+
+  describe("periodCategoryCompletion", () => {
+    it("groups by category, most-active first, with rates", () => {
+      const categories = [makeCategory({ id: "work", name: "업무", color: "#abc" }), makeCategory()];
+      const tasks = [
+        makeTask({ id: "1", categoryId: "work", endDate: "2026-04-02", isCompleted: true }),
+        makeTask({ id: "2", categoryId: "work", endDate: "2026-04-03", isCompleted: false }),
+        makeTask({ id: "3", categoryId: "work", endDate: "2026-04-04", isCompleted: true }),
+        makeTask({ id: "4", categoryId: "cat_me", endDate: "2026-04-05", isCompleted: true }),
+      ];
+      const rows = periodCategoryCompletion(tasks, categories, TYPE, KEY);
+      expect(rows.map((r) => [r.name, r.completed, r.total])).toEqual([
+        ["업무", 2, 3],
+        ["내 일", 1, 1],
+      ]);
+      expect(rows[0].color).toBe("#abc");
+      expect(rows[0].rate).toBeCloseTo(2 / 3);
+    });
+
+    it("collapses uncategorized tasks into a 미분류 row", () => {
+      const tasks = [makeTask({ id: "1", categoryId: null, endDate: "2026-04-02", isCompleted: true })];
+      const rows = periodCategoryCompletion(tasks, [], TYPE, KEY);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ categoryId: null, name: "미분류", completed: 1, total: 1 });
+    });
+  });
+
+  describe("periodHabitAchievement", () => {
+    it("rates each habit by logged active days and averages them", () => {
+      const habits = [
+        makeHabit({ id: "h1", log: { "2026-04-01": 1, "2026-04-02": 1 } }), // some days logged
+        makeHabit({ id: "h2", log: {} }), // active days but none logged → 0
+      ];
+      const { average, items } = periodHabitAchievement(habits, TYPE, KEY, AFTER);
+      expect(items).toHaveLength(2);
+      const h1 = items.find((i) => i.habitId === "h1")!;
+      expect(h1.rate).toBeCloseTo(2 / 30);
+      expect(items.find((i) => i.habitId === "h2")!.rate).toBe(0);
+      expect(average).toBeCloseTo((2 / 30 + 0) / 2);
+    });
+
+    it("excludes habits with no active day in the period", () => {
+      // A weekly habit on Sundays only; April 2026 has Sundays, so use a day-list
+      // that never occurs would be empty — instead use a recurDays set with days.
+      const habit = makeHabit({ id: "h1", recurType: "weekly", recurDays: [] }); // no active days
+      const { items, average } = periodHabitAchievement([habit], TYPE, KEY, AFTER);
+      expect(items).toHaveLength(0);
+      expect(average).toBe(0);
+    });
+  });
+
+  describe("periodBestStreak", () => {
+    it("returns the habit with the longest current streak", () => {
+      const today = "2026-04-10";
+      const habits = [
+        makeHabit({ id: "h1", title: "독서", log: { "2026-04-10": 1, "2026-04-09": 1 } }), // 2
+        makeHabit({ id: "h2", title: "운동", log: { "2026-04-10": 1 } }), // 1
+      ];
+      expect(periodBestStreak(habits, today)).toMatchObject({ habitId: "h1", streak: 2 });
+    });
+
+    it("returns null when no habit has a live streak", () => {
+      const habits = [makeHabit({ id: "h1", log: {} })];
+      expect(periodBestStreak(habits, "2026-04-10")).toBeNull();
+    });
+  });
+
+  describe("periodMostSlipped", () => {
+    it("picks the incomplete period task overdue the longest", () => {
+      const today = "2026-04-20";
+      const tasks = [
+        makeTask({ id: "a", endDate: "2026-04-05", isCompleted: false }), // 15 days overdue
+        makeTask({ id: "b", endDate: "2026-04-15", isCompleted: false }), // 5 days
+        makeTask({ id: "c", endDate: "2026-04-01", isCompleted: true }), // done → ignored
+      ];
+      const worst = periodMostSlipped(tasks, TYPE, KEY, today);
+      expect(worst?.task.id).toBe("a");
+      expect(worst?.overdueDays).toBe(15);
+    });
+
+    it("returns null when nothing is overdue", () => {
+      const tasks = [makeTask({ id: "a", endDate: "2026-04-25", isCompleted: false })];
+      expect(periodMostSlipped(tasks, TYPE, KEY, "2026-04-20")).toBeNull();
+    });
   });
 });

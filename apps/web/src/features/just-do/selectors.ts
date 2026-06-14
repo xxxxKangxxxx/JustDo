@@ -1,5 +1,5 @@
 import { addDays, daysInMonth, isoOf, parseISO, weekdayOfISO } from "@/lib/date";
-import type { Goal, GoalPeriodType, GoalPromptDismissal, Habit, Task } from "@/types/domain";
+import type { Category, Goal, GoalPeriodType, GoalPromptDismissal, Habit, Task } from "@/types/domain";
 
 export const tasksOnDate = (tasks: Task[], iso: string) =>
   tasks.filter((task) => task.startDate <= iso && iso <= task.endDate);
@@ -189,11 +189,17 @@ const goalTokenSet = (goal: Goal) => {
 const taskTokenSet = (task: Task) => tokenize(`${task.title} ${task.tags.join(" ")}`);
 const habitTokenSet = (habit: Habit) => tokenize(habit.title);
 
-// A matched habit contributes its period log-completion ratio (logged active
-// days / active days up to today), so habit-oriented goals earn partial credit.
-const habitPeriodScore = (habit: Habit, start: string, end: string, today: string): number => {
+// A habit's period completion over its *elapsed active* days (logged active days
+// / active days up to today): `active` is also how we tell whether a habit even
+// applies to the period (0 → exclude from achievement rollups).
+export const habitPeriodStats = (
+  habit: Habit,
+  start: string,
+  end: string,
+  today: string,
+): { active: number; done: number; rate: number } => {
   const last = today < end ? today : end;
-  if (last < start) return 0;
+  if (last < start) return { active: 0, done: 0, rate: 0 };
   let active = 0;
   let done = 0;
   for (let iso = start; iso <= last; iso = addDays(iso, 1)) {
@@ -201,8 +207,13 @@ const habitPeriodScore = (habit: Habit, start: string, end: string, today: strin
     active += 1;
     if (habit.log[iso]) done += 1;
   }
-  return active ? done / active : 0;
+  return { active, done, rate: active ? done / active : 0 };
 };
+
+// A matched habit contributes its period log-completion ratio, so habit-oriented
+// goals earn partial credit.
+const habitPeriodScore = (habit: Habit, start: string, end: string, today: string): number =>
+  habitPeriodStats(habit, start, end, today).rate;
 
 export type GoalProgress = {
   goal: Goal;
@@ -290,6 +301,139 @@ export const periodActivityHeatmap = (
     const completedHabits = habits.filter((habit) => habit.log[iso]).length;
     return completedTasks + completedHabits;
   });
+};
+
+// --- Activity summary rollups (report 활동 step) ----------------------------
+// Period-wide rollups (not goal-scoped) for the report's activity step. All are
+// derived from the same period range + completion rules as the goal cards so the
+// numbers stay consistent. Ported to iOS GoalSelectors for cross-platform parity.
+
+export type TaskCompletion = { completed: number; total: number; rate: number };
+
+export type CategoryCompletion = {
+  categoryId: string | null;
+  name: string;
+  color: string;
+  completed: number;
+  total: number;
+  rate: number;
+};
+
+export type HabitAchievement = { habitId: string; title: string; emoji: string; rate: number };
+
+export type StreakHighlight = { habitId: string; title: string; emoji: string; streak: number };
+
+export type SlippedHighlight = { task: Task; overdueDays: number };
+
+const UNCATEGORIZED_NAME = "미분류";
+const UNCATEGORIZED_COLOR = "#9CA3AF";
+
+const daysBetween = (fromISO: string, toISO: string): number =>
+  Math.round((Date.parse(toISO) - Date.parse(fromISO)) / 86_400_000);
+
+/** Task 완료율 over the whole period (every task in range, completed or not). */
+export const periodTaskCompletion = (
+  tasks: Task[],
+  type: GoalPeriodType,
+  periodKey: string,
+): TaskCompletion => {
+  const range = rangeForGoalPeriod(type, periodKey);
+  const periodTasks = tasksInRange(tasks, range.start, range.end);
+  const completed = periodTasks.filter((task) => task.isCompleted).length;
+  const total = periodTasks.length;
+  return { completed, total, rate: total ? completed / total : 0 };
+};
+
+/**
+ * 카테고리별 완료율: period tasks grouped by category, most-active first. Tasks
+ * with no category collapse into a single "미분류" row.
+ */
+export const periodCategoryCompletion = (
+  tasks: Task[],
+  categories: Category[],
+  type: GoalPeriodType,
+  periodKey: string,
+): CategoryCompletion[] => {
+  const range = rangeForGoalPeriod(type, periodKey);
+  const periodTasks = tasksInRange(tasks, range.start, range.end);
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  const groups = new Map<string, { completed: number; total: number }>();
+  for (const task of periodTasks) {
+    const key = task.categoryId ?? "";
+    const group = groups.get(key) ?? { completed: 0, total: 0 };
+    group.total += 1;
+    if (task.isCompleted) group.completed += 1;
+    groups.set(key, group);
+  }
+  const rows: CategoryCompletion[] = [];
+  for (const [key, group] of groups) {
+    const category = key ? byId.get(key) : undefined;
+    rows.push({
+      categoryId: key || null,
+      name: category?.name ?? UNCATEGORIZED_NAME,
+      color: category?.color ?? UNCATEGORIZED_COLOR,
+      completed: group.completed,
+      total: group.total,
+      rate: group.total ? group.completed / group.total : 0,
+    });
+  }
+  return rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ko-KR"));
+};
+
+/**
+ * Habit 달성률: per-habit completion over elapsed active days, plus the average.
+ * Habits with no active day in the period (e.g. a weekly habit whose days never
+ * fell in range) are excluded so they don't drag the average to 0.
+ */
+export const periodHabitAchievement = (
+  habits: Habit[],
+  type: GoalPeriodType,
+  periodKey: string,
+  today: string,
+): { average: number; items: HabitAchievement[] } => {
+  const range = rangeForGoalPeriod(type, periodKey);
+  const items: HabitAchievement[] = [];
+  for (const habit of habits) {
+    const stats = habitPeriodStats(habit, range.start, range.end, today);
+    if (stats.active === 0) continue;
+    items.push({ habitId: habit.id, title: habit.title, emoji: habit.emoji, rate: stats.rate });
+  }
+  const average = items.length ? items.reduce((sum, item) => sum + item.rate, 0) / items.length : 0;
+  return { average, items };
+};
+
+/**
+ * 최고 스트릭: the habit with the longest *current* streak as of today. Streaks
+ * are anchored to today (not the period), matching the habit screen's meaning.
+ */
+export const periodBestStreak = (habits: Habit[], today: string): StreakHighlight | null => {
+  let best: StreakHighlight | null = null;
+  for (const habit of habits) {
+    const streak = habitStreak(habit, today);
+    if (streak <= 0) continue;
+    if (!best || streak > best.streak) {
+      best = { habitId: habit.id, title: habit.title, emoji: habit.emoji, streak };
+    }
+  }
+  return best;
+};
+
+/** 가장 많이 밀린 작업: incomplete period task overdue (endDate < today) the longest. */
+export const periodMostSlipped = (
+  tasks: Task[],
+  type: GoalPeriodType,
+  periodKey: string,
+  today: string,
+): SlippedHighlight | null => {
+  const range = rangeForGoalPeriod(type, periodKey);
+  const periodTasks = tasksInRange(tasks, range.start, range.end);
+  let worst: SlippedHighlight | null = null;
+  for (const task of periodTasks) {
+    if (task.isCompleted || task.endDate >= today) continue;
+    const overdueDays = daysBetween(task.endDate, today);
+    if (!worst || overdueDays > worst.overdueDays) worst = { task, overdueDays };
+  }
+  return worst;
 };
 
 export type ReportAvailability = { periodType: GoalPeriodType; periodKey: string };

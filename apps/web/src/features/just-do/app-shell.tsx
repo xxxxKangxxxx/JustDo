@@ -32,7 +32,12 @@ import {
   justDoTaskSections,
   justDoTasksUntil,
   periodActivityHeatmap,
+  periodBestStreak,
+  periodCategoryCompletion,
+  periodHabitAchievement,
   periodKeyOf,
+  periodMostSlipped,
+  periodTaskCompletion,
   tasksOnDate,
 } from "./selectors";
 import { useGoalMatches } from "./semantic-matches";
@@ -2915,6 +2920,12 @@ function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: T
   const matches = useGoalMatches(target.periodType, target.periodKey, !!auth.user, s.state.goals.length + s.state.tasks.length + s.state.habits.length);
   const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, s.state.habits, target.periodType, target.periodKey, todayISO(), matches);
   const heatmap = periodActivityHeatmap(s.state.tasks, s.state.habits, target.periodType, target.periodKey);
+  // 활동 요약 rollups (period-wide, independent of goals).
+  const taskCompletion = periodTaskCompletion(s.state.tasks, target.periodType, target.periodKey);
+  const categoryRows = periodCategoryCompletion(s.state.tasks, s.state.categories, target.periodType, target.periodKey);
+  const habitAchievement = periodHabitAchievement(s.state.habits, target.periodType, target.periodKey, todayISO());
+  const bestStreak = periodBestStreak(s.state.habits, todayISO());
+  const mostSlipped = periodMostSlipped(s.state.tasks, target.periodType, target.periodKey, todayISO());
   const totalRelated = progress.reduce((sum, item) => sum + item.relatedCount, 0);
   const totalCompleted = progress.reduce((sum, item) => sum + item.completedCount, 0);
   const pct = totalRelated ? totalCompleted / totalRelated : 0;
@@ -2942,10 +2953,10 @@ function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: T
           ))}
         </div>
         <div className="relative min-h-0 flex-1">
-          <div className={`h-full px-6 pt-5 ${locked ? "pointer-events-none select-none blur-[6px]" : ""}`} aria-hidden={locked}>
+          <div className={`flex h-full flex-col px-6 pt-5 ${locked ? "pointer-events-none select-none blur-[6px]" : ""}`} aria-hidden={locked}>
           <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>{periodLabel(target.periodType, target.periodKey)} · {labels[step]}</div>
           {step === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
               <div className="relative">
                 <ProgressRing pct={pct} size={176} color={t.me.solid} bg={t.surfaceAlt} />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -2957,15 +2968,80 @@ function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: T
               <div className="mt-2 text-[13px]" style={{ color: t.textSecondary }}>목표 {progress.length}개를 기준으로 계산했어요.</div>
             </div>
           ) : step === 1 ? (
-            <div className="flex h-full flex-col justify-center">
-              <div className="mb-6 text-[20px] font-bold tracking-[-0.5px]">{isYear ? "달마다 어떻게 움직였나요" : "이 달, 언제 활동했나요"}</div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-1">
+              <div className="mb-4 text-[18px] font-bold tracking-[-0.5px]">{isYear ? "달마다 어떻게 움직였나요" : "이 달, 언제 활동했나요"}</div>
               {isYear ? <YearTrend values={heatmap} mode={mode} /> : <Heatmap values={heatmap} mode={mode} />}
-              <p className="mt-6 text-[13.5px] leading-6" style={{ color: t.textSecondary }}>
-                가장 활동이 많았던 구간을 기준으로 리듬을 확인할 수 있습니다.
-              </p>
+
+              <div className="mt-6 flex items-center gap-2">
+                <div className="text-[13px] font-semibold">할 일 완료율</div>
+                <div className="flex-1" />
+                <div className="text-[12px]" style={{ color: t.textTertiary }}>{taskCompletion.completed}/{taskCompletion.total} · <b style={{ color: t.text }}>{Math.round(taskCompletion.rate * 100)}%</b></div>
+              </div>
+              <div className="mt-2"><ProgressBar pct={taskCompletion.rate} color={isYear ? t.me.solid : t.habit.solid} bg={t.surfaceAlt} /></div>
+
+              {categoryRows.length ? (
+                <div className="mt-6">
+                  <div className="mb-2.5 text-[13px] font-semibold">카테고리별 완료율</div>
+                  <div className="flex flex-col gap-2.5">
+                    {categoryRows.map((row) => (
+                      <div key={row.categoryId ?? "none"}>
+                        <div className="mb-1 flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
+                          <span className="truncate text-[12.5px] font-medium">{row.name}</span>
+                          <div className="flex-1" />
+                          <span className="shrink-0 text-[11.5px]" style={{ color: t.textTertiary }}>{row.completed}/{row.total} · <b style={{ color: t.text }}>{Math.round(row.rate * 100)}%</b></span>
+                        </div>
+                        <ProgressBar pct={row.rate} color={row.color} bg={t.surfaceAlt} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {habitAchievement.items.length ? (
+                <div className="mt-6">
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <div className="text-[13px] font-semibold">Habit 달성률</div>
+                    <div className="flex-1" />
+                    <div className="text-[12px]" style={{ color: t.textTertiary }}>평균 <b style={{ color: t.text }}>{Math.round(habitAchievement.average * 100)}%</b></div>
+                  </div>
+                  <div className="flex flex-col gap-2.5">
+                    {habitAchievement.items.map((item) => (
+                      <div key={item.habitId}>
+                        <div className="mb-1 flex items-center gap-2">
+                          <span className="shrink-0 text-[13px]">{item.emoji}</span>
+                          <span className="truncate text-[12.5px] font-medium">{item.title}</span>
+                          <div className="flex-1" />
+                          <span className="shrink-0 text-[11.5px]" style={{ color: t.text }}><b>{Math.round(item.rate * 100)}%</b></span>
+                        </div>
+                        <ProgressBar pct={item.rate} color={t.habit.solid} bg={t.surfaceAlt} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {bestStreak || mostSlipped ? (
+                <div className="mt-6 grid grid-cols-2 gap-2.5">
+                  {bestStreak ? (
+                    <div className="rounded-xl border px-3.5 py-3" style={{ borderColor: t.divider, background: t.bg2 }}>
+                      <div className="text-[10.5px] font-bold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>최고 스트릭</div>
+                      <div className="mt-1.5 flex items-baseline gap-1"><span className="text-[20px] font-bold tracking-[-1px]">{bestStreak.streak}</span><span className="text-[11px]" style={{ color: t.textTertiary }}>일</span></div>
+                      <div className="mt-0.5 truncate text-[12px]" style={{ color: t.textSecondary }}>{bestStreak.emoji} {bestStreak.title}</div>
+                    </div>
+                  ) : null}
+                  {mostSlipped ? (
+                    <div className="rounded-xl border px-3.5 py-3" style={{ borderColor: t.divider, background: t.bg2 }}>
+                      <div className="text-[10.5px] font-bold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>가장 많이 밀린 작업</div>
+                      <div className="mt-1.5 flex items-baseline gap-1"><span className="text-[20px] font-bold tracking-[-1px]">{mostSlipped.overdueDays}</span><span className="text-[11px]" style={{ color: t.textTertiary }}>일 지남</span></div>
+                      <div className="mt-0.5 truncate text-[12px]" style={{ color: t.textSecondary }}>{mostSlipped.task.title}</div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : step === 2 ? (
-            <div className="flex h-full flex-col justify-center gap-4">
+            <div className="flex min-h-0 flex-1 flex-col justify-center gap-4 overflow-y-auto">
               <div className="text-[16px] font-bold tracking-[-0.3px]">목표별 진행</div>
               {progress.map((item) => (
                 <div key={item.goal.id}>
@@ -2980,7 +3056,7 @@ function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: T
               ))}
             </div>
           ) : (
-            <div className="flex h-full flex-col">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
               <ReportIllustration mode={mode} tone={isYear ? "cool" : "warm"} />
               <div className="mt-5 text-[22px] font-bold leading-tight tracking-[-0.7px]">{isYear ? "한 해의 방향이 남긴 흔적." : "이번 달의 약속이 만든 흐름."}</div>
               <div className="mt-4 flex flex-col gap-3 text-[14px] leading-7">

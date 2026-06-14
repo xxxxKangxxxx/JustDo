@@ -592,6 +592,7 @@ private struct HomeRootView: View {
                 goals: snapshot?.goals ?? [],
                 tasks: snapshot?.tasks ?? [],
                 habits: snapshot?.habits ?? [],
+                categories: snapshot?.categories ?? [],
                 onClose: { goalReportPresentation = nil }
             )
         }
@@ -3077,6 +3078,7 @@ private struct SettingsRootTabView: View {
                 goals: snapshot?.goals ?? [],
                 tasks: snapshot?.tasks ?? [],
                 habits: snapshot?.habits ?? [],
+                categories: snapshot?.categories ?? [],
                 isProPlan: isProPlan,
                 onAddGoal: onAddGoal,
                 onSaveGoal: onSaveGoal,
@@ -4852,11 +4854,12 @@ private enum GoalSelectors {
         }
     }
 
-    /// A matched habit contributes its period log-completion ratio (logged active
-    /// days / active days up to today), mirroring web `habitPeriodScore`.
-    private static func habitPeriodScore(_ habit: Habit, start: String, end: String, today: String) -> Double {
+    /// A habit's period completion over its elapsed active days (logged active
+    /// days / active days up to today). `active` also tells whether a habit
+    /// applies to the period at all. Mirrors web `habitPeriodStats`.
+    static func habitPeriodStats(_ habit: Habit, start: String, end: String, today: String) -> (active: Int, done: Int, rate: Double) {
         let last = today < end ? today : end
-        if last < start { return 0 }
+        if last < start { return (0, 0, 0) }
         var active = 0
         var done = 0
         var iso = start
@@ -4867,7 +4870,12 @@ private enum GoalSelectors {
             }
             iso = JDDate.addDays(iso, 1)
         }
-        return active == 0 ? 0 : Double(done) / Double(active)
+        return (active, done, active == 0 ? 0 : Double(done) / Double(active))
+    }
+
+    /// A matched habit contributes its period log-completion ratio, mirroring web.
+    private static func habitPeriodScore(_ habit: Habit, start: String, end: String, today: String) -> Double {
+        habitPeriodStats(habit, start: start, end: end, today: today).rate
     }
 
     private static func habitActiveOn(_ habit: Habit, iso: String) -> Bool {
@@ -4894,12 +4902,136 @@ private enum GoalSelectors {
         }
     }
 
+    // --- Activity summary rollups (report 활동 page), mirroring web selectors ---
+
+    static func periodTasks(_ tasks: [Task], type: GoalPeriodType, periodKey: String) -> [Task] {
+        let range = range(type: type, periodKey: periodKey)
+        return tasks.filter { $0.endDate >= range.start && $0.startDate <= range.end }
+    }
+
+    /// Task 완료율 over the whole period.
+    static func taskCompletion(tasks: [Task], type: GoalPeriodType, periodKey: String) -> (completed: Int, total: Int, rate: Double) {
+        let period = periodTasks(tasks, type: type, periodKey: periodKey)
+        let completed = period.filter(\.isCompleted).count
+        let total = period.count
+        return (completed, total, total == 0 ? 0 : Double(completed) / Double(total))
+    }
+
+    /// 카테고리별 완료율: period tasks grouped by category, most-active first.
+    static func categoryCompletion(tasks: [Task], categories: [JDCategory], type: GoalPeriodType, periodKey: String) -> [CategoryCompletionRow] {
+        let period = periodTasks(tasks, type: type, periodKey: periodKey)
+        var groups: [String: (completed: Int, total: Int)] = [:]
+        for task in period {
+            let key = task.categoryID?.uuidString ?? ""
+            var group = groups[key] ?? (0, 0)
+            group.total += 1
+            if task.isCompleted { group.completed += 1 }
+            groups[key] = group
+        }
+        let rows = groups.map { key, group -> CategoryCompletionRow in
+            let uuid = UUID(uuidString: key)
+            let category = uuid.flatMap { id in categories.first { $0.id == id } }
+            return CategoryCompletionRow(
+                categoryId: uuid,
+                name: category?.name ?? "미분류",
+                color: category?.color ?? "#9CA3AF",
+                completed: group.completed,
+                total: group.total,
+                rate: group.total == 0 ? 0 : Double(group.completed) / Double(group.total)
+            )
+        }
+        return rows.sorted {
+            $0.total != $1.total ? $0.total > $1.total : $0.name.localizedCompare($1.name) == .orderedAscending
+        }
+    }
+
+    /// Habit 달성률: per-habit completion over elapsed active days + the average.
+    static func habitAchievement(habits: [Habit], type: GoalPeriodType, periodKey: String, today: String) -> (average: Double, items: [HabitAchievementRow]) {
+        let range = range(type: type, periodKey: periodKey)
+        var items: [HabitAchievementRow] = []
+        for habit in habits {
+            let stats = habitPeriodStats(habit, start: range.start, end: range.end, today: today)
+            if stats.active == 0 { continue }
+            items.append(HabitAchievementRow(habitId: habit.id, title: habit.title, emoji: habit.emoji, rate: stats.rate))
+        }
+        let average = items.isEmpty ? 0 : items.map(\.rate).reduce(0, +) / Double(items.count)
+        return (average, items)
+    }
+
+    /// 최고 스트릭: habit with the longest current streak as of today.
+    static func bestStreak(habits: [Habit], today: String) -> StreakHighlight? {
+        var best: StreakHighlight?
+        for habit in habits {
+            let streak = JDDate.habitStreak(habit, selectedDate: today)
+            if streak <= 0 { continue }
+            if best == nil || streak > best!.streak {
+                best = StreakHighlight(title: habit.title, emoji: habit.emoji, streak: streak)
+            }
+        }
+        return best
+    }
+
+    /// 가장 많이 밀린 작업: incomplete period task overdue (endDate < today) the longest.
+    static func mostSlipped(tasks: [Task], type: GoalPeriodType, periodKey: String, today: String) -> SlippedHighlight? {
+        let period = periodTasks(tasks, type: type, periodKey: periodKey)
+        var worst: SlippedHighlight?
+        for task in period {
+            if task.isCompleted || task.endDate >= today { continue }
+            let overdue = daysBetween(task.endDate, today)
+            if worst == nil || overdue > worst!.overdueDays {
+                worst = SlippedHighlight(title: task.title, overdueDays: overdue)
+            }
+        }
+        return worst
+    }
+
+    private static func daysBetween(_ fromISO: String, _ toISO: String) -> Int {
+        let f = JDDate.parts(fromISO)
+        let t = JDDate.parts(toISO)
+        let calendar = Calendar.current
+        guard
+            let from = calendar.date(from: DateComponents(year: f.year, month: f.month, day: f.day)),
+            let to = calendar.date(from: DateComponents(year: t.year, month: t.month, day: t.day))
+        else { return 0 }
+        return calendar.dateComponents([.day], from: from, to: to).day ?? 0
+    }
+
+}
+
+struct CategoryCompletionRow: Identifiable {
+    let categoryId: UUID?
+    let name: String
+    let color: String
+    let completed: Int
+    let total: Int
+    let rate: Double
+    var id: String { categoryId?.uuidString ?? "none" }
+}
+
+struct HabitAchievementRow: Identifiable {
+    let habitId: UUID
+    let title: String
+    let emoji: String
+    let rate: Double
+    var id: UUID { habitId }
+}
+
+struct StreakHighlight {
+    let title: String
+    let emoji: String
+    let streak: Int
+}
+
+struct SlippedHighlight {
+    let title: String
+    let overdueDays: Int
 }
 
 private struct GoalManagementSheet: View {
     let goals: [Goal]
     let tasks: [Task]
     let habits: [Habit]
+    let categories: [JDCategory]
     let isProPlan: Bool
     let onAddGoal: (GoalDraft) -> Void
     let onSaveGoal: (Goal) -> Void
@@ -4996,6 +5128,7 @@ private struct GoalManagementSheet: View {
                     goals: goals,
                     tasks: tasks,
                     habits: habits,
+                    categories: categories,
                     onClose: { reportPresentation = nil }
                 )
             }
@@ -5492,10 +5625,27 @@ private struct GoalReportFullScreen: View {
     let goals: [Goal]
     let tasks: [Task]
     let habits: [Habit]
+    let categories: [JDCategory]
     let onClose: () -> Void
 
     @State private var page = 0
     @State private var matches: [UUID: GoalMatchSet]?
+
+    private var type: GoalPeriodType { presentation.target.periodType }
+    private var periodKey: String { presentation.target.periodKey }
+    private var taskCompletion: (completed: Int, total: Int, rate: Double) {
+        GoalSelectors.taskCompletion(tasks: tasks, type: type, periodKey: periodKey)
+    }
+    private var categoryRows: [CategoryCompletionRow] {
+        GoalSelectors.categoryCompletion(tasks: tasks, categories: categories, type: type, periodKey: periodKey)
+    }
+    private var habitAchievement: (average: Double, items: [HabitAchievementRow]) {
+        GoalSelectors.habitAchievement(habits: habits, type: type, periodKey: periodKey, today: JDDate.todayISO)
+    }
+    private var bestStreak: StreakHighlight? { GoalSelectors.bestStreak(habits: habits, today: JDDate.todayISO) }
+    private var mostSlipped: SlippedHighlight? {
+        GoalSelectors.mostSlipped(tasks: tasks, type: type, periodKey: periodKey, today: JDDate.todayISO)
+    }
 
     private var tint: Color { presentation.target.periodType == .yearly ? JDTheme.me : JDTheme.habit }
     private var progress: [GoalProgress] {
@@ -5580,6 +5730,14 @@ private struct GoalReportFullScreen: View {
 
                 GoalReportPage(eyebrow: "활동 흐름", title: presentation.target.periodType == .yearly ? "월별 흐름" : "활동 히트맵", tint: tint) {
                     GoalHeatmap(values: GoalSelectors.heatmap(tasks: tasks, habits: habits, type: presentation.target.periodType, periodKey: presentation.target.periodKey), tint: tint)
+                    GoalActivitySummary(
+                        taskCompletion: taskCompletion,
+                        categoryRows: categoryRows,
+                        habitAchievement: habitAchievement,
+                        bestStreak: bestStreak,
+                        mostSlipped: mostSlipped,
+                        tint: tint
+                    )
                 }
                 .tag(1)
 
@@ -5794,6 +5952,134 @@ private struct GoalProgressRow: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
+}
+
+private struct GoalRollupBar: View {
+    let rate: Double
+    let color: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(JDTheme.surfaceAlt)
+                Capsule().fill(color).frame(width: proxy.size.width * max(0, min(1, rate)))
+            }
+        }
+        .frame(height: 4)
+    }
+}
+
+private struct GoalHighlightCard: View {
+    let label: String
+    let value: String
+    let unit: String
+    let caption: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundStyle(JDTheme.tertiaryText)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value).font(.system(size: 20, weight: .bold)).monospacedDigit()
+                Text(unit).font(.system(size: 11, weight: .medium)).foregroundStyle(JDTheme.tertiaryText)
+            }
+            Text(caption)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(JDTheme.secondaryText)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(JDTheme.surface)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct GoalActivitySummary: View {
+    let taskCompletion: (completed: Int, total: Int, rate: Double)
+    let categoryRows: [CategoryCompletionRow]
+    let habitAchievement: (average: Double, items: [HabitAchievementRow])
+    let bestStreak: StreakHighlight?
+    let mostSlipped: SlippedHighlight?
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("할 일 완료율").font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Text("\(taskCompletion.completed)/\(taskCompletion.total) · \(pct(taskCompletion.rate))%")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                        .monospacedDigit()
+                }
+                GoalRollupBar(rate: taskCompletion.rate, color: tint)
+            }
+
+            if !categoryRows.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("카테고리별 완료율").font(.system(size: 13, weight: .semibold))
+                    ForEach(categoryRows) { row in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 7) {
+                                Circle().fill(Color(hex: row.color) ?? JDTheme.tertiaryText).frame(width: 9, height: 9)
+                                Text(row.name).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                                Spacer()
+                                Text("\(row.completed)/\(row.total) · \(pct(row.rate))%")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(JDTheme.tertiaryText)
+                                    .monospacedDigit()
+                            }
+                            GoalRollupBar(rate: row.rate, color: Color(hex: row.color) ?? tint)
+                        }
+                    }
+                }
+            }
+
+            if !habitAchievement.items.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Habit 달성률").font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                        Text("평균 \(pct(habitAchievement.average))%")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(JDTheme.tertiaryText)
+                            .monospacedDigit()
+                    }
+                    ForEach(habitAchievement.items) { item in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 7) {
+                                Text(item.emoji).font(.system(size: 13))
+                                Text(item.title).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                                Spacer()
+                                Text("\(pct(item.rate))%")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(JDTheme.primaryText)
+                                    .monospacedDigit()
+                            }
+                            GoalRollupBar(rate: item.rate, color: JDTheme.habit)
+                        }
+                    }
+                }
+            }
+
+            if bestStreak != nil || mostSlipped != nil {
+                HStack(spacing: 10) {
+                    if let bestStreak {
+                        GoalHighlightCard(label: "최고 스트릭", value: "\(bestStreak.streak)", unit: "일", caption: "\(bestStreak.emoji) \(bestStreak.title)")
+                    }
+                    if let mostSlipped {
+                        GoalHighlightCard(label: "가장 많이 밀린 작업", value: "\(mostSlipped.overdueDays)", unit: "일 지남", caption: mostSlipped.title)
+                    }
+                }
+            }
+        }
+    }
+
+    private func pct(_ value: Double) -> Int { Int((value * 100).rounded()) }
 }
 
 private struct GoalHeatmap: View {
