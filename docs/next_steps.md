@@ -183,6 +183,17 @@ Recommended order for the next coding session:
      shortly before live billing.
 
 5. **TestFlight/App Store preparation**
+   - **Listing draft + submission checklist: `docs/app_store_listing_draft.md`**
+     (2026-06-14). Privacy nutrition labels (audited: 0 third-party SDKs, no
+     tracking, data = email/name/user-id/user-content, all App Functionality),
+     KO metadata/keywords/description, App Review notes (incl. the 3.1.1
+     no-IAP/multiplatform explanation), and the privacy-policy page draft.
+   - **Open decisions/blockers from that draft**: (a) iPad support —
+     `TARGETED_DEVICE_FAMILY` is `1,2`; recommend iPhone-only `1` for v1
+     (mobile=iPhone strategy) to skip iPad screenshots/layout; (b) host a public
+     `/privacy` URL (none exists — App Store Connect requires it); (c) add
+     `ITSAppUsesNonExemptEncryption = NO`; (d) refresh the in-app 약관/방침 text
+     to include Apple login (currently Google-only).
    - Goal & Pro Report MVP is now included in the local iOS build. Start
      archive/TestFlight work after the remaining report-entry banner pass and
      final real-device confirmation of the new Settings/Habit/Goal IA.
