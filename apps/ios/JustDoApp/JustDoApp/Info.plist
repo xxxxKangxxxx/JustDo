@@ -13,6 +13,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>JUSTDO_SUPABASE_ANON_KEY</key>
 	<string>$(JUSTDO_SUPABASE_ANON_KEY)</string>
 	<key>JUSTDO_SUPABASE_URL</key>

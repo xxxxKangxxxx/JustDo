@@ -5301,3 +5301,36 @@ as a follow-up.
 - Remaining App Store prep: app icon (dark/tinted + polish), App Store Connect
   listing (metadata/screenshots/privacy labels/age rating), final real-device
   smoke (incl. the 구독 group change).
+
+## 2026-06-14 iOS App Store prep: listing draft (#3) + quick wins
+
+### Claude Code (paired with user on the iPad decision)
+
+- Audited what the app actually collects/sends to write accurate App Privacy
+  labels: **0 third-party SDKs** (no remote SPM, only local `JustDoShared`), no
+  analytics/tracking/ads/crash SDK, no ATT/IDFA; the app talks to **Supabase
+  only** (Apple/Google sign-in is OS/web-level, Gemini is server-side). Local
+  notifications are not actually implemented (settings are stored only). No
+  permission usage-description keys.
+- Wrote `docs/app_store_listing_draft.md`: App Privacy nutrition labels
+  (Data Linked to You = email/name/user-id/user-content, all App Functionality;
+  Tracking = none), KO metadata (name/subtitle/description/keywords/category/age),
+  screenshot guidance, **App Review notes** (incl. the no-IAP multiplatform 3.1.1
+  explanation + SIWA/demo-account note), a privacy-policy page draft, and a
+  build/submission checklist with the surfaced blockers.
+- **Quick wins implemented + verified** (`xcodebuild` BUILD SUCCEEDED):
+  - **iPad decision (user chose iPhone-only)** → `TARGETED_DEVICE_FAMILY` set to
+    `1` across all targets (was `1,2`). Skips iPad screenshots/layout; matches the
+    mobile=iPhone strategy.
+  - Added `ITSAppUsesNonExemptEncryption = NO` to `Info.plist` (standard HTTPS →
+    export-compliance exempt; removes the per-upload question).
+  - Refreshed the in-app 약관 "계정" + 방침 "수집 항목" text to include Apple login
+    (was Google-only).
+- **Hosted privacy/terms pages**: added `apps/web/src/app/privacy/page.tsx` and
+  `/terms` (static server components, Tailwind). web lint + `next build` pass;
+  both render as static routes. **Still need**: deploy to justdo.co.kr + replace
+  the `CONTACT_EMAIL` placeholder and 시행일 with real values before citing the
+  URL in App Store Connect.
+- Remaining App Store prep: app icon (dark/tinted + polish), screenshots, demo
+  account + review notes entry, archive/TestFlight/submit, final real-device
+  smoke.
