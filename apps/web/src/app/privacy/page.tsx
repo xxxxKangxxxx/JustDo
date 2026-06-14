@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 // 시행일 / 연락처는 게시 전에 실제 값으로 교체하세요.
 const EFFECTIVE_DATE = "2026-06-14";
-const CONTACT_EMAIL = "support@justdo.co.kr"; // TODO: 운영자 실제 연락처로 교체
+const CONTACT_EMAIL = "kang071911@gmail.com";
 
 export default function PrivacyPage() {
   return (
