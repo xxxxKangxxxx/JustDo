@@ -267,8 +267,8 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 
 > **2026-06-14 리포트 활동 요약 롤업 DONE (web + iOS)** — 리포트 활동 스텝(web
 > `GoalReportModal` step 1 / iOS `GoalReportFullScreen` 활동 페이지)이 히트맵만
-> 보여주던 것을 5개 기간 롤업으로 채움. 커밋 `689e9b6`(아직 **未push**, 사용자
-> 실기기 레이아웃 확인 후 커밋 — 수치 cross-check는 미완).
+> 보여주던 것을 5개 기간 롤업으로 채움. 커밋 `689e9b6`. 사용자 실기기 레이아웃 확인 +
+> **web↔iOS 수치 cross-check 완료(2026-06-14, 일치 확인)** 후 push.
 > - **5개 롤업(월간·연간 공통, 기간 전체 기준 = 목표와 무관)**: ① **할 일 완료율**
 >   (기간 task 완료/전체) ② **카테고리별 완료율**(카테고리별 그룹, 활동 많은 순, 무카테고리
 >   → "미분류" 한 줄) ③ **Habit 달성률**(평균 + habit별; 기간 내 활성일 0인 습관은 제외해
@@ -293,8 +293,9 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > - **주의/한계**: ⓐ **최고 스트릭은 플랫폼 간 미세 차이 가능** — web `habitStreak`는
 >   주간 습관의 비활성일을 건너뛰지만 iOS `JDDate.habitStreak`는 `log==1`만 연속으로
 >   세 비활성일을 고려 안 함(앱 전역에서 쓰는 기존 정의 유지). 일반 daily 습관은 동일.
->   ⓑ **수치 cross-check 미완** — 레이아웃/페이지만 실기기 확인. 같은 계정 web↔iOS 수치
->   일치 확인은 follow-up. ⓒ 활동 요약 결정(`next_steps.md` Report Content)의 풀셋을
+>   ⓑ **수치 cross-check 완료(2026-06-14)** — 같은 계정에서 web(localhost) ↔ iPhone
+>   리포트의 5개 롤업 수치 일치 확인(할 일 완료율/카테고리/Habit/밀림 동일; 활동 롤업은
+>   E3·목표 매칭과 무관한 기간 전체 집계라 결정적으로 일치). ⓒ 활동 요약 결정(`next_steps.md` Report Content)의 풀셋을
 >   모두 채움(Task 완료율/카테고리/Habit/스트릭/밀림).
 > - 검증: web lint / vitest **140** / `next build`; iOS `swift test` **66** /
 >   xcodebuild generic **BUILD SUCCEEDED** / `git diff --check` clean.

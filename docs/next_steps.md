@@ -52,7 +52,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > stored global mean for stability, or merging near-duplicate goals; (4)
 > ~~report **활동 요약 rollups**~~ **DONE 2026-06-14** (web+iOS, 커밋 `689e9b6`:
 > 할 일 완료율·카테고리별 완료율·Habit 달성률·최고 스트릭·가장 많이 밀린 작업,
-> 활동 스텝 스크롤화; web↔iOS 수치 cross-check + 실기기 수치확인은 follow-up);
+> 활동 스텝 스크롤화; 실기기 레이아웃 + web↔iOS 수치 cross-check 완료);
 > (5) Toss merchant review / Pro checkout DLQ (external).
 
 Recommended order for the next coding session:
@@ -507,7 +507,8 @@ Recommended order for the next coding session:
 > `완료율/평균 진행률 → 활동 → 목표별 진행 → 이야기` steps; this is the agreed
 > content + gating. **A3 (목표별/이야기/회고/Free blur) landed 2026-06-06; the
 > 활동 요약 rollups landed 2026-06-14 (commit `689e9b6`)** — this section is now
-> fully implemented. Remaining: web↔iOS number cross-check on a real account.
+> fully implemented and verified (real-device layout + web↔iOS number cross-check
+> both passed 2026-06-14).
 
 - **목표별 진행 = centerpiece**: show each goal's auto progress + target
   (`운동 7/10`); qualitative goals show %. Optionally list the read-only items

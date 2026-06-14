@@ -5158,8 +5158,9 @@ as a follow-up.
 - **Free gating**: rollups live inside the already-blurred report, so no new gating.
 - **Caveats**: 최고 스트릭 can differ slightly cross-platform — web `habitStreak`
   skips a weekly habit's inactive days, iOS `JDDate.habitStreak` just walks back
-  while `log==1` (kept the app's existing definition). Numbers were **not yet
-  cross-checked** web↔iOS on a real account; only layout/pages were smoke-checked.
+  while `log==1` (kept the app's existing definition). Numbers **cross-checked
+  web↔iOS on the same account 2026-06-14 — matched** (rollups are period-wide and
+  independent of E3/goal matching, so they line up deterministically).
 - Verify: web lint / vitest **140** / `next build`; iOS `swift test` **66** /
   xcodebuild generic **BUILD SUCCEEDED**; `git diff --check` clean. Installed the
   build to 강영모의 iPhone (iPhone 14 Pro, iOS 26.5) via `devicectl`; user confirmed
