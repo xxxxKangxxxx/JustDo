@@ -15,6 +15,9 @@ export const authProviders: AuthProviderConfig[] = [
     unavailableLabel: "Google 로그인 준비 중",
   },
   {
+    // NEXT_PUBLIC_AUTH_APPLE_ENABLED is inlined at *build* time, so flipping the
+    // Amplify env var only takes effect on a fresh build (a same-version redeploy
+    // can keep the old value from .next/cache). Set it to exactly "true".
     id: "apple",
     label: "Apple로 로그인",
     enabled: process.env.NEXT_PUBLIC_AUTH_APPLE_ENABLED === "true",
