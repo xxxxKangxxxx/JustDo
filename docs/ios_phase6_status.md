@@ -345,11 +345,17 @@ swift test
 
 ## Before Deployment
 
-- Move real production Supabase values into deployment/build settings, not
-  `Local.xcconfig`.
+- **[DONE 2026-06-14] Production Supabase client config is now committed in
+  `Debug.xcconfig` / `Release.xcconfig`** (URL + public anon key) so release
+  archives are self-contained — no silent empty-key release if `Local.xcconfig`
+  is absent. The anon key is the `role: anon` public client key (RLS-protected,
+  already shipped in the binary), so committing it adds no exposure. The
+  `service_role` key is NOT present anywhere in iOS. `Local.xcconfig`
+  (gitignored) still `#include?`s after and can override for local-only Supabase.
 - Confirm `Local.xcconfig` remains gitignored and is not staged.
-- Confirm release build has non-empty `JUSTDO_SUPABASE_URL` and
-  `JUSTDO_SUPABASE_ANON_KEY` in the generated app Info.plist.
+- [VERIFIED 2026-06-14] Release build (simulator) injects non-empty
+  `JUSTDO_SUPABASE_URL` + `JUSTDO_SUPABASE_ANON_KEY` (208 chars) into the app
+  Info.plist.
 - Confirm Associated Domains are not needed for the current custom-scheme
   deep-link approach. If universal links are added later, add associated domains
   and hosted apple-app-site-association configuration.

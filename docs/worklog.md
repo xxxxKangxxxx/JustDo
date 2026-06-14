@@ -5271,3 +5271,33 @@ as a follow-up.
   privacy policy = justdo.co.kr), and a final user-run real-device visual smoke.
   Minor: project-level `IPHONEOS_DEPLOYMENT_TARGET` is 26.2 but the app target
   overrides to 17.0 (effective = 17.0).
+
+## 2026-06-14 iOS App Store prep: release build config audit (#2)
+
+### Claude Code
+
+- Audited how the iOS app gets its Supabase client config into a release build.
+  Flow: `Debug.xcconfig` / `Release.xcconfig` are the app target's
+  `baseConfigurationReference`; they set `JUSTDO_SUPABASE_URL` +
+  `JUSTDO_SUPABASE_ANON_KEY` and `#include? "Local.xcconfig"`, then map them to
+  `INFOPLIST_KEY_*`; `Info.plist` exposes `$(JUSTDO_SUPABASE_URL)` /
+  `$(JUSTDO_SUPABASE_ANON_KEY)`; `AppSyncCoordinator` reads them from the bundle.
+- Findings: ✅ `Local.xcconfig` gitignored; ✅ both configs wired; ✅ a **Release**
+  simulator build injects URL + a 208-char anon key into the built Info.plist;
+  ✅ the key is the **public `role: anon`** client key (RLS-protected, already
+  ships in the binary) and **`service_role` is NOT present anywhere in iOS**;
+  ✅ single hosted Supabase project (`cohkxnwsbhrsfmsjqdpa`) shared with web;
+  ✅ version 1.0 / build 1 fine for first submission.
+- **Footgun fixed (user chose: commit the key)**: the production anon key
+  previously lived ONLY in gitignored `Local.xcconfig`, with `Release.xcconfig`
+  empty + optional `#include?` — so a release built without that file (clean
+  machine / CI / accidental deletion) would silently ship an **empty** key with
+  no build error. Committed the public anon key directly into `Debug.xcconfig`
+  and `Release.xcconfig` (with an explaining comment); `Local.xcconfig` still
+  `#include?`s after for local-only overrides. Zero added exposure (key already
+  in the binary; URL was already committed). Re-verified Release build → 208-char
+  key still injected. Caveat noted to user: if the GitHub repo is public the key
+  value is now visible in git — safe because it's the public anon key.
+- Remaining App Store prep: app icon (dark/tinted + polish), App Store Connect
+  listing (metadata/screenshots/privacy labels/age rating), final real-device
+  smoke (incl. the 구독 group change).

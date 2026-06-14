@@ -1,8 +1,11 @@
 // Shared public client config for Release builds.
 // Real local overrides belong in Local.xcconfig, which is gitignored.
 
+// The anon key is the Supabase public client key (role: anon, RLS-protected).
+// It already ships inside the app binary, so committing it here is safe and
+// makes release archives self-contained. Local.xcconfig still overrides below.
 JUSTDO_SUPABASE_URL = https:/$()/cohkxnwsbhrsfmsjqdpa.supabase.co
-JUSTDO_SUPABASE_ANON_KEY =
+JUSTDO_SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvaGt4bndzYmhyc2Ztc2pxZHBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczOTQ1MDIsImV4cCI6MjA5Mjk3MDUwMn0.aUPcviilvMj9UFJc35_LYMRqbuiBzNADBmd0qj6wX9I
 
 #include? "Local.xcconfig"
 
