@@ -11,7 +11,7 @@
 
 | 항목 | 상태 | 조치 |
 |---|---|---|
-| **개인정보처리방침 URL (공개 호스팅)** | 🟡 페이지 생성·연락처 입력 완료, **배포(push) 대기** | 2026-06-14 `/privacy`·`/terms` 라우트 추가, 연락처 `kang071911@gmail.com`·시행일 2026-06-14 입력. main push → Amplify 배포되면 `https://www.justdo.co.kr/privacy` 라이브. |
+| **개인정보처리방침 URL (공개 호스팅)** | ✅ LIVE (2026-06-16 확인) | 2026-06-14 `/privacy`·`/terms` 라우트 추가, 연락처 `kang071911@gmail.com`·시행일 2026-06-14 입력. main push → Amplify 배포 완료. **`https://www.justdo.co.kr/privacy`·`/terms` 둘 다 200 응답 확인.** App Store Connect 개인정보 URL에 그대로 입력 가능. |
 | **데모 계정 / 심사 메모** | 미작성 | OAuth 로그인이라 리뷰어용 안내 필요. §4 참고. |
 | **스크린샷** | 없음 | iPhone 6.9"/6.7" 필수. §3 참고. |
 | **iPad 지원 여부 결정** | ✅ iPhone 전용 결정·적용 (2026-06-14) | `TARGETED_DEVICE_FAMILY` 전 타깃 `1`로 변경. iPad 스크린샷 불필요. |

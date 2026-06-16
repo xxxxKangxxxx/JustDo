@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-06-02
+Date: 2026-06-16 (last content update; dated banner entries below carry their own dates)
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -168,6 +168,34 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > auth/loading은 light 고정) + `SettingsRootTabView` 콘텐츠에도 적용해 열린
 > Settings가 토글 즉시 live 갱신. 실기기 확인 완료. 자세한 경위: `worklog.md`
 > 2026-06-02 엔트리.
+
+> **2026-06-14 Apple 로그인 LIVE (web + iOS) — App Store 차단 항목 해소** — 서드파티
+> 소셜 로그인(Google)을 제공하면 App Store Guideline 4.8이 Sign in with Apple을
+> 요구하므로 v1 출시 차단 항목이었음. **Google + Apple 둘 다 LIVE**(web 운영 배포 +
+> iOS 실기기 동작 확인). iOS는 `SupabaseAuthClient.signIn(provider:)`에서
+> apple=네이티브(`ASAuthorizationController`로 identity token+nonce → Supabase
+> `auth/v1/token?grant_type=id_token`), google=웹OAuth 분기. 엔타이틀먼트
+> `com.apple.developer.applesignin`. web은 `signInWithOAuth({provider})` 공통,
+> `NEXT_PUBLIC_AUTH_APPLE_ENABLED=true`로 노출. 취소(`ASAuthorizationError.canceled`)는
+> `.signedOut`으로 조용히 무시(빨간 오류 X). **⚠️ 운영 주의: Apple client secret(web
+> OAuth용 ES256 JWT, `supabase/scripts/generate-apple-secret.mjs`)은 ~6개월 만료 →
+> 재생성 후 Supabase 갱신.** Apple은 id_token에 이름 미제공 → displayName 미수집(이메일만).
+> 커밋 trail: `e1f7d5d`/`fb93e1f`/`9434c68`/`ae6e006`. 자세한 경위: `worklog.md`
+> 2026-06-14 + `next_steps.md` "Apple Sign-In" 섹션.
+
+> **2026-06-14~15 iOS App Store 제출 준비 트랙 (진행 중)** — Apple 로그인 해소 후
+> 남은 v1 차단은 **App Store 제출 자산(대부분 코드 외 작업)**. 완료된 코드측 quick wins:
+> ① **iPhone 전용** `TARGETED_DEVICE_FAMILY=1`(전 타깃, iPad 미지원 결정) ② Info.plist
+> `ITSAppUsesNonExemptEncryption=NO`(export compliance 면제) ③ 인앱 약관/방침 텍스트에
+> Apple 로그인 반영 ④ **3.1.1 회피** — 인앱 Pro 구매 UI/외부 결제 링크 제거(구매는 web
+> Toss만, multiplatform 예외; 커밋 `9662bd9`), Pro 게이팅·언급은 유지 ⑤ anon 키를
+> `Debug/Release.xcconfig`에 직접 커밋(self-contained 릴리스, 커밋 `48c27c4` — public
+> anon 키라 노출 0) ⑥ **`/privacy`·`/terms` 페이지 운영 LIVE**(`https://www.justdo.co.kr/privacy`,
+> 200 확인). 리스팅/심사 메모 초안 = `docs/app_store_listing_draft.md`(서드파티 SDK 0개
+> 감사 기반 개인정보 라벨, KO 메타데이터, 3.1.1 no-IAP 심사 메모). **남은 blocker(코드 외,
+> 사용자 트랙)**: 스크린샷 6.9"/6.7", 데모 계정+심사 메모 입력, 앱 아이콘 dark/tinted polish,
+> Archive→TestFlight→제출, 최종 실기기 시각 smoke(구독 그룹 변경 포함). 체크리스트:
+> `docs/app_store_listing_draft.md` §0 + `next_steps.md` 5번 항목.
 
 > **2026-06-11 E3 semantic goal matching LIVE & DEPLOYED (web + iOS)** — 손수 만든
 > 동의어 사전(E1)의 일반화 한계를 넘기 위해 **Gemini 임베딩 기반 의미 매칭(E3)**을
@@ -1183,6 +1211,28 @@ Recommended immediate next steps:
 
 ## Recommended Next Work
 
+> **2026-06-16 기준 — 현재 활성 트랙 (아래 2026-05-25 블록은 히스토리로 보존).**
+> 제품 기능(목표 진행률 E1+E3, 리포트 롤업)·인증(Google+Apple)·운영 배포는 모두
+> LIVE. **v1 ship 병목은 순수 코드가 아니라 ① iOS App Store 제출 자산 ② Toss 가맹점
+> 심사 — 둘 다 사용자 외부 트랙.** 이어받는 세션(Codex/Claude Code)은 아래 순서로:
+>
+> 1. **iOS App Store 제출 (활성 차단 트랙)** — 남은 건 거의 코드 외 작업.
+>    체크리스트 = `docs/app_store_listing_draft.md` §0 + `next_steps.md` 5번.
+>    - 코드 외(사용자): 스크린샷 6.9"/6.7", 데모 계정+심사 메모 입력, 앱 아이콘
+>      dark/tinted polish, Archive→TestFlight→제출, 최종 실기기 시각 smoke(구독
+>      그룹 변경 포함).
+>    - 코드측 quick wins(iPhone 전용/export compliance/3.1.1 no-IAP/anon 키
+>      커밋/privacy·terms LIVE)는 **완료**. 위 "2026-06-14~15 App Store 준비" 배너 참고.
+>    - 에이전트가 도울 수 있는 것: 심사 메모/데모 계정 문구 초안, 메타데이터 마무리,
+>      제출 후 리젝 대응.
+> 2. **Toss 가맹점 심사 (사용자 외부 트랙, 가장 긴 차단 ~2–3주)** — 아래 1번(구) 블록.
+>    코드측은 Toss 테스트 키 E2E + webhook signature + live 직전 DLQ만 남음.
+> 3. **선택적 follow-up(급하지 않음)**: E3 캐시 invalidate(항목 mutation 시)/
+>    sign-out `cache.clear()`(멀티계정)/iOS 공유 actor 캐시, E3 threshold 튜닝 또는
+>    near-dup 목표 통합, Phase 7 web 데스크탑 재디자인(prototype 도착 후, 보류).
+>
+> ---
+>
 > 2026-05-25 기준 — 배포 트랙은 운영 LIVE로 종료됨. Phase 7 Web Desktop
 > Redesign은 Pro checkout 운영 확인/외부 의존만 남아 있고, iOS 잔여 작업은
 > 실기기 시각 검증 중심. Toss 가맹점 심사는 가장 긴 차단 항목 (~2–3주)이라

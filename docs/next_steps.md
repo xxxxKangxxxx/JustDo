@@ -45,9 +45,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > 2026-06-11 handoff "E3 매칭 fetch 디바운스/캐시" 블록 참고.
 >
 > **Next**: (1) iOS real-device smoke of the goal UI (A-track + E3), then
-> TestFlight/App Store prep — **note: Apple 로그인이 현재 placeholder라 App Store
-> 출시 차단 항목**(네이티브 Sign in with Apple 구현 필요, 아래 "Apple Sign-In" 섹션);
-> (2) ~~debounce/cache the `goal_semantic_matches`
+> TestFlight/App Store prep — **note: Apple 로그인은 2026-06-14 DONE & LIVE**(web +
+> iOS 실기기, App Store 4.8 차단 해소; 아래 "Apple Sign-In" 섹션). 현재 App Store 남은
+> blocker는 코드 외 자산(스크린샷·데모 계정·아이콘·Archive/제출) — `docs/app_store_listing_draft.md`
+> §0 참고; (2) ~~debounce/cache the `goal_semantic_matches`
 > fetch~~ **DONE 2026-06-11 (web)** — follow-ups가 남으면: 항목 mutation 시 해당
 > period 키 캐시 invalidate(즉시 반영), sign-out에서 `cache.clear()`(멀티계정),
 > iOS 공유 actor 캐시(두 화면 중복 제거); (3) E3 threshold tuning / consider a
