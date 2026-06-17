@@ -2535,7 +2535,6 @@ private struct AddTaskSheet: View {
         .padding(.horizontal, 20)
         .padding(.top, 10)
         .padding(.bottom, 30)
-        .frame(maxHeight: .infinity, alignment: .top)
         .background(JDTheme.surface)
         .onAppear {
             selectedCategoryID = selectedCategoryID ?? categories.first?.id
