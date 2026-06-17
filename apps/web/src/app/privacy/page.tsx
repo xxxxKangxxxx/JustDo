@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   description: "Just Do 개인정보처리방침",
 };
 
-// 시행일 / 연락처는 게시 전에 실제 값으로 교체하세요.
 const EFFECTIVE_DATE = "2026-06-14";
 const CONTACT_EMAIL = "kang071911@gmail.com";
 
