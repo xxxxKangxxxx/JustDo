@@ -490,6 +490,7 @@ private struct HomeRootView: View {
             activeRootTab
             BottomTabBar(selectedTab: selectedTab) { selectedTab = $0 }
         }
+        .ignoresSafeArea(.keyboard)
         .navigationBarHidden(true)
         .sheet(isPresented: $isShowingAddTask) {
             AddTaskSheet(
