@@ -5236,6 +5236,32 @@ as a follow-up.
   blocker resolved. Remaining: App Store submission track, the ~6-month Apple secret
   rotation, and the displayName-not-captured follow-up.
 
+## 2026-06-18 iOS Add Task sheet keyboard displacement follow-up
+
+### Codex
+
+- User re-tested the Add Task sheet on a real iPhone after Xcode builds and
+  confirmed the keyboard displacement issue is still unresolved.
+- Symptom: opening Add Task, focusing the title `TextField`, and showing the iOS
+  keyboard moves the background Home header upward. In the screenshot, the
+  `Just Do` wordmark/status area is pushed into the status bar region. This
+  should not happen; the sheet/keyboard movement should not affect the Home
+  header behind the sheet, or the sheet should stop before it visually collides
+  with the header.
+- Important baseline: the existing Task edit sheet behavior is acceptable. The
+  bug is specific to the Add Task sheet, so future work should compare Add Task
+  against the Task edit presentation rather than changing the editor behavior.
+- Attempted but ineffective approaches:
+  - Removing Add Task's internal `maxHeight` frame.
+  - Adding `.ignoresSafeArea(.keyboard)` to the Home root.
+  - Moving Add Task padding/background/drag indicator closer to the Task edit
+    sheet presentation pattern.
+- Next action: keep this as the next coding task. Re-open the Add Task vs
+  TaskDetailEditor presentation paths and verify the actual presentation
+  context, `sheet(isPresented:)` vs `sheet(item:)`, detent behavior, focus
+  timing, nested sheet interactions, and whether Add Task needs to be routed
+  through the same editor wrapper/presentation context as Task editing.
+
 ## 2026-06-14 iOS App Store prep: Pro/IAP compliance (remove purchase CTA)
 
 ### Claude Code (paired with user on the policy decision)

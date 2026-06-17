@@ -154,6 +154,26 @@ implementation gaps, and checks to run before testing or shipping.
 - Core Data mirror operations are serialized on the context queue, and
   snapshot/upsert paths update existing rows in place where possible.
 
+## Open Issues
+
+- **Add Task sheet keyboard displacement on real device (2026-06-18).**
+  Repro: Home에서 Add Task 시트를 열고 제목 입력 필드에 포커스해 iOS 키보드를
+  올리면, 시트 뒤 배경인 Home 헤더(`Just Do` wordmark/status 영역)가 함께 위로
+  밀려 상태바와 겹친다. 기대 동작은 Task 편집 시트처럼 키보드/시트 움직임이
+  뒤 배경 Home 헤더를 밀지 않는 것이다. 사용자는 Task 편집 시트의 기존 동작은
+  문제없고 Add Task 시트에서만 재현된다고 확인했다.
+  - 실기기 확인 환경: 사용자 Xcode 빌드 후 iPhone 실기기.
+  - 실패한 접근: Home 루트에 `.ignoresSafeArea(.keyboard)` 적용, Add 시트 내부
+    `maxHeight` 제거, Add 시트 padding/background/drag indicator를 Task 편집
+    시트 호출부 방식으로 맞추는 변경은 모두 실기기에서 증상 개선 없음.
+  - 다음 조사 기준: Add Task 시트와 TaskDetailEditor 시트의 차이를 다시 비교한다.
+    특히 Add Task가 `@State Bool` sheet이고 Task 편집이 `item` sheet인 점,
+    Add Task 내부의 첫 `TextField` 자동 focus/키보드 전환, nested date-picker
+    sheet, detent 높이, selected-day sheet 안의 inline editor와 Home-owned sheet의
+    presentation context 차이를 확인한다. 필요하면 Add Task도 Task 편집과 같은
+    editor wrapper/route에서 열거나 UIKit sheet presentation keyboard behavior를
+    직접 확인한다.
+
 ## Resolved Issues
 
 - **Launch crash after signed-in sync.** The app could terminate on launch with

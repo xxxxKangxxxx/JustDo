@@ -44,7 +44,18 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > 자세한 내용·주의(TTL이 항목 추가 직후 즉시 refetch를 막음, 로그아웃 시 캐시 미클리어)는
 > 2026-06-11 handoff "E3 매칭 fetch 디바운스/캐시" 블록 참고.
 >
-> **Next**: (1) iOS real-device smoke of the goal UI (A-track + E3), then
+> **Next**: (0) iOS Add Task sheet keyboard displacement 조사/수정 — 실기기에서
+> Add Task 시트의 제목 입력에 포커스해 키보드가 올라오면 시트 뒤 Home 헤더
+> (`Just Do` wordmark/status 영역)가 함께 위로 밀려 상태바와 겹친다. Task 편집
+> 시트에서는 같은 문제가 없으므로, Add Task 시트와 TaskDetailEditor 시트의
+> presentation/focus/keyboard avoidance 차이를 기준으로 원인을 좁힌다. 2026-06-18
+> 확인: `.ignoresSafeArea(.keyboard)`, Add 시트 내부 `maxHeight` 제거, Add 시트
+> padding/drag indicator를 편집 시트 방식으로 맞추는 시도는 실기기에서 효과 없음.
+> 다음 시도 전 현재 커밋 `fed6b20`의 presentation 변경이 유효한지 재검토하고,
+> 필요하면 Add Task도 Task 편집과 동일한 editor wrapper/route에서 열거나 UIKit
+> sheet presentation keyboard behavior를 직접 확인한다.
+>
+> 그 다음: (1) iOS real-device smoke of the goal UI (A-track + E3), then
 > TestFlight/App Store prep — **note: Apple 로그인은 2026-06-14 DONE & LIVE**(web +
 > iOS 실기기, App Store 4.8 차단 해소; 아래 "Apple Sign-In" 섹션). 현재 App Store 남은
 > blocker는 코드 외 자산(스크린샷·데모 계정·아이콘·Archive/제출) — `docs/app_store_listing_draft.md`
