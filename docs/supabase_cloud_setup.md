@@ -215,8 +215,11 @@ supabase gen types typescript --linked > apps/web/src/lib/supabase/database.type
 
 ## Remaining
 
-- Configure Google provider in the hosted Supabase Console.
-- Switch `apps/web/.env.local` to hosted URL/key when testing against cloud.
-- Run hosted Google login and signup fanout verification.
-- Decide whether to add separate npm scripts or documentation helpers for
-  switching local/cloud env files.
+- Hosted Google and Apple providers are configured and production OAuth has been
+  smoke-tested on `https://www.justdo.co.kr`.
+- Hosted signup fanout has been verified after the
+  `20260525090000_categories_user_name_unique.sql` fix.
+- Optional local-dev convenience: decide whether to add separate npm scripts or
+  documentation helpers for switching local/cloud env files.
+- Operational watch item: regenerate and update the Apple OAuth client secret
+  roughly every six months with `supabase/scripts/generate-apple-secret.mjs`.

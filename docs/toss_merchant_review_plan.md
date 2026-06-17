@@ -13,9 +13,14 @@ Toss Payments automatic billing.
 Current app state:
 
 - Production web app is live at `https://www.justdo.co.kr`.
+- Privacy and terms pages are live at `https://www.justdo.co.kr/privacy` and
+  `https://www.justdo.co.kr/terms`; contact email is `kang071911@gmail.com`.
 - Toss Payments test-key billing flow is wired in the app.
 - Billing API routes exist, including `/api/billing/issue-key`,
   `/api/billing/charge`, `/api/billing/cancel`, and `/api/webhook/toss`.
+- Recurring billing cron infrastructure exists: AWS EventBridge Scheduler ->
+  Lambda -> `/api/billing/charge`, daily 05:30 KST. Manual and first scheduled
+  runs were confirmed. DLQ remains a live-billing-before-launch follow-up.
 - Live Toss automatic billing keys are blocked on business registration,
   merchant contract/review, and automatic-billing MID approval.
 
@@ -149,9 +154,9 @@ Before submitting the Toss application, the production site should clearly show:
 - [ ] Recurring billing consent copy in the billing flow.
 - [ ] Cancellation policy and path: Settings -> Subscription -> Cancel.
 - [ ] Refund policy.
-- [ ] Privacy policy.
-- [ ] Terms of service.
-- [ ] Contact email.
+- [x] Privacy policy — `https://www.justdo.co.kr/privacy`.
+- [x] Terms of service — `https://www.justdo.co.kr/terms`.
+- [x] Contact email — `kang071911@gmail.com`.
 - [ ] Business registration number after issuance.
 - [ ] Mail-order sales report number after issuance, unless exempt.
 
@@ -163,8 +168,8 @@ Before submitting the Toss application, the production site should clearly show:
 - Toss documents also state that, after electronic payment contract completion,
   the app should use the client/secret keys for the automatic-billing MID.
 - Toss documents state that the app is responsible for scheduling recurring
-  billing calls. The Just Do route for that exists, but the cron scheduler is
-  still a separate code task.
+  billing calls. Just Do already has the route and AWS scheduler/Lambda path;
+  add the planned DLQ before enabling live billing.
 - This document is operational planning, not legal or tax advice. Final tax
   type, industry code, and mail-order reporting decisions should be checked
   against Hometax/local government guidance or a tax professional.

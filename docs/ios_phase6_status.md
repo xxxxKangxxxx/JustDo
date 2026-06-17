@@ -244,7 +244,8 @@ implementation gaps, and checks to run before testing or shipping.
   - [x] Verify lock badge tap does not also trigger card edit.
   - [x] Verify add/edit/delete/lock changes survive app relaunch and cloud sync.
   - [x] Delete confirmation implemented for the goal editor.
-  - [ ] Decide report entry UX now that card tap is reserved for edit.
+  - [x] Report entry UX decided and implemented: Home top period-end banner plus
+    Settings → 목표 supporting banners; card tap remains edit/locked confirmation.
 - App icon: only the light (default) 1024x1024 variant is shipped. Dark
   and tinted home-screen variants are deferred until dedicated artwork
   is produced.
@@ -384,10 +385,9 @@ swift test
 > iOS 26.5 최종 smoke에서 Smoke 1~5 정상 확인.
 > 2026-05-30: Goal & Pro Report iOS first pass와 실기기 UI 피드백 반영 완료.
 > Settings → 목표 focused smoke는 사용자 확인 완료. 삭제 확인 alert도 반영됨.
-> 2026-06-01: 제품 IA 결정 반영 예정. Settings는 Home 우측 상단으로 이동,
-> Stats 독립 탭은 리포트/활동 요약으로 흡수, 하단 바는 단기적으로 Home 단일
-> 탭 중앙 배치, 미래 확장은 `함께` 탭으로 예약. 다음 차례는 이 구조 반영,
-> 기간 종료 리포트 배너, Web 태그 UX, TestFlight/App Store 준비.
+> 2026-06-17 refresh: 2026-06-01 제품 IA, 기간 종료 리포트 배너, Web 태그 UX는
+> 모두 구현/검증 완료로 문서화됨. 현재 다음 차례는 TestFlight/App Store 제출
+> 자산과 Toss 외부 심사 트랙.
 
 - [x] **iOS 최종 실기기 smoke (2026-05-29 통과)**.
   - 환경: `강영모의 iPhone` / iOS 26.5, bundle id `kr.justdo.app`.
@@ -418,8 +418,8 @@ swift test
   - `설정 → 습관 → 편집` opens Habit management above the Habit screen.
   - `설정 → 목표` and `설정 → 카테고리 관리` open inside Settings instead of
     routing through Home-owned sheets.
-  - Still needs user-run real-device visual confirmation after the latest
-    full-screen IA refinements.
+  - Real-device visual confirmation passed on iPhone 14 Pro / iOS 26.5, including
+    Settings/Habit/Goal contained flows and unified close-button behavior.
 
 - [x] **iOS report-entry follow-up (2026-06-01 결정)** — Home 상단 리포트 배너
   구현 완료 (`ReportBanner` / `homeReportBanner` / `GoalReportSelectors.homeBannerReport`

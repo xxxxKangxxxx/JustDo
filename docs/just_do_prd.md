@@ -332,11 +332,11 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
   그룹핑(텍스트 유사도)은 후속.
 - 2026-05-29 결정: Just Do Mode iOS/Web smoke 후 다음 제품 구현 트랙으로
   진행한다.
-- 2026-05-30 구현 상태: Supabase schema, Web MVP, iOS shared data layer, iOS
+- 2026-06-17 구현 상태: Supabase schema, Web MVP, iOS shared data layer, iOS
   Settings → 목표 UI, goal prompt, goal CRUD/sync, locked-goal confirmation,
-  and lock toggle first pass are implemented. Settings → 목표 focused smoke와
-  삭제 확인 UX도 완료됐다. 남은 범위는 기간 종료 리포트 배너 진입 UX 구현과
-  TestFlight 준비다.
+  lock toggle, 기간 종료 리포트 배너 진입 UX, 활동 요약 rollup, E3 의미 매칭까지
+  구현/배포 완료됐다. Settings → 목표 focused smoke와 삭제 확인 UX도 완료됐다.
+  남은 v1 범위는 TestFlight/App Store 제출 준비와 Toss 외부 심사 트랙이다.
 - 목표 입력은 Free / Trial / Pro 모두 가능하다.
 - 목표 기반 월간/연간 리포트 상세 열람은 Trial / Pro 전용이다.
 - 첫 가입 또는 첫 실행 사용자는 목표 설정 모달을 본다. 모달은 강제 입력이
@@ -505,7 +505,7 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 
 | 단계 | 내용 |
 |------|------|
-| **v1** | iOS 앱 + Web (데스크탑 productivity hub) 동시 출시. Task/Habit CRUD, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림, Trial/구독. **Web Desktop Redesign (Phase 7) v1 차단 항목** — 데스크탑 reference 도착 후 구현 진행 중, 출시 전 완료 필요 |
+| **v1** | iOS 앱 + Web (데스크탑 productivity hub) 동시 출시. Task/Habit CRUD, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인(Google/Apple), 실시간 동기화, 오프라인 지원, 목표/리포트, Trial/Pro entitlement. **Web Desktop Redesign (Phase 7)은 구현 완료**, 현재 출시 차단은 App Store 제출 자산과 Toss 가맹점 심사/운영 결제 확인 |
 | **v2** | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, `함께` 친구/일정 공유, 리포트 고도화, 이메일 회원가입 |
 | **v3** | Android 앱 출시 — v3 출시 전까지 Android 사용자는 데스크탑 web 사용 |
 
@@ -513,11 +513,12 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 
 ## 7. 보안 체크리스트
 
-- [ ] 모든 Supabase 테이블 RLS 활성화
-- [ ] `service_role key` 서버 환경변수로만 사용, 클라이언트 노출 금지
-- [ ] Next.js `.env.local`에 민감 키 관리
-- [ ] Apple / Google OAuth 콜백 URL 화이트리스트 등록
-- [ ] APNs 인증서 / FCM 서버 키 안전하게 관리
+- [x] 모든 Supabase 비즈니스 테이블 RLS 활성화
+- [x] `service_role key` 서버 환경변수로만 사용, 클라이언트 노출 금지
+- [x] Next.js `.env.local`에 민감 키 관리
+- [x] Apple / Google OAuth 콜백 URL 화이트리스트 등록
+- [ ] APNs 인증서 / FCM 서버 키 안전하게 관리 — v1 push notification 미구현,
+  푸시 도입 시점에 처리
 
 ---
 

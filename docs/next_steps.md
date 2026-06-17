@@ -185,23 +185,20 @@ Recommended order for the next coding session:
 
 5. **TestFlight/App Store preparation**
    - **Listing draft + submission checklist: `docs/app_store_listing_draft.md`**
-     (2026-06-14). Privacy nutrition labels (audited: 0 third-party SDKs, no
-     tracking, data = email/name/user-id/user-content, all App Functionality),
-     KO metadata/keywords/description, App Review notes (incl. the 3.1.1
-     no-IAP/multiplatform explanation), and the privacy-policy page draft.
-   - **Open decisions/blockers from that draft**: (a) iPad support —
-     `TARGETED_DEVICE_FAMILY` is `1,2`; recommend iPhone-only `1` for v1
-     (mobile=iPhone strategy) to skip iPad screenshots/layout; (b) host a public
-     `/privacy` URL (none exists — App Store Connect requires it); (c) add
-     `ITSAppUsesNonExemptEncryption = NO`; (d) refresh the in-app 약관/방침 text
-     to include Apple login (currently Google-only).
-   - Goal & Pro Report MVP is now included in the local iOS build. Start
-     archive/TestFlight work after the remaining report-entry banner pass and
-     final real-device confirmation of the new Settings/Habit/Goal IA.
-   - Current iOS Home/Add/Edit/pre-IA Stats/Settings/Widget/Just Do Mode smoke
-     is already documented as passing on iPhone 14 Pro / iOS 26.5. The
-     2026-06-01 full-screen Settings IA has passed `swift test` and generic iOS
-     `xcodebuild`; it still needs the user-run real-device visual check.
+     (2026-06-14, last refreshed 2026-06-16). Privacy nutrition labels (audited:
+     0 third-party SDKs, no tracking, data = email/name/user-id/user-content,
+     all App Functionality), KO metadata/keywords/description, App Review notes
+     (incl. the 3.1.1 no-IAP/multiplatform explanation), and hosted privacy /
+     terms URLs are ready.
+   - Previously open code-side blockers from the draft are **done**: iPhone-only
+     `TARGETED_DEVICE_FAMILY=1`, public `/privacy` and `/terms` routes LIVE,
+     `ITSAppUsesNonExemptEncryption = NO`, and in-app Terms/Privacy copy updated
+     for Apple login.
+   - Goal & Pro Report MVP, the 2026-06-01 Settings IA, and report-entry banners
+     are included in the iOS build and have passed the documented real-device
+     smoke path. Current App Store blockers are code-adjacent/assets: app icon
+     dark/tinted polish, screenshots, demo account/review notes, Archive ->
+     TestFlight -> submission, and a final release-candidate device smoke.
 
 ## Immediate Goal & Pro Report Follow-Up
 
@@ -257,8 +254,8 @@ Recommended order for the next coding session:
   - shared schedule coordination,
   - future notification/permission work.
 - Do not implement full `함께` before TestFlight. Document it now and use the
-  current cycle for report-entry banner UX, final iOS real-device IA smoke, and
-  TestFlight prep.
+  current cycle for App Store submission assets and final release-candidate
+  smoke; report-entry banners and iOS IA smoke are already done.
 
 ## Web Tag UX Status (2026-06-01)
 
@@ -321,8 +318,10 @@ Recommended order for the next coding session:
 > 2026-05-28 decision: this is separate from Just Do Mode. Just Do Mode changes
 > Home's task display behavior; Goal & Pro Report captures monthly/yearly goals
 > and turns them into Pro-gated reports. 2026-05-29/30: schema, Web first pass,
-> and iOS first pass are implemented. Remaining work is focused smoke and UX
-> polish rather than first implementation.
+> and iOS first pass were implemented. 2026-06-17 refresh: focused smoke,
+> report-entry UX, activity rollups, optional target, and E3 semantic matching are
+> also implemented/deployed. Remaining v1 work is App Store submission and Toss
+> external review, not Goal & Pro first implementation.
 
 - Goal input is available to Free / Trial / Pro users.
 - Monthly/yearly goal report detail is Trial / Pro only. Free users see a report
@@ -353,8 +352,8 @@ Recommended order for the next coding session:
   - Optional later: in reports, loosely group monthly goals under related yearly
     goals via **text similarity** (same E1 approach, no manual field). Defer to
     the report-content track.
-- Goal fields for the first implementation: title, optional note, sort order,
-  lock flag.
+- Goal fields: title, optional note, optional numeric target, sort order, lock
+  flag.
 - Goal lock is a confirmation UX, not permanent immutability:
   - User-facing option: `이번 기간 동안 목표를 고정할게요`.
   - iOS goal cards expose a direct `고정/열림` lock badge toggle.
@@ -375,8 +374,9 @@ Recommended order for the next coding session:
   - Do not directly link goals to task/habit rows in MVP.
   - Report calculations can derive from existing tasks, habits, and habit logs
     at render time.
-  - Saved report snapshots, AI narrative, push notification reminders, numeric
-    goal progress fields, and goal-task linking are future work.
+  - Saved report snapshots, AI narrative, push notification reminders, and
+    goal-task linking are future work. Optional numeric `target` is already
+    implemented.
 - First implementation files to inspect:
   - Web app shell/UI: `apps/web/src/features/just-do/app-shell.tsx`.
   - Web state/persistence: `apps/web/src/features/just-do/store.tsx`,
@@ -389,19 +389,24 @@ Recommended order for the next coding session:
   - Product spec: `docs/just_do_prd.md` Goal & Pro Report.
   - Implemented schema: `docs/just_do_db_schema.md` Goal & Pro Report schema.
 
-## Goal Progress Accuracy (2026-06-03 decision, not yet implemented)
+## Goal Progress Accuracy (2026-06-03 decision, implemented)
 
 > Decision from a design discussion. Captures how goal progress (the donut %) is
-> computed and why. Implementation has not started; this is the plan.
+> computed and why. 2026-06-17 refresh: A-track is implemented on web+iOS
+> (no all-tasks fallback, shared E1 matcher, optional target), and E3 semantic
+> matching is LIVE/deployed as the primary online matcher with E1 retained as the
+> offline/unembedded fallback. Historical plan text below is preserved for
+> rationale.
 
 ### Problem
 
-- Current progress in web `selectors.ts` (`goalProgressForPeriod` + `taskMatchesGoal`)
-  and iOS `GoalSelectors` (`progress` + `taskMatches`, in `ContentView.swift`)
-  uses a fragile substring matcher AND, when no task matches a goal, falls back to
-  ALL period tasks (`related = matched.length ? matched : periodTasks`). Two
-  unrelated goals with no matching tasks then show the SAME global completion
-  rate — a confident-looking but meaningless number.
+- Previous progress in web `selectors.ts` (`goalProgressForPeriod` +
+  `taskMatchesGoal`) and iOS `GoalSelectors` (`progress` + `taskMatches`, in
+  `ContentView.swift`) used a fragile substring matcher AND, when no task matched
+  a goal, fell back to ALL period tasks (`related = matched.length ? matched :
+  periodTasks`). That made unrelated goals with no matching tasks show the same
+  global completion rate. This is fixed: zero related items now show "관련 항목
+  없음" instead of a global fallback.
 
 ### Product stance (anti-tamper level 가)
 
@@ -416,18 +421,16 @@ Recommended order for the next coding session:
   (level 나) needs external signals (HealthKit, Screen Time, Calendar attendance)
   and is a separate future track, out of scope here.
 
-### Engine decision: E1 now, ML later
+### Engine decision: E1 shipped, E3 live
 
-- **E1 (improved deterministic matcher) — ship now.** One shared algorithm ported
+- **E1 (improved deterministic matcher) — shipped.** One shared algorithm ported
   identically to web `selectors.ts` and iOS `GoalSelectors` so progress matches
   across devices. No schema change (computed client-side from existing task/goal
   text). Tamper-resistant (auto, read-only), offline, no infra/cost/privacy.
-- **E3 (server ML embeddings) — later, only if E1 accuracy is insufficient.**
-  Sync-time embedding (e.g. pgvector cosine similarity) computed once on the
-  server and stored, read identically by both clients. Adds infra, online
-  dependency, cost (embeddings are cheap), and a privacy disclosure (task text
-  leaves the device). E1 and E3 share the same progress formula; only the matcher
-  source swaps, so the upgrade is contained.
+- **E3 (server ML embeddings) — LIVE/deployed 2026-06-11.** Gemini embeddings,
+  pgvector, the `goal_semantic_matches` RPC, and pg_cron/Edge Function embedding
+  sweep are implemented. E3 is the primary online relevance signal; E1 remains
+  the offline / not-yet-embedded fallback.
 - **E2 (on-device ML) rejected** — iOS `NLEmbedding` and a web JS model are
   different models, so per-device similarity scores diverge and break
   cross-platform progress consistency.
@@ -589,8 +592,9 @@ Recommended order for the next coding session:
   - Lock badge directly toggles lock state; card tap remains edit/confirmation.
   - Delete sits immediately left of Save in the editor dialog and opens a
     destructive confirmation before removal.
-- **Immediate next work**: implement the confirmed IA/report-entry banner policy,
-  fix Web tag filtering/input UX, then continue TestFlight/App Store preparation.
+- **2026-06-17 status refresh**: the confirmed IA/report-entry banner policy and
+  Web tag filtering/input UX are implemented and documented as done. Continue
+  with App Store submission assets and Toss external review work.
 
 ## Where We Are (2026-05-29)
 
@@ -919,7 +923,7 @@ Recommended order for the next coding session:
   - hex 직접 입력 + 숨김 native color picker 버튼 제공. 기본 color input 의 네모 swatch 는 노출하지 않음.
   - hex 입력 시 light/dark 각 모드용 (solid, soft, ink) 자동 계산 로직 (예: HSL 기반 보정).
   - preset 8색은 hex 기반 + HSL 보정으로 시작.
-- [x] `categoryStyle(category, mode)` 헬퍼 추가, `tokens[mode].me/ext` 직접 참조 사용처 (Add/Edit Sheet, Detail, Home, primitives 등) 전부 헬퍼로 마이그레이션.
+- [x] `categoryStyle(category, mode)` 헬퍼 추가, 당시 `tokens[mode].me/ext` 직접 참조 사용처를 헬퍼로 마이그레이션. Phase 7 이후 옛 Web 화면 파일은 정리됨.
 - [x] Add/Edit Task sheet 의 카테고리 segment → 동적 chip selector.
 - [x] 카테고리 개수 무제한, 검색 없음, reorder 만 지원.
 - [x] Button reorder 유지 + drag reorder interaction 추가.
@@ -1154,7 +1158,8 @@ Recommended order for the next coding session:
     - [ ] 사업자등록 (개인사업자 + 통신판매업 신고).
     - [ ] Toss Payments 가입 + 가맹점 심사 (~2–3주).
     - [ ] 운영 API 키 / Webhook secret 발급.
-    - [ ] 운영 도메인 결정 (Webhook URL 등록용, deployment 트랙과 동시).
+    - [x] 운영 도메인 결정 — `https://www.justdo.co.kr`, webhook URL은
+      `https://www.justdo.co.kr/api/webhook/toss`.
     - 세부 체크리스트: `docs/toss_merchant_review_plan.md`.
   - Track B — 코드 작업 (Toss 테스트 키로 동작):
     - [x] B1 Schema 마이그레이션 — `user_subscriptions` 보강
@@ -1162,11 +1167,11 @@ Recommended order for the next coding session:
       `last_payment_at`, `payment_failures`) + 신규 `payment_events` 테이블
       (webhook 멱등 처리).
     - [x] B2 서버 엔드포인트 — `POST /api/billing/issue-key`,
-      `POST /api/billing/charge`, `POST /api/webhook/toss` (signature 검증 +
-      멱등), `POST /api/billing/cancel`. 모두 `service-role` client 사용.
-      2026-05-14 현재 테스트 키 기준 REST 래퍼와 endpoint 골격 구현 완료.
-      Toss webhook signature 방식은 운영 심사/대시보드 설정 단계에서 공식
-      secret/헤더 스펙 확인 후 보강 필요.
+      `POST /api/billing/charge`, `POST /api/webhook/toss`,
+      `POST /api/billing/cancel`. 모두 `service-role` client 사용. 테스트 키
+      기준 REST 래퍼와 endpoint 골격, webhook 멱등 처리는 구현 완료.
+      Toss webhook signature 검증은 운영 심사/대시보드 설정 단계에서 공식
+      secret/헤더 스펙 확인 후 enable할 남은 항목.
     - [x] B3 정기결제 cron 방향 결정 — AWS EventBridge Scheduler -> Lambda ->
       `/api/billing/charge`, 매일 05:30 KST. Lambda wrapper:
       `infra/aws/billing-cron-lambda.mjs`, 운영 설정 문서:
@@ -1194,13 +1199,13 @@ Recommended order for the next coding session:
     - [x] B5 로그인 필수 정책 정리 — 비로그인 사용자는 로그인 화면에서 앱
       shell로 진입하지 못하는 현재 정책을 테스트로 고정하고, Trial + 결제수단
       미등록 상태는 Pro 사용 가능하되 구독 패널에서 Toss 결제 연결 CTA를 표시.
-    - [ ] B6 회귀 테스트 — 1차 route 단위 테스트 완료:
+    - [x] B6 회귀 테스트 — route 단위 테스트 완료:
       `issue-key`, `charge` 성공/실패 retry-pause, `webhook` fixture/idempotent
       upsert.
       2026-05-21 추가: Toss SDK client mock 기반 upgrade modal billing auth
       흐름과 cancel route edge cases를 테스트로 보강.
-      남은 항목: 운영 Toss 테스트 키 E2E, webhook signature는 운영 dashboard
-      secret/header 확인 후.
+    - [ ] B6 외부 의존 검증 — 운영 Toss 테스트 키 E2E, webhook signature는 운영
+      dashboard secret/header 확인 후.
   - 진행 순서: B1 → B2 → B4 → B3. Track A 완료 후 운영 키만 교체.
 
 ### 7-4. 모바일 진입 페이지
@@ -1271,7 +1276,8 @@ Recommended order for the next coding session:
 > id_token, nonce}`)로 교환 → 기존 `TokenResponse.storedSession()` 재사용. nonce는
 > raw를 Supabase로, **SHA256 hex를 Apple 요청에** 넣는다. 로그인 버튼은 이미
 > `signIn(.apple)`에 배선돼 있어 추가 배선 불필요. xcodebuild generic **BUILD
-> SUCCEEDED**. **단, 아래 외부 설정 전엔 런타임 동작 안 함**(엔타이틀먼트/공급자 미설정).
+> SUCCEEDED**. 외부 설정(Apple Developer, Supabase provider, Amplify env)과
+> 실기기 검증까지 완료되어 현재 런타임 동작 가능 상태다.
 >
 > **web은 코드 변경 불필요** — `useAuth.tsx`의 `signInWithSupabaseProvider`가
 > google/apple 공통으로 `signInWithOAuth({provider})`를 호출. `providers.ts`의
@@ -1302,8 +1308,10 @@ Recommended order for the next coding session:
 - [ ] **계정 연결/이메일 정책**: 동일 사용자가 Google·Apple을 번갈아 쓰면 Supabase가
       별도 identity를 만들 수 있음 — identity linking 또는 이메일 병합 정책 결정.
       Apple **"Hide My Email"** relay(`@privaterelay.appleid.com`) 케이스 고려.
-- [ ] **검증**: SIWA는 시뮬레이터 제약이 있어 **실기기**에서 신규/기존 계정,
-      취소/실패, 재로그인 세션 유지 smoke (다른 iOS 작업과 한 번에 진행 예정).
+- [x] **기본 검증**: SIWA는 시뮬레이터 제약이 있어 실기기에서 확인. 2026-06-14
+      강영모 iPhone에서 Apple 로그인 → 홈 진입, 취소 시 오류 없음까지 통과.
+      재로그인/장기 세션 유지와 Google↔Apple 교차 계정 정책은 위 계정 연결
+      follow-up에서 별도 확인한다.
 - **알려진 한계**: Apple은 **첫 로그인 때만 이름(`fullName`)을 credential로** 주고
   id_token에는 이름이 없음 → 현재 교환 경로는 **displayName 미수집**(이메일만).
   필요하면 첫 로그인 `credential.fullName`을 잡아 Supabase user_metadata에 별도 업데이트하는

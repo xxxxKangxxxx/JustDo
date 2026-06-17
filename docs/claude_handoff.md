@@ -362,20 +362,18 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 >   한 함수로 격리돼 swap 가능. (b) 리포트 **활동 요약 롤업**(카테고리별 완료율,
 >   Habit 달성률). (c) 신규 goal target UI의 **iOS 실기기 smoke**.
 
-> **다음 작업자가 픽업할 우선순위 (2026-06-06 갱신)**:
+> **2026-06-17 refresh**: 아래 2026-06-06 우선순위 중 iOS Goal Progress smoke,
+> E3 임베딩 매처, 리포트 활동 요약 롤업은 모두 완료/배포됨. 현재 활성 우선순위는
+> App Store 제출 자산 + Toss 가맹점 심사이며, 이 블록은 당시 의사결정 이력으로만
+> 보존한다.
+>
+> **다음 작업자가 픽업할 우선순위 (2026-06-06 갱신, superseded)**:
 > 1. **Toss 가맹점 심사 준비 병행** (사용자 외부 트랙, 가장 긴 차단 항목
 >    ~2–3주). 사업자등록 → 통신판매업 신고 → Toss Payments 가맹점 신청 순서.
 >    체크리스트: `docs/toss_merchant_review_plan.md`.
-> 2. **iOS 실기기 smoke (Goal Progress A-track)**. A1~A3 + 숫자 target 입력이
->    iOS 빌드에 포함됨. 설정→목표에서 매칭 진행률/도넛, `목표 수치` 입력→`목표 n/3`,
->    리포트 target/narrative/회고/Free blur, 프롬프트 1-7일 동작을 iPhone 14 Pro
->    실기기에서 확인. 통과하면 TestFlight/App Store 준비로 진행.
-> 3. **E3 임베딩 매처 (목표 매칭 일반화)**. 위 follow-up (a). 사용자가 E3 진행
->    신호를 줄 때 착수. 임베딩 제공자 키 선택(OpenAI/Voyage/Cohere) →
->    pgvector 마이그레이션 → 동기화 시 임베딩 → `goalProgressForPeriod` /
->    `GoalSelectors.progress`의 관련성 신호를 token-overlap → 코사인으로 swap,
->    E1은 오프라인/미임베딩 폴백으로 유지.
-> 4. **리포트 활동 요약 롤업** (follow-up (b), 작은 작업). 카테고리별 완료율 +
+> 2. **iOS 실기기 smoke (Goal Progress A-track)**. 완료됨.
+> 3. **E3 임베딩 매처 (목표 매칭 일반화)**. 완료/배포됨.
+> 4. **리포트 활동 요약 롤업**. 완료됨. 카테고리별 완료율 +
 >    Habit 달성률을 리포트 활동 스텝에 추가.
 > 5. **Pro Checkout B6 외부 의존 검증 / DLQ**. route 단위 테스트, Toss SDK
 >    client mock, cancel edge cases, webhook fixture/idempotency는 보강 완료.
@@ -712,8 +710,8 @@ iOS build/test commands below before doing the next real-device smoke pass.
     Settings, Widget, 1-hour+ auth session refresh smoke, and final real-device
     smoke passed on the configured real device. Goal & Pro Report first pass is
     also in the local iOS build; Settings → 목표 focused smoke is user-confirmed,
-    and delete confirmation is implemented. TestFlight/App Store preparation
-    follows the 2026-06-01 IA/report-entry pass.
+    delete confirmation is implemented, and the 2026-06-01 IA/report-entry pass
+    is done. Current native track is TestFlight/App Store submission preparation.
     Because this is a native SwiftUI/Xcode app, do **not** use Expo Go; install
     directly from Xcode to a real iPhone or use TestFlight later.
   - Both targets share App Group `group.kr.justdo.app`.
@@ -994,15 +992,15 @@ docs/supabase_cloud_setup.md
 docs/widget_sync_strategy.md
 
 apps/web/src/features/just-do/store.tsx
+apps/web/src/features/just-do/app-shell.tsx
 apps/web/src/features/just-do/persistence.ts
 apps/web/src/features/just-do/supabase-storage.ts
 apps/web/src/features/just-do/supabase-mapping.ts
-apps/web/src/features/just-do/habit-screen.tsx
-apps/web/src/features/just-do/settings-screen.tsx
-apps/web/src/features/just-do/stats-screen.tsx
-apps/web/src/features/just-do/add-sheet.tsx
+apps/web/src/features/just-do/selectors.ts
+apps/web/src/features/just-do/semantic-matches.ts
 apps/web/src/features/just-do/tags.ts
 apps/web/src/features/just-do/tags.test.ts
+apps/web/src/features/just-do/app-shell.test.tsx
 apps/web/src/features/just-do/persistence.test.ts
 
 apps/web/src/lib/billing/toss.ts
@@ -1284,7 +1282,8 @@ Recommended immediate next steps:
        counts 후).
   - 2026-06-01 갱신: Goal & Pro Report iOS first pass도 반영됨. Settings → 목표
     focused smoke는 사용자 확인 완료이고 삭제 확인 alert도 구현됨. 남은 iOS
-    작업은 IA/report-entry banner 반영과 TestFlight/App Store 준비. 상세
+    작업은 TestFlight/App Store 제출 준비. IA/report-entry banner는 2026-06-01
+    구현/검증 완료. 상세
     체크리스트는 `docs/ios_phase6_status.md` 참고.
    - Widget은 home-screen small/medium/large와 lock-screen accessory로 분리.
      Home-screen row text deep link는 제거했고 row 전체 탭이 완료 토글이다.
@@ -1365,8 +1364,8 @@ Recommended immediate next steps:
 - iOS는 Phase 7과 독립 트랙. Auth landing, Home, Add Sheet, editor-sheet
   routing, Just Do Mode, Stats, Settings, Widget 보정은 iPhone 14 Pro iOS 26.5
   최종 smoke까지 통과. Goal & Pro Report first pass도 iOS에 포함됨. Settings →
-  목표 focused smoke와 삭제 확인 alert까지 완료됐고, 현재 남은 것은 리포트 진입 UX
-  결정과 TestFlight 준비이며, Expo Go로 검증하지 않음.
+  목표 focused smoke, 삭제 확인 alert, 리포트 진입 UX까지 완료됐고, 현재 남은 것은
+  TestFlight/App Store 제출 준비이며, Expo Go로 검증하지 않음.
 - **새 SSR route를 만들 때** 위의 "Amplify SSR 함정" 섹션의 세 가지 함정에
   주의 — forwarded host 헤더 사용, server-only secret을 `amplify.yml`에 등록,
   monorepo platform/framework 설정 유지.

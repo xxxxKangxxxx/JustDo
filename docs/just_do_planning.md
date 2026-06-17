@@ -331,8 +331,8 @@ Just Do
 
 | 구분 | 기능 |
 |------|------|
-| **무료** | 기본 Task/Habit 관리, 캘린더 뷰, 위젯, 소셜 로그인, 동기화 |
-| **유료 (구독)** | Task Dependency 시각화, 공유/협업 기능, 통계 및 리포트, 고급 위젯 커스터마이징(추후 범위 확정) |
+| **무료** | Task/Habit 기록·관리, 캘린더 뷰, 카테고리, 태그, 기본 동기화, 데이터 export, 기본 위젯 3종, 목표 입력 |
+| **Trial/Pro** | 통계·목표 리포트 상세, Just Do Mode 등 고급 기능. 고급 위젯 커스터마이징과 Task Dependency 시각화는 v2 이후 범위 확정 |
 
 > 2026-05-19 결정: Free는 Task/Habit 기록·관리, 캘린더, 카테고리, 태그,
 > 기본 동기화, 데이터 export, 기본 위젯 3종을 제공한다. Trial/Pro는
@@ -347,8 +347,8 @@ Just Do
 
 | 단계 | 플랫폼 | 주요 내용 |
 |------|--------|-----------|
-| **v1** | iOS (모바일) + 웹 (데스크탑 productivity hub) | Task/Habit 핵심 기능, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인, 실시간 동기화, 오프라인 지원, 푸시 알림. **Web Desktop Redesign (Phase 7)이 v1 출시 차단 항목** |
-| **v2** | iOS + 웹 | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, 공유/협업 기능, 통계 리포트, 이메일 회원가입 |
+| **v1** | iOS (모바일) + 웹 (데스크탑 productivity hub) | Task/Habit 핵심 기능, 캘린더 뷰, 위젯 3종 (iOS), Google/Apple 로그인, 실시간 동기화, 오프라인 지원, 목표/리포트, Trial/Pro entitlement. Web Desktop Redesign (Phase 7)은 구현 완료 |
+| **v2** | iOS + 웹 | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, `함께` 공유/협업 기능, 리포트 고도화, 이메일 회원가입, push notification |
 | **v3** | Android | Android 앱 출시 — v3 전까지 Android 사용자는 데스크탑 web으로 우회 |
 
 ---
@@ -357,4 +357,4 @@ Just Do
 
 - [x] DB 스키마 설계
 - [x] 구독 가격 정책 (월/연 금액)
-- [ ] 앱스토어 출시 일정
+- [ ] 앱스토어 출시 일정 — 현재 App Store 제출 자산 준비/Archive/TestFlight 단계

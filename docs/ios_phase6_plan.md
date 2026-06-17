@@ -166,5 +166,5 @@ mutations, requests a timeline reload, and lets the app drain App Group
    (Done 2026-05-29/30: shared models, Core Data mirror, Supabase sync,
    Settings → 목표, prompt UI, centered goal editor dialog, lock toggle, and
    report scaffolding.)
-10. Remaining: focused Goal smoke, report-entry/delete-confirm UX decisions,
-    then TestFlight/App Store preparation.
+10. Focused Goal smoke, report-entry UX, and delete-confirm UX are done.
+    Remaining v1 work is TestFlight/App Store submission preparation.
