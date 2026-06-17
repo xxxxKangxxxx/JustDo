@@ -51,7 +51,7 @@ final class AuthViewModel: ObservableObject {
     func reload() async {
         #if DEBUG
         if JustDoUITestSupport.isEnabled {
-            profile = AuthProfile(email: "uitest@justdo.local", displayName: "UI Test", avatarURL: nil)
+            profile = AuthProfile(email: "uitest@justdo.local", displayName: "UI Test", avatarURL: nil, authProvider: nil)
             status = .signedIn
             return
         }

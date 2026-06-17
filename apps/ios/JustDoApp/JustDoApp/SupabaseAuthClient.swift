@@ -9,7 +9,7 @@ import AuthenticationServices
 import CryptoKit
 import Foundation
 
-enum SupabaseAuthProvider: String, CaseIterable, Identifiable {
+enum SupabaseAuthProvider: String, CaseIterable, Codable, Identifiable {
     case google
     case apple
 
@@ -21,6 +21,15 @@ enum SupabaseAuthProvider: String, CaseIterable, Identifiable {
             return "Continue with Google"
         case .apple:
             return "Continue with Apple"
+        }
+    }
+
+    var displayTitle: String {
+        switch self {
+        case .google:
+            return "Google"
+        case .apple:
+            return "Apple"
         }
     }
 }
@@ -418,7 +427,8 @@ private struct TokenResponse: Decodable {
             expiresAt: resolvedExpiresAt,
             email: user?.email,
             displayName: user?.metadata.displayName,
-            avatarURL: user?.metadata.resolvedAvatarURL
+            avatarURL: user?.metadata.resolvedAvatarURL,
+            authProvider: user?.appMetadata.authProvider ?? AuthProfile.fromAccessToken(accessToken)?.authProvider
         )
     }
 
@@ -435,11 +445,13 @@ private struct AuthUser: Decodable {
     var id: UUID
     var email: String?
     var metadata: AuthUserMetadata
+    var appMetadata: AuthUserAppMetadata
 
     private enum CodingKeys: String, CodingKey {
         case id
         case email
         case metadata = "user_metadata"
+        case appMetadata = "app_metadata"
     }
 
     init(from decoder: Decoder) throws {
@@ -447,6 +459,15 @@ private struct AuthUser: Decodable {
         id = try container.decode(UUID.self, forKey: .id)
         email = try container.decodeIfPresent(String.self, forKey: .email)
         metadata = try container.decodeIfPresent(AuthUserMetadata.self, forKey: .metadata) ?? AuthUserMetadata()
+        appMetadata = try container.decodeIfPresent(AuthUserAppMetadata.self, forKey: .appMetadata) ?? AuthUserAppMetadata()
+    }
+}
+
+private struct AuthUserAppMetadata: Decodable {
+    var provider: String?
+
+    var authProvider: SupabaseAuthProvider? {
+        provider.flatMap(SupabaseAuthProvider.init(rawValue:))
     }
 }
 

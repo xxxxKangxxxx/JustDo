@@ -160,6 +160,7 @@ struct SupabaseStoredSession: Codable, Equatable {
     var email: String?
     var displayName: String?
     var avatarURL: String?
+    var authProvider: SupabaseAuthProvider?
 
     func isExpired(referenceDate: Date = Date()) -> Bool {
         guard let expiresAt else {
@@ -184,7 +185,8 @@ struct SupabaseStoredSession: Codable, Equatable {
         AuthProfile(
             email: email,
             displayName: displayName,
-            avatarURL: avatarURL
+            avatarURL: avatarURL,
+            authProvider: authProvider
         ).mergingFallback(AuthProfile.fromAccessToken(accessToken))
     }
 }
@@ -193,6 +195,7 @@ struct AuthProfile: Equatable {
     var email: String?
     var displayName: String?
     var avatarURL: String?
+    var authProvider: SupabaseAuthProvider?
 
     var title: String {
         let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -211,7 +214,11 @@ struct AuthProfile: Equatable {
         if let trimmedEmail, !trimmedEmail.isEmpty, trimmedEmail != title {
             return trimmedEmail
         }
-        return "Google 로그인"
+        return loginMethodTitle ?? "로그인됨"
+    }
+
+    var loginMethodTitle: String? {
+        authProvider.map { "\($0.displayTitle) 로그인" }
     }
 
     var initials: String {
@@ -226,7 +233,8 @@ struct AuthProfile: Equatable {
         return AuthProfile(
             email: email ?? fallback.email,
             displayName: displayName ?? fallback.displayName,
-            avatarURL: avatarURL ?? fallback.avatarURL
+            avatarURL: avatarURL ?? fallback.avatarURL,
+            authProvider: authProvider ?? fallback.authProvider
         )
     }
 
@@ -242,7 +250,8 @@ struct AuthProfile: Equatable {
         return AuthProfile(
             email: payload.email,
             displayName: payload.userMetadata.displayName,
-            avatarURL: payload.userMetadata.resolvedAvatarURL
+            avatarURL: payload.userMetadata.resolvedAvatarURL,
+            authProvider: payload.appMetadata.authProvider
         )
     }
 }
@@ -250,16 +259,27 @@ struct AuthProfile: Equatable {
 private struct AuthTokenPayload: Decodable {
     var email: String?
     var userMetadata: AuthTokenUserMetadata
+    var appMetadata: AuthTokenAppMetadata
 
     private enum CodingKeys: String, CodingKey {
         case email
         case userMetadata = "user_metadata"
+        case appMetadata = "app_metadata"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         email = try container.decodeIfPresent(String.self, forKey: .email)
         userMetadata = try container.decodeIfPresent(AuthTokenUserMetadata.self, forKey: .userMetadata) ?? AuthTokenUserMetadata()
+        appMetadata = try container.decodeIfPresent(AuthTokenAppMetadata.self, forKey: .appMetadata) ?? AuthTokenAppMetadata()
+    }
+}
+
+private struct AuthTokenAppMetadata: Decodable {
+    var provider: String?
+
+    var authProvider: SupabaseAuthProvider? {
+        provider.flatMap(SupabaseAuthProvider.init(rawValue:))
     }
 }
 

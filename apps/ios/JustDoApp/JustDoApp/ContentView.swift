@@ -2901,7 +2901,7 @@ private struct SettingsRootTabView: View {
     @State private var settingsMessage: String?
 
     private var resolvedProfile: AuthProfile {
-        authProfile ?? AuthProfile(email: nil, displayName: nil, avatarURL: nil)
+        authProfile ?? AuthProfile(email: nil, displayName: nil, avatarURL: nil, authProvider: nil)
     }
 
     private var isProPlan: Bool {
@@ -3280,7 +3280,7 @@ private struct AccountDetailSheet: View {
             VStack(spacing: 0) {
                 AccountInfoRow(title: "이름", value: profile.title)
                 AccountInfoRow(title: "이메일", value: profile.email ?? "-")
-                AccountInfoRow(title: "로그인 방식", value: "Google")
+                AccountInfoRow(title: "로그인 방식", value: profile.loginMethodTitle ?? "-")
                 AccountInfoRow(title: "현재 플랜", value: plan, isLast: true)
             }
             .background(JDTheme.surfaceAlt)
