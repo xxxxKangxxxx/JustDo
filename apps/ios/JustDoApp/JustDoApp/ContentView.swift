@@ -490,7 +490,6 @@ private struct HomeRootView: View {
             activeRootTab
             BottomTabBar(selectedTab: selectedTab) { selectedTab = $0 }
         }
-        .ignoresSafeArea(.keyboard)
         .navigationBarHidden(true)
         .sheet(isPresented: $isShowingAddTask) {
             AddTaskSheet(
@@ -501,8 +500,11 @@ private struct HomeRootView: View {
                 onSaveTask: addTask(_:),
                 onSaveHabit: addHabit(title:emoji:)
             )
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 30)
             .presentationDetents([.height(500)])
-            .presentationDragIndicator(.hidden)
+            .presentationDragIndicator(.visible)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
@@ -2392,11 +2394,6 @@ private struct AddTaskSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Capsule()
-                .fill(JDTheme.dividerStrong)
-                .frame(width: 36, height: 4)
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 16)
             Picker("Type", selection: $mode) {
                 ForEach(Mode.allCases) { mode in
                     Text(mode.rawValue).tag(mode)
@@ -2533,10 +2530,6 @@ private struct AddTaskSheet: View {
             }
             .padding(.top, 18)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 30)
-        .background(JDTheme.surface)
         .onAppear {
             selectedCategoryID = selectedCategoryID ?? categories.first?.id
             startDateValue = Self.date(from: initialStartDate)
