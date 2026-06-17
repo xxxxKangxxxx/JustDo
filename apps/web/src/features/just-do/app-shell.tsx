@@ -1488,24 +1488,6 @@ function TaskModalBody({
     setTags(nextTags);
     s.updateTask(task.id, { tags: nextTags });
   };
-  const commitTagDraft = (raw: string) => {
-    const parsed = parseTagInput(raw);
-    setTagDraft("");
-    if (!parsed.length) return;
-    updateTags(mergeTags(tags, parsed));
-  };
-  const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (isComposingInputEvent(event)) return;
-    if (isTagCommitKey(event.key)) {
-      event.preventDefault();
-      commitTagDraft(event.currentTarget.value || tagDraft);
-      return;
-    }
-    if (event.key === "Backspace" && !tagDraft && tags.length) {
-      event.preventDefault();
-      updateTags(tags.slice(0, -1));
-    }
-  };
   return (
     <>
         <div className="flex items-center gap-2.5 border-b px-[18px] py-3.5" style={{ borderColor: t.divider }}>
@@ -1547,31 +1529,15 @@ function TaskModalBody({
             </div>
           </ModalRow>
           <ModalRow label="태그" mode={mode}>
-            <div className="flex flex-1 flex-wrap items-center gap-1.5">
-              {tags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => updateTags(tags.filter((item) => item !== tag))}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium"
-                  style={{ background: c.soft, color: c.ink }}
-                  aria-label={`태그 ${tag} 삭제`}
-                >
-                  <span>{tag}</span>
-                  <span aria-hidden style={{ opacity: 0.7 }}>×</span>
-                </button>
-              ))}
-              <input
-                value={tagDraft}
-                onChange={(event) => setTagDraft(event.target.value)}
-                onKeyDown={onTagKeyDown}
-                onBlur={(event) => commitTagDraft(event.currentTarget.value || tagDraft)}
-                placeholder={tags.length ? "" : "태그 추가"}
-                className="min-w-[100px] flex-1 bg-transparent py-1 text-[13px] font-medium outline-none"
-                style={{ color: t.text }}
-                aria-label="Task 태그 추가"
-              />
-            </div>
+            <TaskTagInput
+              mode={mode}
+              color={c}
+              tags={tags}
+              draft={tagDraft}
+              onDraftChange={setTagDraft}
+              onTagsChange={updateTags}
+              ariaLabel="Task 태그 추가"
+            />
           </ModalRow>
         </div>
         <div className="flex items-center justify-between border-t px-[18px] py-2.5 text-[11px]" style={{ borderColor: t.divider, color: t.textTertiary }}>
@@ -1732,23 +1698,6 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
   const category = categories.find((item) => item.id === categoryId) ?? categories[0] ?? null;
   const c = categoryStyle(category, mode);
   const safeEndDate = endDate < startDate ? startDate : endDate;
-  const commitTagDraft = (raw: string) => {
-    const next = parseTagInput(raw);
-    if (next.length) setTags((current) => mergeTags(current, next));
-    setTagDraft("");
-  };
-  const onTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (isComposingInputEvent(event)) return;
-    if (isTagCommitKey(event.key)) {
-      event.preventDefault();
-      commitTagDraft(event.currentTarget.value || tagDraft);
-      return;
-    }
-    if (event.key === "Backspace" && !tagDraft && tags.length) {
-      event.preventDefault();
-      setTags((current) => current.slice(0, -1));
-    }
-  };
   const submit = () => {
     if (!title.trim()) {
       onClose();
@@ -1846,30 +1795,14 @@ function NewTaskInlineBody({ mode, draft, onClose, onToast }: { mode: ThemeMode;
                 />
               </ModalRow>
               <ModalRow label="태그" mode={mode}>
-                <div className="flex flex-1 flex-wrap items-center gap-1.5">
-                  {tags.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => setTags((current) => current.filter((item) => item !== tag))}
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium"
-                      style={{ background: c.soft, color: c.ink }}
-                      aria-label={`태그 ${tag} 삭제`}
-                    >
-                      <span>{tag}</span>
-                      <span aria-hidden style={{ opacity: 0.7 }}>×</span>
-                    </button>
-                  ))}
-                  <input
-                    value={tagDraft}
-                    onChange={(event) => setTagDraft(event.target.value)}
-                    onKeyDown={onTagKeyDown}
-                    onBlur={() => commitTagDraft(tagDraft)}
-                    placeholder={tags.length ? "" : "태그 추가"}
-                    className="min-w-[100px] flex-1 bg-transparent py-1 text-[13px] font-medium outline-none"
-                    style={{ color: t.text }}
-                  />
-                </div>
+                <TaskTagInput
+                  mode={mode}
+                  color={c}
+                  tags={tags}
+                  draft={tagDraft}
+                  onDraftChange={setTagDraft}
+                  onTagsChange={setTags}
+                />
               </ModalRow>
             </div>
           ) : (
@@ -3970,6 +3903,71 @@ function ModalRow({ label, mode, children }: { label: string; mode: ThemeMode; c
     <div className="flex min-h-[36px] items-center gap-3">
       <div className="w-[78px] text-[11.5px] font-semibold uppercase tracking-[0.2px]" style={{ color: t.textTertiary }}>{label}</div>
       <div className="flex flex-1 flex-wrap items-center gap-1.5 text-[13px]">{children}</div>
+    </div>
+  );
+}
+
+function TaskTagInput({
+  mode,
+  color,
+  tags,
+  draft,
+  onDraftChange,
+  onTagsChange,
+  ariaLabel,
+}: {
+  mode: ThemeMode;
+  color: { soft: string; ink: string };
+  tags: string[];
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onTagsChange: (nextTags: string[]) => void;
+  ariaLabel?: string;
+}) {
+  const t = webTokens(mode);
+  const commitDraft = (raw: string) => {
+    const parsed = parseTagInput(raw);
+    onDraftChange("");
+    if (parsed.length) onTagsChange(mergeTags(tags, parsed));
+  };
+  const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingInputEvent(event)) return;
+    if (isTagCommitKey(event.key)) {
+      event.preventDefault();
+      commitDraft(event.currentTarget.value || draft);
+      return;
+    }
+    if (event.key === "Backspace" && !draft && tags.length) {
+      event.preventDefault();
+      onTagsChange(tags.slice(0, -1));
+    }
+  };
+
+  return (
+    <div className="flex flex-1 flex-wrap items-center gap-1.5">
+      {tags.map((tag) => (
+        <button
+          key={tag}
+          type="button"
+          onClick={() => onTagsChange(tags.filter((item) => item !== tag))}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium"
+          style={{ background: color.soft, color: color.ink }}
+          aria-label={`태그 ${tag} 삭제`}
+        >
+          <span>{tag}</span>
+          <span aria-hidden style={{ opacity: 0.7 }}>×</span>
+        </button>
+      ))}
+      <input
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        onBlur={(event) => commitDraft(event.currentTarget.value || draft)}
+        placeholder={tags.length ? "" : "태그 추가"}
+        className="min-w-[100px] flex-1 bg-transparent py-1 text-[13px] font-medium outline-none"
+        style={{ color: t.text }}
+        aria-label={ariaLabel}
+      />
     </div>
   );
 }
