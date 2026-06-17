@@ -147,6 +147,24 @@ private struct TaskDraft {
     var endDate: String
     var priority: Priority
     var scheduledTime: String?
+    var tags: [String]
+}
+
+private func parseTaskTags(_ text: String) -> [String] {
+    var seen = Set<String>()
+    var result: [String] = []
+
+    for rawTag in text.split(whereSeparator: { $0 == "," || $0.isWhitespace }) {
+        let trimmedTag = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tag = trimmedTag.hasPrefix("#") ? String(trimmedTag.dropFirst()) : trimmedTag
+
+        if !tag.isEmpty, !seen.contains(tag) {
+            seen.insert(tag)
+            result.append(tag)
+        }
+    }
+
+    return result
 }
 
 private func sortTasksByDueDate(_ lhs: Task, _ rhs: Task) -> Bool {
@@ -914,7 +932,7 @@ private struct HomeRootView: View {
             priority: draft.priority,
             isCompleted: false,
             scheduledTime: draft.scheduledTime?.nilIfBlank,
-            tags: []
+            tags: draft.tags
         )
 
         do {
@@ -2348,6 +2366,7 @@ private struct AddTaskSheet: View {
     @State private var editingScheduleField: ScheduleField?
     @State private var selectedPriority: Priority = .medium
     @State private var selectedEmoji = "🌱"
+    @State private var tagsText = ""
 
     private let emojis = ["🌱", "💧", "🏃", "📖", "🧘", "✏️"]
     private let priorities: [(Priority, String)] = [(.high, "높음"), (.medium, "중간"), (.low, "낮음")]
@@ -2438,6 +2457,12 @@ private struct AddTaskSheet: View {
                             .buttonStyle(.plain)
                         }
                     }
+                }
+                AddSheetFieldRow(label: "태그", noBorder: true) {
+                    TextField("쉼표 또는 공백으로 구분", text: $tagsText)
+                        .font(.system(size: 13, weight: .medium))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
             }
             if mode == .habit {
@@ -2539,7 +2564,8 @@ private struct AddTaskSheet: View {
                     startDate: Self.isoDate(from: startDateValue),
                     endDate: Self.isoDate(from: endDateValue),
                     priority: selectedPriority,
-                    scheduledTime: includesTime ? Self.timeString(from: startDateValue) : nil
+                    scheduledTime: includesTime ? Self.timeString(from: startDateValue) : nil,
+                    tags: parseTaskTags(tagsText)
                 )
             )
         case .habit:
@@ -6830,10 +6856,7 @@ private struct TaskDetailEditor: View {
     }
 
     private var parsedTags: [String] {
-        tagsText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        parseTaskTags(tagsText)
     }
 
     private func save() {
