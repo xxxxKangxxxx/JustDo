@@ -167,6 +167,23 @@ private func parseTaskTags(_ text: String) -> [String] {
     return result
 }
 
+private func mergeTaskTags(_ current: [String], _ incoming: [String]) -> [String] {
+    var seen = Set<String>()
+    var result: [String] = []
+
+    for rawTag in current + incoming {
+        let trimmedTag = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tag = trimmedTag.hasPrefix("#") ? String(trimmedTag.dropFirst()) : trimmedTag
+        let key = tag.lowercased()
+        if !tag.isEmpty, !seen.contains(key) {
+            seen.insert(key)
+            result.append(tag)
+        }
+    }
+
+    return result
+}
+
 private func sortTasksByDueDate(_ lhs: Task, _ rhs: Task) -> Bool {
     if lhs.endDate != rhs.endDate {
         return lhs.endDate < rhs.endDate
@@ -2366,7 +2383,8 @@ private struct AddTaskSheet: View {
     @State private var editingScheduleField: ScheduleField?
     @State private var selectedPriority: Priority = .medium
     @State private var selectedEmoji = "🌱"
-    @State private var tagsText = ""
+    @State private var tags: [String] = []
+    @State private var tagDraft = ""
 
     private let emojis = ["🌱", "💧", "🏃", "📖", "🧘", "✏️"]
     private let priorities: [(Priority, String)] = [(.high, "높음"), (.medium, "중간"), (.low, "낮음")]
@@ -2458,11 +2476,12 @@ private struct AddTaskSheet: View {
                         }
                     }
                 }
-                AddSheetFieldRow(label: "태그", noBorder: true) {
-                    TextField("쉼표 또는 공백으로 구분", text: $tagsText)
-                        .font(.system(size: 13, weight: .medium))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                AddSheetFieldRow(label: "태그", noBorder: true, alignTop: !tags.isEmpty) {
+                    TaskTagChipInput(
+                        tags: $tags,
+                        draft: $tagDraft,
+                        tint: selectedCategoryColor
+                    )
                 }
             }
             if mode == .habit {
@@ -2565,7 +2584,7 @@ private struct AddTaskSheet: View {
                     endDate: Self.isoDate(from: endDateValue),
                     priority: selectedPriority,
                     scheduledTime: includesTime ? Self.timeString(from: startDateValue) : nil,
-                    tags: parseTaskTags(tagsText)
+                    tags: mergeTaskTags(tags, parseTaskTags(tagDraft))
                 )
             )
         case .habit:
@@ -2720,14 +2739,16 @@ private struct SmallTimeToggle: View {
 private struct AddSheetFieldRow<Content: View>: View {
     let label: String
     var noBorder = false
+    var alignTop = false
     @ViewBuilder let content: Content
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: alignTop ? .top : .center, spacing: 12) {
             Text(label)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(JDTheme.tertiaryText)
                 .frame(width: 72, alignment: .leading)
+                .padding(.top, alignTop ? 6 : 0)
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -2738,6 +2759,124 @@ private struct AddSheetFieldRow<Content: View>: View {
                     .fill(JDTheme.divider)
                     .frame(height: 0.5)
             }
+        }
+    }
+}
+
+private struct TaskTagChipInput: View {
+    @Binding var tags: [String]
+    @Binding var draft: String
+    let tint: Color
+
+    var body: some View {
+        FlowLayout(spacing: 6, rowSpacing: 6) {
+            ForEach(tags, id: \.self) { tag in
+                Button {
+                    tags.removeAll { $0 == tag }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(tag)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(tint.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+            }
+
+            TextField(tags.isEmpty ? "태그 추가" : "", text: $draft)
+                .font(.system(size: 13, weight: .medium))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .frame(minWidth: 92)
+                .onChange(of: draft) { _, value in
+                    guard value.last?.isWhitespace == true || value.last == "," else {
+                        return
+                    }
+                    commit(value)
+                }
+                .onSubmit {
+                    commit(draft)
+                }
+        }
+    }
+
+    private func commit(_ raw: String) {
+        tags = mergeTaskTags(tags, parseTaskTags(raw))
+        draft = ""
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 0
+    var rowSpacing: CGFloat = 0
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentRowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var widestRow: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > 0, currentX + spacing + size.width > maxWidth {
+                widestRow = max(widestRow, currentX)
+                totalHeight += currentRowHeight + rowSpacing
+                currentX = 0
+                currentRowHeight = 0
+            }
+
+            if currentX > 0 {
+                currentX += spacing
+            }
+            currentX += size.width
+            currentRowHeight = max(currentRowHeight, size.height)
+        }
+
+        widestRow = max(widestRow, currentX)
+        totalHeight += currentRowHeight
+
+        return CGSize(
+            width: proposal.width ?? widestRow,
+            height: totalHeight
+        )
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var currentRowHeight: CGFloat = 0
+        let maxX = bounds.maxX
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > bounds.minX, currentX + spacing + size.width > maxX {
+                currentX = bounds.minX
+                currentY += currentRowHeight + rowSpacing
+                currentRowHeight = 0
+            }
+
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            currentX += size.width + spacing
+            currentRowHeight = max(currentRowHeight, size.height)
         }
     }
 }

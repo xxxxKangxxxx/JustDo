@@ -153,6 +153,7 @@ final class SupabaseRestSyncTests: XCTestCase {
                 )
             )
         )
+        let tagID = uuid("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
         let habitLogMutation = QueuedMutation(
             id: uuid("90000000-0000-0000-0000-000000000002"),
             updatedAt: "2026-05-07T10:01:00Z",
@@ -164,7 +165,12 @@ final class SupabaseRestSyncTests: XCTestCase {
         )
         try store.applyAndEnqueue(taskMutation)
         try store.applyAndEnqueue(habitLogMutation)
-        let transport = FakeSupabaseRestTransport(responses: [:])
+        let transport = FakeSupabaseRestTransport(responses: [
+            "tags:upsert": """
+            [{"id":"\(tagID.uuidString.lowercased())"}]
+            """,
+            "task_tags": "[]",
+        ])
 
         let flushed = try await SupabaseQueuedMutationFlusher(
             mutationClient: SupabaseMutationClient(userID: userID, transport: transport),
@@ -173,19 +179,74 @@ final class SupabaseRestSyncTests: XCTestCase {
 
         XCTAssertEqual(flushed, [taskMutation, habitLogMutation])
         XCTAssertEqual(try store.queuedMutations(), [])
-        XCTAssertEqual(transport.upserts.map(\.path), ["tasks", "habit_logs"])
-        XCTAssertEqual(transport.upserts[1].queryItems.first?.name, "on_conflict")
-        XCTAssertEqual(transport.upserts[1].queryItems.first?.value, "habit_id,log_date")
+        XCTAssertEqual(transport.upserts.map(\.path), ["tasks", "tags", "task_tags", "habit_logs"])
+        XCTAssertEqual(transport.upserts[2].queryItems.first?.name, "on_conflict")
+        XCTAssertEqual(transport.upserts[2].queryItems.first?.value, "task_id,tag_id")
+        XCTAssertEqual(transport.upserts[3].queryItems.first?.name, "on_conflict")
+        XCTAssertEqual(transport.upserts[3].queryItems.first?.value, "habit_id,log_date")
 
         let taskBody = try XCTUnwrap(transport.upserts.first?.json)
         XCTAssertEqual(taskBody["user_id"] as? String, userID.uuidString.uppercased())
         XCTAssertEqual(taskBody["title"] as? String, "Proposal draft")
         XCTAssertEqual(taskBody["is_completed"] as? Bool, true)
 
-        let habitLogBody = try XCTUnwrap(transport.upserts.dropFirst().first?.json)
+        let tagBody = try XCTUnwrap(transport.upserts[1].json)
+        XCTAssertEqual(tagBody["user_id"] as? String, userID.uuidString.uppercased())
+        XCTAssertEqual(tagBody["name"] as? String, "focus")
+
+        let taskTagBody = try XCTUnwrap(transport.upserts[2].jsonArray?.first)
+        XCTAssertEqual(taskTagBody["task_id"] as? String, "11111111-1111-1111-1111-111111111111")
+        XCTAssertEqual(taskTagBody["tag_id"] as? String, tagID.uuidString.uppercased())
+
+        let habitLogBody = try XCTUnwrap(transport.upserts[3].json)
         XCTAssertEqual(habitLogBody["habit_id"] as? String, "33333333-3333-3333-3333-333333333333")
         XCTAssertEqual(habitLogBody["log_date"] as? String, "2026-04-30")
         XCTAssertEqual(habitLogBody["is_completed"] as? Bool, true)
+    }
+
+    func testQueuedMutationFlusherRemovesStaleTaskTags() async throws {
+        let userID = uuid("99999999-9999-9999-9999-999999999999")
+        let stack = CoreDataStack(inMemory: true)
+        let store = CoreDataAppSnapshotStore(context: stack.container.viewContext)
+        let taskID = uuid("11111111-1111-1111-1111-111111111111")
+        let staleTagID = uuid("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+        let mutation = QueuedMutation(
+            id: uuid("90000000-0000-0000-0000-000000000009"),
+            updatedAt: "2026-05-07T10:03:00Z",
+            mutation: .taskUpsert(
+                Task(
+                    id: taskID,
+                    title: "No tag task",
+                    categoryID: nil,
+                    startDate: "2026-04-30",
+                    endDate: "2026-04-30",
+                    priority: .medium,
+                    isCompleted: false,
+                    scheduledTime: nil,
+                    tags: []
+                )
+            )
+        )
+        try store.applyAndEnqueue(mutation)
+        let transport = FakeSupabaseRestTransport(responses: [
+            "task_tags": """
+            [{"tag_id":"\(staleTagID.uuidString.lowercased())"}]
+            """,
+        ])
+
+        _ = try await SupabaseQueuedMutationFlusher(
+            mutationClient: SupabaseMutationClient(userID: userID, transport: transport),
+            snapshotStore: store
+        ).flush()
+
+        XCTAssertEqual(transport.deletes.map(\.path), ["task_tags"])
+        XCTAssertEqual(
+            transport.deletes.first?.queryItems.map { "\($0.name)=\($0.value ?? "")" },
+            [
+                "task_id=eq.\(taskID.uuidString.lowercased())",
+                "tag_id=in.(\(staleTagID.uuidString.lowercased()))",
+            ]
+        )
     }
 
     func testQueuedMutationFlusherDeletesHabitLogWhenValueIsZero() async throws {
@@ -378,6 +439,11 @@ private final class FakeSupabaseRestTransport: SupabaseRestTransport {
         upserts.append(try MutationRequest(path: path, queryItems: queryItems, body: body))
     }
 
+    func upsertReturning(path: String, queryItems: [URLQueryItem], body: Data) async throws -> Data {
+        upserts.append(try MutationRequest(path: path, queryItems: queryItems, body: body))
+        return Data((responses["\(path):upsert"] ?? responses[path] ?? "[]").utf8)
+    }
+
     func patch(path: String, queryItems: [URLQueryItem], body: Data) async throws {
         patches.append(try MutationRequest(path: path, queryItems: queryItems, body: body))
     }
@@ -391,18 +457,26 @@ private struct MutationRequest {
     var path: String
     var queryItems: [URLQueryItem]
     var json: [String: Any]
+    var jsonArray: [[String: Any]]?
 
     init(path: String, queryItems: [URLQueryItem], body: Data) throws {
         self.path = path
         self.queryItems = queryItems
-        self.json = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: body) as? [String: Any]
-        )
+        let object = try JSONSerialization.jsonObject(with: body)
+        if let dictionary = object as? [String: Any] {
+            self.json = dictionary
+            self.jsonArray = nil
+        } else {
+            let array = try XCTUnwrap(object as? [[String: Any]])
+            self.json = [:]
+            self.jsonArray = array
+        }
     }
 
     init(path: String, queryItems: [URLQueryItem], json: [String: Any]) {
         self.path = path
         self.queryItems = queryItems
         self.json = json
+        self.jsonArray = nil
     }
 }

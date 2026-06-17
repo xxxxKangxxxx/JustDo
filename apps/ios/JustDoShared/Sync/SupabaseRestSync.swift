@@ -42,6 +42,7 @@ public struct SupabaseCredentials: Equatable, Sendable {
 
 public protocol SupabaseRestTransport {
     func get(path: String, queryItems: [URLQueryItem]) async throws -> Data
+    func upsertReturning(path: String, queryItems: [URLQueryItem], body: Data) async throws -> Data
     func upsert(path: String, queryItems: [URLQueryItem], body: Data) async throws
     func patch(path: String, queryItems: [URLQueryItem], body: Data) async throws
     func delete(path: String, queryItems: [URLQueryItem]) async throws
@@ -76,6 +77,16 @@ public final class URLSessionSupabaseRestTransport: SupabaseRestTransport {
             queryItems: queryItems,
             body: body,
             prefer: "return=minimal,resolution=merge-duplicates"
+        )
+    }
+
+    public func upsertReturning(path: String, queryItems: [URLQueryItem], body: Data) async throws -> Data {
+        try await request(
+            method: "POST",
+            path: path,
+            queryItems: queryItems,
+            body: body,
+            prefer: "return=representation,resolution=merge-duplicates"
         )
     }
 
@@ -172,6 +183,7 @@ public final class SupabaseMutationClient {
             try await patchPreferences(key: key, value: value)
         case .taskUpsert(let task):
             try await upsert("tasks", body: SupabaseTaskMutationRow(task: task, userID: userID))
+            try await replaceTaskTags(task)
         case .taskCompletionSet(let id, let isCompleted, let completedAt):
             try await patchTaskCompletion(
                 id: id,
@@ -234,6 +246,20 @@ public final class SupabaseMutationClient {
         )
     }
 
+    private func upsertReturning<Row: Encodable, Returned: Decodable>(
+        _ path: String,
+        queryItems: [URLQueryItem] = [],
+        body: Row,
+        as type: Returned.Type
+    ) async throws -> Returned {
+        let data = try await transport.upsertReturning(
+            path: path,
+            queryItems: queryItems,
+            body: encoder.encode(body)
+        )
+        return try JSONDecoder().decode(Returned.self, from: data)
+    }
+
     private func delete(_ path: String, id: UUID) async throws {
         try await transport.delete(
             path: path,
@@ -242,6 +268,69 @@ public final class SupabaseMutationClient {
                 URLQueryItem(name: "id", value: "eq.\(id.uuidString.lowercased())"),
             ]
         )
+    }
+
+    private func replaceTaskTags(_ task: Task) async throws {
+        let nextTagIDs = try await ensureTagIDs(task.tags)
+        let currentData = try await transport.get(
+            path: "task_tags",
+            queryItems: [
+                URLQueryItem(name: "select", value: "tag_id"),
+                URLQueryItem(name: "task_id", value: "eq.\(task.id.uuidString.lowercased())"),
+            ]
+        )
+        let currentRows = try JSONDecoder().decode([SupabaseTaskTagIDRow].self, from: currentData)
+        let currentTagIDs = Set(currentRows.map(\.tagID))
+        let nextTagIDSet = Set(nextTagIDs)
+        let staleTagIDs = currentTagIDs.subtracting(nextTagIDSet)
+        let newTagIDs = nextTagIDs.filter { !currentTagIDs.contains($0) }
+
+        if !staleTagIDs.isEmpty {
+            let staleIDs = staleTagIDs.map { $0.uuidString.lowercased() }.joined(separator: ",")
+            try await transport.delete(
+                path: "task_tags",
+                queryItems: [
+                    URLQueryItem(name: "task_id", value: "eq.\(task.id.uuidString.lowercased())"),
+                    URLQueryItem(name: "tag_id", value: "in.(\(staleIDs))"),
+                ]
+            )
+        }
+
+        if !newTagIDs.isEmpty {
+            try await upsert(
+                "task_tags",
+                queryItems: [URLQueryItem(name: "on_conflict", value: "task_id,tag_id")],
+                body: newTagIDs.map { SupabaseTaskTagMutationRow(taskID: task.id, tagID: $0) }
+            )
+        }
+    }
+
+    private func ensureTagIDs(_ tags: [String]) async throws -> [UUID] {
+        var seen = Set<String>()
+        var tagIDs: [UUID] = []
+
+        for rawTag in tags {
+            let tag = rawTag.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = tag.lowercased()
+            guard !tag.isEmpty, !seen.contains(key) else {
+                continue
+            }
+            seen.insert(key)
+            let rows: [SupabaseTagIDRow] = try await upsertReturning(
+                "tags",
+                queryItems: [
+                    URLQueryItem(name: "select", value: "id"),
+                    URLQueryItem(name: "on_conflict", value: "user_id,name"),
+                ],
+                body: SupabaseTagMutationRow(userID: userID, name: tag),
+                as: [SupabaseTagIDRow].self
+            )
+            if let id = rows.first?.id {
+                tagIDs.append(id)
+            }
+        }
+
+        return tagIDs
     }
 
     private func patchPreferences(key: PreferenceKey, value: Int) async throws {
@@ -527,7 +616,39 @@ struct SupabaseTagRow: Decodable, Equatable {
     var name: String
 }
 
+struct SupabaseTagIDRow: Decodable, Equatable {
+    var id: UUID
+}
+
+struct SupabaseTagMutationRow: Encodable {
+    var userID: UUID
+    var name: String
+
+    private enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case name
+    }
+}
+
 struct SupabaseTaskTagRow: Decodable, Equatable {
+    var taskID: UUID
+    var tagID: UUID
+
+    private enum CodingKeys: String, CodingKey {
+        case taskID = "task_id"
+        case tagID = "tag_id"
+    }
+}
+
+struct SupabaseTaskTagIDRow: Decodable, Equatable {
+    var tagID: UUID
+
+    private enum CodingKeys: String, CodingKey {
+        case tagID = "tag_id"
+    }
+}
+
+struct SupabaseTaskTagMutationRow: Encodable {
     var taskID: UUID
     var tagID: UUID
 

@@ -3930,6 +3930,13 @@ function TaskTagInput({
     onDraftChange("");
     if (parsed.length) onTagsChange(mergeTags(tags, parsed));
   };
+  const updateDraft = (value: string) => {
+    if (/[\s,]$/.test(value)) {
+      commitDraft(value);
+      return;
+    }
+    onDraftChange(value);
+  };
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (isComposingInputEvent(event)) return;
     if (isTagCommitKey(event.key)) {
@@ -3960,7 +3967,7 @@ function TaskTagInput({
       ))}
       <input
         value={draft}
-        onChange={(event) => onDraftChange(event.target.value)}
+        onChange={(event) => updateDraft(event.target.value)}
         onKeyDown={onKeyDown}
         onBlur={(event) => commitDraft(event.currentTarget.value || draft)}
         placeholder={tags.length ? "" : "태그 추가"}
