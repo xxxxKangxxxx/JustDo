@@ -6822,7 +6822,8 @@ private struct TaskDetailEditor: View {
     @State private var editingScheduleField: ScheduleField?
     @State private var selectedCategoryID: UUID?
     @State private var selectedPriority: Priority
-    @State private var tagsText: String
+    @State private var tags: [String]
+    @State private var tagDraft = ""
     @State private var isShowingDeleteConfirmation = false
 
     private let priorities: [(Priority, String)] = [(.high, "높음"), (.medium, "중간"), (.low, "낮음")]
@@ -6845,7 +6846,7 @@ private struct TaskDetailEditor: View {
         _includesTime = State(initialValue: task.scheduledTime != nil)
         _selectedCategoryID = State(initialValue: task.categoryID)
         _selectedPriority = State(initialValue: task.priority ?? .medium)
-        _tagsText = State(initialValue: task.tags.joined(separator: ", "))
+        _tags = State(initialValue: task.tags)
     }
 
     var body: some View {
@@ -6919,10 +6920,12 @@ private struct TaskDetailEditor: View {
                     }
                 }
             }
-            AddSheetFieldRow(label: "태그") {
-                TextField("쉼표로 구분", text: $tagsText)
-                    .font(.system(size: 13, weight: .medium))
-                    .textInputAutocapitalization(.never)
+            AddSheetFieldRow(label: "태그", alignTop: !tags.isEmpty) {
+                TaskTagChipInput(
+                    tags: $tags,
+                    draft: $tagDraft,
+                    tint: selectedCategoryColor
+                )
             }
 
             HStack(spacing: 10) {
@@ -6995,7 +6998,7 @@ private struct TaskDetailEditor: View {
     }
 
     private var parsedTags: [String] {
-        parseTaskTags(tagsText)
+        mergeTaskTags(tags, parseTaskTags(tagDraft))
     }
 
     private func save() {
