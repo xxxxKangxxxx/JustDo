@@ -177,7 +177,7 @@ implementation gaps, and checks to run before testing or shipping.
   - 적용 위치: Home의 `isShowingAddTask`/`editingTask`(deep link)/`editingHabit`(deep link)
     `.fullScreenCover`, 그리고 `SelectedDayPanel`의 인라인 `PanelMode` 편집을 패널 내부
     `.fullScreenCover(item:)`로 교체(저장/취소 시 패널 목록 복귀 유지, `editTaskView`/
-    `editHeader`/`PanelMode` 제거). 시뮬레이터 빌드 통과, 실기기 최종 확인 진행 중.
+    `editHeader`/`PanelMode` 제거). 시뮬레이터 빌드 통과, 실기기 확인 완료(2026-06-19).
 
 - **Launch crash after signed-in sync.** The app could terminate on launch with
   Core Data exceptions such as `Collection <__NSCFSet> was mutated while being

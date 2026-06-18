@@ -5288,7 +5288,7 @@ as a follow-up.
   `.fullScreenCover(item:)` (save/cancel still returns to the panel list);
   `editTaskView`/`editHeader`/`PanelMode` removed (net −36 lines).
 - Verification: `xcodebuild` simulator build passes. User reviewed and approved the
-  diff; real-device confirmation in progress. Tradeoff accepted: the compact
+  diff; real-device confirmed working on 2026-06-19. Tradeoff accepted: the compact
   bottom-sheet look becomes a full-screen editor.
 
 ## 2026-06-18 iOS habit add — recur/reminder parity with web
@@ -5314,8 +5314,8 @@ as a follow-up.
 - Note: deep-link editor UI tests (`DeepLinkUITests`) still pass — they assert the
   `task-editor-title`/`habit-editor-title` fields exist, which are unchanged by the
   earlier `.sheet` → `.fullScreenCover` move.
-- Verification: `xcodebuild` simulator build passes. Real-device confirmation by
-  the user pending.
+- Verification: `xcodebuild` simulator build passes. Real-device confirmed working
+  on 2026-06-19.
 
 ## 2026-06-14 iOS App Store prep: Pro/IAP compliance (remove purchase CTA)
 
