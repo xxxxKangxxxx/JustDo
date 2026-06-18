@@ -5262,6 +5262,35 @@ as a follow-up.
   timing, nested sheet interactions, and whether Add Task needs to be routed
   through the same editor wrapper/presentation context as Task editing.
 
+## 2026-06-18 iOS editor sheet keyboard displacement — resolved (fullScreenCover)
+
+### Claude Code (paired with user)
+
+- Root cause (corrected): not content overflow or SwiftUI keyboard avoidance, but
+  UIKit `UISheetPresentationController` behavior. A detent bottom sheet over Home,
+  when the keyboard rises, slides up to clear the keyboard and drags the presenter
+  (Home) card up with it, so the `Just Do` wordmark collides with the status bar.
+  This is why `.ignoresSafeArea(.keyboard)`, removing `maxHeight`, and a ScrollView
+  wrap (also tried this round) all had no effect.
+- Correction to the earlier baseline: Task edit was NOT actually fine. The user
+  confirmed it pushes Home up the same way. It just looked acceptable because task
+  edit opens inside `SelectedDayPanel` (itself a detent sheet) via inline content
+  swap, leaving Home two layers down and less visibly affected.
+- Fix: route the three editors (Add Task / Task edit / Habit edit) through a shared
+  `EditorScreen` wrapper presented as `.fullScreenCover`. Full screen means there is
+  no presenter card behind to drag, so nothing moves. `EditorScreen` = surface
+  background + `ScrollView(.scrollBounceBehavior(.basedOnSize))` to absorb keyboard
+  avoidance internally, a top-right `xmark` close button (`@Environment(\.dismiss)`),
+  and tap-outside-input → `dismissKeyboard()`.
+- Touch points in `ContentView.swift`: Home `isShowingAddTask`/`editingTask`(deep
+  link)/`editingHabit`(deep link) converted from `.sheet` to `.fullScreenCover`;
+  `SelectedDayPanel` inline `PanelMode` edit replaced with an in-panel
+  `.fullScreenCover(item:)` (save/cancel still returns to the panel list);
+  `editTaskView`/`editHeader`/`PanelMode` removed (net −36 lines).
+- Verification: `xcodebuild` simulator build passes. User reviewed and approved the
+  diff; real-device confirmation in progress. Tradeoff accepted: the compact
+  bottom-sheet look becomes a full-screen editor.
+
 ## 2026-06-14 iOS App Store prep: Pro/IAP compliance (remove purchase CTA)
 
 ### Claude Code (paired with user on the policy decision)

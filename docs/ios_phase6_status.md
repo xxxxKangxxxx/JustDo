@@ -156,25 +156,28 @@ implementation gaps, and checks to run before testing or shipping.
 
 ## Open Issues
 
-- **Add Task sheet keyboard displacement on real device (2026-06-18).**
-  Repro: Home에서 Add Task 시트를 열고 제목 입력 필드에 포커스해 iOS 키보드를
-  올리면, 시트 뒤 배경인 Home 헤더(`Just Do` wordmark/status 영역)가 함께 위로
-  밀려 상태바와 겹친다. 기대 동작은 Task 편집 시트처럼 키보드/시트 움직임이
-  뒤 배경 Home 헤더를 밀지 않는 것이다. 사용자는 Task 편집 시트의 기존 동작은
-  문제없고 Add Task 시트에서만 재현된다고 확인했다.
-  - 실기기 확인 환경: 사용자 Xcode 빌드 후 iPhone 실기기.
-  - 실패한 접근: Home 루트에 `.ignoresSafeArea(.keyboard)` 적용, Add 시트 내부
-    `maxHeight` 제거, Add 시트 padding/background/drag indicator를 Task 편집
-    시트 호출부 방식으로 맞추는 변경은 모두 실기기에서 증상 개선 없음.
-  - 다음 조사 기준: Add Task 시트와 TaskDetailEditor 시트의 차이를 다시 비교한다.
-    특히 Add Task가 `@State Bool` sheet이고 Task 편집이 `item` sheet인 점,
-    Add Task 내부의 첫 `TextField` 자동 focus/키보드 전환, nested date-picker
-    sheet, detent 높이, selected-day sheet 안의 inline editor와 Home-owned sheet의
-    presentation context 차이를 확인한다. 필요하면 Add Task도 Task 편집과 같은
-    editor wrapper/route에서 열거나 UIKit sheet presentation keyboard behavior를
-    직접 확인한다.
+- (none)
 
 ## Resolved Issues
+
+- **Editor sheet keyboard displacement on real device (2026-06-18).** Add Task /
+  Task 편집 / Habit 편집 같은 detent 바텀시트가 Home 위에 떠 있는 상태에서 제목
+  `TextField`에 포커스해 키보드를 올리면, 뒤에 깔린 presenter(Home) 카드가 함께
+  위로 끌려 올라가 `Just Do` wordmark가 상태바와 겹쳤다. 원인은 SwiftUI 모디파이어로
+  못 막는 UIKit `UISheetPresentationController` 동작 — detent 시트가 키보드를 피해
+  위로 올라가면서 presenter 카드도 같이 이동한다. (그래서 이전의 `.ignoresSafeArea(.keyboard)`,
+  `maxHeight` 제거, `ScrollView` 래핑은 모두 무효였다. Task 편집이 "괜찮아 보였던" 것은
+  `SelectedDayPanel`(자체도 detent 시트) 내부에서 콘텐츠 교체로 열려 Home이 두 겹 아래라
+  덜 두드러졌을 뿐, 실제로는 동일하게 밀렸다.)
+  - 해결: 세 에디터를 공통 래퍼 `EditorScreen`으로 감싼 `.fullScreenCover`로 전환했다.
+    전체화면이라 뒤에 깔리는 카드 자체가 없어 밀릴 대상이 사라진다. `EditorScreen`은
+    surface 배경 + `ScrollView(.scrollBounceBehavior(.basedOnSize))`로 키보드 회피를
+    내부에서 흡수하고, 우측 상단 `xmark` 닫기 버튼(`@Environment(\.dismiss)`)과
+    입력 외 영역 탭 시 `dismissKeyboard()`를 제공한다.
+  - 적용 위치: Home의 `isShowingAddTask`/`editingTask`(deep link)/`editingHabit`(deep link)
+    `.fullScreenCover`, 그리고 `SelectedDayPanel`의 인라인 `PanelMode` 편집을 패널 내부
+    `.fullScreenCover(item:)`로 교체(저장/취소 시 패널 목록 복귀 유지, `editTaskView`/
+    `editHeader`/`PanelMode` 제거). 시뮬레이터 빌드 통과, 실기기 최종 확인 진행 중.
 
 - **Launch crash after signed-in sync.** The app could terminate on launch with
   Core Data exceptions such as `Collection <__NSCFSet> was mutated while being

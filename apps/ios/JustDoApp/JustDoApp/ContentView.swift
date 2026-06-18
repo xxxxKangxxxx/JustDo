@@ -491,22 +491,17 @@ private struct HomeRootView: View {
             BottomTabBar(selectedTab: selectedTab) { selectedTab = $0 }
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $isShowingAddTask) {
-            AddTaskSheet(
-                selectedDate: selectedDate,
-                initialStartDate: addTaskStartDate ?? selectedDate,
-                initialEndDate: addTaskEndDate ?? selectedDate,
-                categories: snapshot?.categories ?? [],
-                onSaveTask: addTask(_:),
-                onSaveHabit: addHabit(title:emoji:)
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 30)
-            .presentationDetents([.height(500)])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.surface)
+        .fullScreenCover(isPresented: $isShowingAddTask) {
+            EditorScreen {
+                AddTaskSheet(
+                    selectedDate: selectedDate,
+                    initialStartDate: addTaskStartDate ?? selectedDate,
+                    initialEndDate: addTaskEndDate ?? selectedDate,
+                    categories: snapshot?.categories ?? [],
+                    onSaveTask: addTask(_:),
+                    onSaveHabit: addHabit(title:emoji:)
+                )
+            }
         }
         .fullScreenCover(isPresented: $isShowingSettings) {
             SettingsRootTabView(
@@ -537,35 +532,25 @@ private struct HomeRootView: View {
                 onDismiss: { isShowingSettings = false }
             )
         }
-        .sheet(item: $editingTask) { task in
-            TaskDetailEditor(
-                task: task,
-                categories: snapshot?.categories ?? [],
-                onCancel: { editingTask = nil },
-                onSave: saveTask(_:),
-                onDelete: deleteTask(_:)
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 30)
-            .presentationDetents([.height(560)])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.surface)
+        .fullScreenCover(item: $editingTask) { task in
+            EditorScreen {
+                TaskDetailEditor(
+                    task: task,
+                    categories: snapshot?.categories ?? [],
+                    onCancel: { editingTask = nil },
+                    onSave: saveTask(_:),
+                    onDelete: deleteTask(_:)
+                )
+            }
         }
-        .sheet(item: $editingHabit) { habit in
-            HabitDetailEditor(
-                habit: habit,
-                onCancel: { editingHabit = nil },
-                onSave: saveHabit(_:)
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 30)
-            .presentationDetents([.height(500)])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
-            .presentationBackground(JDTheme.surface)
+        .fullScreenCover(item: $editingHabit) { habit in
+            EditorScreen {
+                HabitDetailEditor(
+                    habit: habit,
+                    onCancel: { editingHabit = nil },
+                    onSave: saveHabit(_:)
+                )
+            }
         }
         .sheet(item: $exportURL) { file in
             DataExportSheet(url: file.url)
@@ -1893,11 +1878,6 @@ private struct WeekTaskBar {
 }
 
 private struct SelectedDayPanel: View {
-    private enum PanelMode {
-        case list
-        case task(Task)
-    }
-
     let selectedDate: String
     let tasks: [Task]
     let justDoTasks: [Task]
@@ -1910,20 +1890,30 @@ private struct SelectedDayPanel: View {
     let onDeleteTask: (Task) -> Void
     let onAdd: (Bool) -> Void
 
-    @State private var mode: PanelMode = .list
+    @State private var editingTask: Task?
     @State private var isShowingJustDoMode = false
 
     var body: some View {
-        Group {
-            switch mode {
-            case .list:
-                listView
-            case .task(let task):
-                editTaskView(task)
+        listView
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+            .fullScreenCover(item: $editingTask) { task in
+                EditorScreen {
+                    TaskDetailEditor(
+                        task: task,
+                        categories: categories,
+                        onCancel: { editingTask = nil },
+                        onSave: { updated in
+                            onSaveTask(updated)
+                            editingTask = nil
+                        },
+                        onDelete: { deleted in
+                            onDeleteTask(deleted)
+                            editingTask = nil
+                        }
+                    )
+                }
             }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 24)
     }
 
     private var listView: some View {
@@ -1942,7 +1932,7 @@ private struct SelectedDayPanel: View {
                                     tasks: section.tasks,
                                     categories: categories,
                                     onToggleTask: onToggleTask,
-                                    onOpenTask: { task in mode = .task(task) }
+                                    onOpenTask: { task in editingTask = task }
                                 )
                             }
                         } else {
@@ -1951,7 +1941,7 @@ private struct SelectedDayPanel: View {
                                     category: group.category,
                                     tasks: group.tasks,
                                     onToggleTask: onToggleTask,
-                                    onOpenTask: { task in mode = .task(task) }
+                                    onOpenTask: { task in editingTask = task }
                                 )
                             }
                         }
@@ -1992,48 +1982,6 @@ private struct SelectedDayPanel: View {
             .padding(.trailing, 2)
             .padding(.bottom, 2)
         }
-    }
-
-    private func editTaskView(_ task: Task) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            editHeader(title: "Task 편집")
-            ScrollView(showsIndicators: false) {
-                TaskDetailEditor(
-                    task: task,
-                    categories: categories,
-                    onCancel: { mode = .list },
-                    onSave: { updated in
-                        onSaveTask(updated)
-                        mode = .list
-                    },
-                    onDelete: { deleted in
-                        onDeleteTask(deleted)
-                        mode = .list
-                    }
-                )
-                .padding(.top, 12)
-            }
-        }
-    }
-
-    private func editHeader(title: String) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                mode = .list
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .bold))
-                    .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(JDTheme.primaryText)
-
-            Text(title)
-                .font(.system(size: 18, weight: .bold))
-            Spacer()
-        }
-        .padding(.top, 18)
-        .padding(.bottom, 6)
     }
 
     private var dragHeader: some View {
@@ -2339,6 +2287,48 @@ private struct CheckCircle: View {
         Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
             .font(.system(size: 21, weight: .medium))
             .foregroundStyle(isChecked ? color : JDTheme.dividerStrong)
+    }
+}
+
+private struct EditorScreen<Content: View>: View {
+    @ViewBuilder var content: Content
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            JDTheme.surface.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        dismissKeyboard()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(JDTheme.secondaryText)
+                            .frame(width: 32, height: 32)
+                            .background(JDTheme.surfaceAlt)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("닫기")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+
+                ScrollView {
+                    content
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            dismissKeyboard()
+        }
     }
 }
 
