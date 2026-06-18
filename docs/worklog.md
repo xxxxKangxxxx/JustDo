@@ -5291,6 +5291,32 @@ as a follow-up.
   diff; real-device confirmation in progress. Tradeoff accepted: the compact
   bottom-sheet look becomes a full-screen editor.
 
+## 2026-06-18 iOS habit add — recur/reminder parity with web
+
+### Claude Code (paired with user)
+
+- Gap: iOS habit add (Home/day-panel `+` → Habit tab in `AddTaskSheet`) only let
+  you set title + emoji, while web's add modal also sets 반복(recurType), 요일
+  (recurDays), and 알림(reminderTime). Brought iOS to parity.
+- Added `HabitDraft` (title/emoji/recurType/recurDays/reminderTime), mirroring
+  `TaskDraft`. `addHabit(_:)` now consumes a `HabitDraft`; the old
+  `addHabit(title:emoji:)` stays as a thin convenience (daily, no reminder) so the
+  Settings → 습관 관리 quick-add is untouched. `AddTaskSheet.onSaveHabit` is now
+  `(HabitDraft) -> Void`.
+- Habit-tab fields now mirror the existing in-app `HabitDetailEditor`: emoji,
+  반복 segmented (매일/매주), 요일 weekday toggles (weekly only, default = the
+  selected date's weekday like web), and 알림.
+- 알림 time UI matches the Task add time picker per user request: a
+  `ScheduleValueButton`-style pill that opens a wheel `TimePickerSheet` (the same
+  sheet used for settings/notify time), with a 지우기 button. Reminder defaults to
+  **09:00** shown (not "없음"); clearing sets it to none. Added `date(fromTime:)`
+  helper to parse `"HH:mm"` → `Date`.
+- Note: deep-link editor UI tests (`DeepLinkUITests`) still pass — they assert the
+  `task-editor-title`/`habit-editor-title` fields exist, which are unchanged by the
+  earlier `.sheet` → `.fullScreenCover` move.
+- Verification: `xcodebuild` simulator build passes. Real-device confirmation by
+  the user pending.
+
 ## 2026-06-14 iOS App Store prep: Pro/IAP compliance (remove purchase CTA)
 
 ### Claude Code (paired with user on the policy decision)

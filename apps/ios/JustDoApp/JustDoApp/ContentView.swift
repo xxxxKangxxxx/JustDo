@@ -150,6 +150,14 @@ private struct TaskDraft {
     var tags: [String]
 }
 
+private struct HabitDraft {
+    var title: String
+    var emoji: String
+    var recurType: HabitRecurType
+    var recurDays: [Int]?
+    var reminderTime: String?
+}
+
 private func parseTaskTags(_ text: String) -> [String] {
     var seen = Set<String>()
     var result: [String] = []
@@ -499,7 +507,7 @@ private struct HomeRootView: View {
                     initialEndDate: addTaskEndDate ?? selectedDate,
                     categories: snapshot?.categories ?? [],
                     onSaveTask: addTask(_:),
-                    onSaveHabit: addHabit(title:emoji:)
+                    onSaveHabit: addHabit(_:)
                 )
             }
         }
@@ -1060,12 +1068,16 @@ private struct HomeRootView: View {
     }
 
     private func addHabit(title: String, emoji: String) {
+        addHabit(HabitDraft(title: title, emoji: emoji, recurType: .daily, recurDays: nil, reminderTime: nil))
+    }
+
+    private func addHabit(_ draft: HabitDraft) {
         guard let snapshotStore else {
             actionMessage = "Local mirror is unavailable."
             return
         }
 
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
             actionMessage = "Habit title is required."
             return
@@ -1074,11 +1086,11 @@ private struct HomeRootView: View {
         let habit = Habit(
             id: UUID(),
             title: trimmedTitle,
-            emoji: emoji,
+            emoji: draft.emoji,
             startedAt: selectedDate,
-            recurType: .daily,
-            recurDays: nil,
-            reminderTime: nil,
+            recurType: draft.recurType,
+            recurDays: draft.recurType == .weekly ? draft.recurDays : nil,
+            reminderTime: draft.reminderTime,
             log: [:]
         )
 
@@ -2364,7 +2376,7 @@ private struct AddTaskSheet: View {
     let initialEndDate: String
     let categories: [JDCategory]
     let onSaveTask: (TaskDraft) -> Void
-    let onSaveHabit: (String, String) -> Void
+    let onSaveHabit: (HabitDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var mode: Mode = .task
@@ -2378,9 +2390,17 @@ private struct AddTaskSheet: View {
     @State private var selectedEmoji = "🌱"
     @State private var tags: [String] = []
     @State private var tagDraft = ""
+    @State private var recurType: HabitRecurType = .daily
+    @State private var selectedHabitDays: Set<Int> = []
+    @State private var reminderTime = "09:00"
+    @State private var reminderDate = Date()
+    @State private var isShowingReminderPicker = false
 
     private let emojis = ["🌱", "💧", "🏃", "📖", "🧘", "✏️"]
     private let priorities: [(Priority, String)] = [(.high, "높음"), (.medium, "중간"), (.low, "낮음")]
+    private let weekdays: [(Int, String)] = [
+        (0, "일"), (1, "월"), (2, "화"), (3, "수"), (4, "목"), (5, "금"), (6, "토")
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2473,7 +2493,7 @@ private struct AddTaskSheet: View {
                 }
             }
             if mode == .habit {
-                AddSheetFieldRow(label: "이모지", noBorder: true) {
+                AddSheetFieldRow(label: "이모지") {
                     HStack(spacing: 6) {
                         ForEach(emojis, id: \.self) { emoji in
                             Button {
@@ -2490,6 +2510,55 @@ private struct AddTaskSheet: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                             .buttonStyle(.plain)
+                        }
+                    }
+                }
+                AddSheetFieldRow(label: "반복") {
+                    Picker("반복", selection: $recurType) {
+                        Text("매일").tag(HabitRecurType.daily)
+                        Text("매주").tag(HabitRecurType.weekly)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                if recurType == .weekly {
+                    AddSheetFieldRow(label: "요일") {
+                        HStack(spacing: 6) {
+                            ForEach(weekdays, id: \.0) { day, label in
+                                Button {
+                                    toggleHabitDay(day)
+                                } label: {
+                                    Text(label)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(selectedHabitDays.contains(day) ? .white : JDTheme.secondaryText)
+                                        .frame(width: 28, height: 28)
+                                        .background(selectedHabitDays.contains(day) ? JDTheme.habit : JDTheme.surfaceAlt)
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                AddSheetFieldRow(label: "알림", noBorder: true) {
+                    HStack(spacing: 8) {
+                        Button {
+                            isShowingReminderPicker = true
+                        } label: {
+                            Text(reminderTime.isEmpty ? "없음" : reminderTime)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(reminderTime.isEmpty ? JDTheme.secondaryText : JDTheme.accent)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(JDTheme.surfaceAlt)
+                                .clipShape(RoundedRectangle(cornerRadius: 7))
+                        }
+                        .buttonStyle(.plain)
+                        if !reminderTime.isEmpty {
+                            Button("지우기") {
+                                reminderTime = ""
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(JDTheme.tertiaryText)
                         }
                     }
                 }
@@ -2524,6 +2593,10 @@ private struct AddTaskSheet: View {
             selectedCategoryID = selectedCategoryID ?? categories.first?.id
             startDateValue = Self.date(from: initialStartDate)
             endDateValue = Self.date(from: initialEndDate)
+            if selectedHabitDays.isEmpty {
+                selectedHabitDays = [JDDate.weekday(selectedDate)]
+            }
+            reminderDate = Self.date(fromTime: reminderTime) ?? Self.date(fromTime: "09:00") ?? reminderDate
         }
         .sheet(item: $editingScheduleField) { field in
             DateTimeWheelSheet(
@@ -2539,6 +2612,20 @@ private struct AddTaskSheet: View {
                 }
             )
             .presentationDetents([.height(330)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
+        .sheet(isPresented: $isShowingReminderPicker) {
+            TimePickerSheet(
+                title: "알림 시간",
+                date: $reminderDate,
+                onDone: {
+                    reminderTime = Self.timeString(from: reminderDate)
+                    isShowingReminderPicker = false
+                }
+            )
+            .presentationDetents([.height(280)])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
@@ -2571,9 +2658,35 @@ private struct AddTaskSheet: View {
                 )
             )
         case .habit:
-            onSaveHabit(title, selectedEmoji)
+            onSaveHabit(
+                HabitDraft(
+                    title: title,
+                    emoji: selectedEmoji,
+                    recurType: recurType,
+                    recurDays: recurType == .weekly
+                        ? (selectedHabitDays.isEmpty ? [JDDate.weekday(selectedDate)] : selectedHabitDays.sorted())
+                        : nil,
+                    reminderTime: reminderTime.nilIfBlank
+                )
+            )
         }
         dismiss()
+    }
+
+    private func toggleHabitDay(_ day: Int) {
+        if selectedHabitDays.contains(day) {
+            selectedHabitDays.remove(day)
+        } else {
+            selectedHabitDays.insert(day)
+        }
+    }
+
+    private static func date(fromTime time: String) -> Date? {
+        let parts = time.split(separator: ":")
+        guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]) else {
+            return nil
+        }
+        return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date())
     }
 
     private static func date(from iso: String) -> Date {
