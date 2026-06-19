@@ -192,7 +192,7 @@ Recommended order for the next coding session:
 
 5. **TestFlight/App Store preparation**
    - **Listing draft + submission checklist: `docs/app_store_listing_draft.md`**
-     (2026-06-14, last refreshed 2026-06-16). Privacy nutrition labels (audited:
+     (2026-06-14, last refreshed 2026-06-19). Privacy nutrition labels (audited:
      0 third-party SDKs, no tracking, data = email/name/user-id/user-content,
      all App Functionality), KO metadata/keywords/description, App Review notes
      (incl. the 3.1.1 no-IAP/multiplatform explanation), and hosted privacy /
@@ -203,9 +203,12 @@ Recommended order for the next coding session:
      for Apple login.
    - Goal & Pro Report MVP, the 2026-06-01 Settings IA, and report-entry banners
      are included in the iOS build and have passed the documented real-device
-     smoke path. Current App Store blockers are code-adjacent/assets: app icon
-     dark/tinted polish, screenshots, demo account/review notes, Archive ->
-     TestFlight -> submission, and a final release-candidate device smoke.
+     smoke path. **2026-06-19 update:** app icon alpha removed; privacy manifests
+     added to the app/widget targets; demo account `kangym071900@gmail.com` seeded;
+     App Store Connect metadata/privacy/screenshots/review notes saved; Archive
+     uploaded and TestFlight internal build 1 installed. Remaining before public
+     App Review: TestFlight smoke/fixes, Toss/business/payment-readiness decisions,
+     and final release-candidate device smoke.
 
 ## Immediate Goal & Pro Report Follow-Up
 

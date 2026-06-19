@@ -5415,3 +5415,41 @@ as a follow-up.
 - Remaining App Store prep: app icon (dark/tinted + polish), screenshots, demo
   account + review notes entry, archive/TestFlight/submit, final real-device
   smoke.
+
+## 2026-06-19 iOS TestFlight/App Store asset pass
+
+### Codex
+
+- Finished the first App Store/TestFlight asset pass for the iOS app.
+- App icon: removed alpha from `JustDoApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png`
+  and verified the 1024 PNG is RGB/no-alpha.
+- Privacy manifests: added `PrivacyInfo.xcprivacy` to both `JustDoApp` and
+  `JustDoWidget`, declaring UserDefaults access reason `CA92.1`, no tracking,
+  and no collected data in the manifest file.
+- Demo/screenshot data: documented the demo account flow in
+  `docs/app_store_screenshot_prep.md`; added
+  `supabase/scripts/seed_screenshot_demo_data.sql` for
+  `kangym071900@gmail.com`; fixed the SQL alias issue (`offset` -> `day_offset`);
+  user ran the seed and confirmed iOS sync.
+- Screenshots: generated a four-image App Store poster flow from real-device
+  captures, plus 6.5-inch upload variants:
+  - `app-store-screenshots/01-calendar-flow.png` through `04-goals-flow.png`
+    at 1320x2868.
+  - `app-store-screenshots/iphone-65/01-calendar-flow.png` through
+    `04-goals-flow.png` at 1242x2688 for the App Store Connect 6.5-inch slot.
+  - Final generation script: `scripts/render_app_store_three_carousel.swift`.
+- Listing docs: refreshed `docs/app_store_listing_draft.md` and added
+  `docs/app_store_submission_next_steps.md` with the current App Store Connect
+  input order, privacy labels, demo-account note, screenshot filenames, and
+  pre-archive checks.
+- App Store Connect: user created the app record with bundle id `kr.justdo.app`,
+  set category/pricing/content rights, entered App Privacy labels
+  (name/email/user-id/other user content; linked; app functionality; no
+  tracking), uploaded screenshots, saved review notes with the demo account, and
+  kept the version saved without submitting for public App Review.
+- TestFlight: user uploaded Archive build 1, created an internal testing group
+  with automatic distribution, installed the build through TestFlight, and
+  deferred the actual smoke run until the next work session.
+- Current release stance: TestFlight/internal validation first. Public App Review
+  is intentionally held until TestFlight smoke/fixes and Toss/business/payment
+  readiness decisions are complete.
