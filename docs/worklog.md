@@ -5453,3 +5453,27 @@ as a follow-up.
 - Current release stance: TestFlight/internal validation first. Public App Review
   is intentionally held until TestFlight smoke/fixes and Toss/business/payment
   readiness decisions are complete.
+
+## 2026-06-20 External TestFlight submission
+
+### Codex
+
+- User added external testers in App Store Connect.
+- User attached TestFlight build 1 to the external testing group and submitted it
+  for TestFlight Beta App Review.
+- Current state: external TestFlight is waiting on Apple Beta App Review
+  approval. External testers can be managed now, but installation is expected to
+  become available after approval.
+- Next: continue internal build 1 smoke while waiting for Beta App Review; after
+  approval, ask external testers to install through TestFlight and report issues
+  using `docs/testflight_smoke_checklist.md`.
+
+## 2026-06-20 TestFlight internal smoke start
+
+### Codex
+
+- Started internal smoke on the already-installed TestFlight build 1.
+- Smoke item 1, Install and Launch, passed: user confirmed the TestFlight build
+  opens successfully.
+- Work paused before item 2. Next session should resume from Apple Sign-In in
+  `docs/testflight_smoke_checklist.md`.

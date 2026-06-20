@@ -1,6 +1,6 @@
 # App Store Submission Next Steps
 
-Updated: 2026-06-19
+Updated: 2026-06-20
 
 ## Ready Assets
 
@@ -40,6 +40,14 @@ Store Connect review notes.
 8. Archive from Xcode and upload the build.
 9. Wait for processing, attach the build, then submit for review.
 
+## Current TestFlight State
+
+- Internal TestFlight build 1 is installed.
+- External testers have been added.
+- Build 1 has been submitted for TestFlight Beta App Review.
+- Next: wait for Beta App Review approval, then have external testers install
+  through TestFlight. Continue internal build 1 smoke in parallel.
+
 ## Final Local Checks Before Archive
 
 - Release build succeeds.
@@ -51,3 +59,5 @@ Store Connect review notes.
   - Google demo sign-in.
   - Calendar, task add, goal screen, report entry, widget.
 
+For the current TestFlight internal validation pass, use
+`docs/testflight_smoke_checklist.md`.
