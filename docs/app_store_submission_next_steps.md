@@ -1,6 +1,6 @@
 # App Store Submission Next Steps
 
-Updated: 2026-06-20
+Updated: 2026-06-21
 
 ## Ready Assets
 
@@ -45,6 +45,17 @@ Store Connect review notes.
 - Internal TestFlight build 1 is installed.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
+- App Store Connect required metadata currently shows no red missing-information
+  warnings.
+- Age rating is saved as `4+`.
+- Pricing is set to Free.
+- App Privacy is saved: no tracking; linked data limited to email address, name,
+  user ID, and user content for App Functionality.
+- Content rights are set for the app's own/user-entered productivity content
+  model; the app does not provide third-party media/content catalogs.
+- App Review notes are saved with Sign in with Apple as the primary review path,
+  the Google demo account as fallback, and explicit confirmation that this iOS
+  build has no IAP, purchase flow, external payment link, or purchase CTA.
 - Next: wait for Beta App Review approval, then have external testers install
   through TestFlight. Continue internal build 1 smoke in parallel.
 

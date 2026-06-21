@@ -5477,3 +5477,24 @@ as a follow-up.
   opens successfully.
 - Work paused before item 2. Next session should resume from Apple Sign-In in
   `docs/testflight_smoke_checklist.md`.
+
+## 2026-06-21 App Store Connect metadata cross-check
+
+### Codex
+
+- User confirmed App Store Connect currently has no red missing-information
+  warnings for the iOS app version.
+- Age rating questionnaire was completed and saved as `4+`. Answers matched the
+  current app surface: no unrestricted web access, no public user-generated
+  content, no chat/messaging, no ads, no medical/health advice, no sexual
+  content, no violence, no gambling/contests/loot boxes, and no age-category
+  override.
+- Rechecked the App Review notes language for the current iOS v1 payment stance.
+  The saved notes say this submitted build has no IAP, purchase flow, external
+  payment link, or purchase CTA. This is intentionally scoped to the current
+  submitted version; future Apple IAP work will require updated review notes.
+- User reconfirmed App Privacy is complete and pricing is already set to Free.
+  Content rights were clarified as the standard third-party-content/licensing
+  question; Just Do does not provide third-party media/content catalogs.
+- Next: continue internal TestFlight build 1 smoke from Apple Sign-In while
+  external TestFlight remains in Beta App Review.
