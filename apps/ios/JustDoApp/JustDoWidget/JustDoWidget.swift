@@ -30,11 +30,17 @@ struct Provider: TimelineProvider {
         let snapshot = todaySnapshot(
             from: (try? AppGroupWidgetSnapshotStore().read()) ?? WidgetSnapshot.placeholder()
         )
-        let displayMode: WidgetDisplayMode = family.isLockScreenAccessory ? .task : ((try? AppGroupWidgetDisplayModeStore().read()) ?? .task)
+        let widgetSettings = try? AppGroupWidgetDisplayModeStore()
+        let displayMode: WidgetDisplayMode = family.isLockScreenAccessory ? .task : (widgetSettings?.read() ?? .task)
+        let modeColors = widgetSettings?.readColors() ?? WidgetModeColors(
+            task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
+            habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
+        )
         let model = JustDoWidgetDisplayModelFactory.make(
             from: snapshot,
             size: size,
-            displayMode: displayMode
+            displayMode: displayMode,
+            modeColors: modeColors
         )
         return JustDoEntry(date: Date(), model: model, size: size)
     }
@@ -399,8 +405,8 @@ private struct WidgetModeControl: View {
 
     var body: some View {
         HStack(spacing: style == .compact ? 5 : 6) {
-            modeButton(.task, title: "Task", color: .accentColor)
-            modeButton(.habit, title: "Habit", color: Color(hex: JustDoWidgetDisplayModelFactory.habitColor))
+            modeButton(.task, title: "Task", color: Color(hex: model.taskModeColorHex))
+            modeButton(.habit, title: "Habit", color: Color(hex: model.habitModeColorHex))
             Spacer(minLength: 4)
             Text("\(model.completedCount)/\(model.totalCount)")
                 .font(.system(size: 12, weight: .bold, design: .rounded))

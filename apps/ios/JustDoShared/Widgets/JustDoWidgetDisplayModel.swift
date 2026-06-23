@@ -80,6 +80,8 @@ public struct JustDoWidgetDisplayModel: Equatable, Sendable {
     public var completedCount: Int
     public var remainingCount: Int
     public var totalCount: Int
+    public var taskModeColorHex: String
+    public var habitModeColorHex: String
     public var items: [JustDoWidgetItem]
     public var weekDays: [JustDoWidgetDay]
     public var monthDays: [JustDoWidgetDay]
@@ -91,6 +93,8 @@ public struct JustDoWidgetDisplayModel: Equatable, Sendable {
         completedCount: Int,
         remainingCount: Int,
         totalCount: Int,
+        taskModeColorHex: String = AppGroupWidgetDisplayModeStore.defaultTaskColor,
+        habitModeColorHex: String = AppGroupWidgetDisplayModeStore.defaultHabitColor,
         items: [JustDoWidgetItem],
         weekDays: [JustDoWidgetDay],
         monthDays: [JustDoWidgetDay]
@@ -101,6 +105,8 @@ public struct JustDoWidgetDisplayModel: Equatable, Sendable {
         self.completedCount = completedCount
         self.remainingCount = remainingCount
         self.totalCount = totalCount
+        self.taskModeColorHex = taskModeColorHex
+        self.habitModeColorHex = habitModeColorHex
         self.items = items
         self.weekDays = weekDays
         self.monthDays = monthDays
@@ -108,14 +114,18 @@ public struct JustDoWidgetDisplayModel: Equatable, Sendable {
 }
 
 public enum JustDoWidgetDisplayModelFactory {
-    public static let habitColor = "#2F9B72"
+    public static let habitColor = AppGroupWidgetDisplayModeStore.defaultHabitColor
 
     public static func make(
         from snapshot: WidgetSnapshot,
         size: JustDoWidgetSize,
-        displayMode: WidgetDisplayMode = .task
+        displayMode: WidgetDisplayMode = .task,
+        modeColors: WidgetModeColors = WidgetModeColors(
+            task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
+            habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
+        )
     ) -> JustDoWidgetDisplayModel {
-        let allItems = allItems(from: snapshot)
+        let allItems = allItems(from: snapshot, habitColor: modeColors.habit)
         let items = prioritizedItems(
             allItems.filter { $0.displayMode == displayMode }
         )
@@ -136,13 +146,15 @@ public enum JustDoWidgetDisplayModelFactory {
             completedCount: items.filter(\.isDone).count,
             remainingCount: items.filter { !$0.isDone }.count,
             totalCount: items.count,
+            taskModeColorHex: modeColors.task,
+            habitModeColorHex: modeColors.habit,
             items: Array(items.prefix(limit)),
             weekDays: weekDays(selectedDate: snapshot.selectedDate, items: allItems),
             monthDays: monthDays(selectedDate: snapshot.selectedDate, items: allItems)
         )
     }
 
-    private static func allItems(from snapshot: WidgetSnapshot) -> [JustDoWidgetItem] {
+    private static func allItems(from snapshot: WidgetSnapshot, habitColor: String) -> [JustDoWidgetItem] {
         let categoriesByID = Dictionary(uniqueKeysWithValues: snapshot.categories.map { ($0.id, $0) })
         let taskItems = snapshot.tasks
             .filter { $0.startDate <= snapshot.selectedDate && snapshot.selectedDate <= $0.endDate }

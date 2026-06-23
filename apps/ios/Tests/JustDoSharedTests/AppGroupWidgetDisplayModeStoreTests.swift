@@ -31,4 +31,20 @@ final class AppGroupWidgetDisplayModeStoreTests: XCTestCase {
 
         XCTAssertEqual(store.read(), .habit)
     }
+
+    func testReadColorsDefaultsToModeColors() {
+        XCTAssertEqual(
+            store.readColors(),
+            WidgetModeColors(
+                task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
+                habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
+            )
+        )
+    }
+
+    func testWriteAndReadColorsNormalizesHex() {
+        store.writeColors(WidgetModeColors(task: "4f6fd8", habit: "#69a17d"))
+
+        XCTAssertEqual(store.readColors(), WidgetModeColors(task: "#4F6FD8", habit: "#69A17D"))
+    }
 }

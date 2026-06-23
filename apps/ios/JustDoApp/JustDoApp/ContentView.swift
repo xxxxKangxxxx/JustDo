@@ -8,6 +8,9 @@
 import Foundation
 import SwiftUI
 import JustDoShared
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 private typealias JDCategory = JustDoShared.Category
 
@@ -136,6 +139,31 @@ private enum RootTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:
             "calendar"
+        }
+    }
+}
+
+private enum HomeDisplayMode: String, CaseIterable, Identifiable {
+    case calendar
+    case list
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .calendar:
+            return "캘린더"
+        case .list:
+            return "리스트"
+        }
+    }
+
+    var systemName: String {
+        switch self {
+        case .calendar:
+            return "calendar"
+        case .list:
+            return "list.bullet"
         }
     }
 }
@@ -476,6 +504,7 @@ private struct HomeRootView: View {
     @State private var displayYear = JDDate.todayComponents.year
     @State private var displayMonth = JDDate.todayComponents.month
     @State private var selectedTab: RootTab = .home
+    @AppStorage("justdo.homeDisplayMode") private var homeDisplayModeRaw = HomeDisplayMode.calendar.rawValue
     @State private var isShowingAddTask = false
     @State private var isShowingSettings = false
     @State private var addTaskStartDate: String?
@@ -532,7 +561,9 @@ private struct HomeRootView: View {
                 onAddHabit: addHabit(title:emoji:),
                 onDeleteHabit: deleteHabit(_:),
                 onAddCategory: addCategory(name:color:),
+                onSaveCategory: saveCategory(_:),
                 onDeleteCategory: deleteCategory(_:),
+                onSetWidgetColors: setWidgetColors(_:),
                 onExportData: exportData,
                 onResetData: resetAllData,
                 onRetrySync: retrySync,
@@ -654,30 +685,8 @@ private struct HomeRootView: View {
                     .padding(.top, 14)
                 }
                 Spacer()
-                    .frame(height: 36)
-                MonthCalendarView(
-                    year: displayYear,
-                    month: displayMonth,
-                    selectedDate: selectedDate,
-                    weekStart: snapshot?.settings.weekStart ?? 0,
-                    tasks: snapshot?.tasks ?? [],
-                    categories: snapshot?.categories ?? [],
-                    onSelectDate: { date in
-                        selectedDate = date
-                        isShowingDayPanel = true
-                    }
-                )
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 30)
-                        .onEnded { value in
-                            let dx = value.translation.width
-                            let dy = value.translation.height
-                            guard abs(dx) > abs(dy), abs(dx) > 50 else { return }
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                moveMonth(dx > 0 ? -1 : 1)
-                            }
-                        }
-                )
+                    .frame(height: homeDisplayMode == .calendar ? 36 : 18)
+                homeContent
                 Spacer(minLength: 0)
             }
             .padding(.bottom, 100)
@@ -702,6 +711,7 @@ private struct HomeRootView: View {
                 .offset(y: -14)
                 .accessibilityLabel("설정")
             }
+            HomeDisplayModePicker(selection: homeDisplayModeBinding)
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(displayYear))
@@ -754,8 +764,73 @@ private struct HomeRootView: View {
         .padding(.top, 16)
     }
 
+    @ViewBuilder
+    private var homeContent: some View {
+        switch homeDisplayMode {
+        case .calendar:
+            MonthCalendarView(
+                year: displayYear,
+                month: displayMonth,
+                selectedDate: selectedDate,
+                weekStart: snapshot?.settings.weekStart ?? 0,
+                tasks: snapshot?.tasks ?? [],
+                categories: snapshot?.categories ?? [],
+                onSelectDate: { date in
+                    selectedDate = date
+                    isShowingDayPanel = true
+                }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30)
+                    .onEnded { value in
+                        let dx = value.translation.width
+                        let dy = value.translation.height
+                        guard abs(dx) > abs(dy), abs(dx) > 50 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            moveMonth(dx > 0 ? -1 : 1)
+                        }
+                    }
+            )
+        case .list:
+            HomeListView(
+                selectedDate: selectedDate,
+                tasks: tasksForSelectedDate,
+                habits: habitsForSelectedDate,
+                categories: snapshot?.categories ?? [],
+                onMoveDate: { selectedDate = JDDate.addDays(selectedDate, $0) },
+                onOpenCalendarDay: { isShowingDayPanel = true },
+                onToggleTask: toggleTask(_:),
+                onOpenTask: { editingTask = $0 },
+                onToggleHabit: toggleHabit(_:on:)
+            )
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private var homeDisplayMode: HomeDisplayMode {
+        HomeDisplayMode(rawValue: homeDisplayModeRaw) ?? .calendar
+    }
+
+    private var homeDisplayModeBinding: Binding<HomeDisplayMode> {
+        Binding(
+            get: { homeDisplayMode },
+            set: { homeDisplayModeRaw = $0.rawValue }
+        )
+    }
+
     private var tasksForSelectedDate: [Task] {
         (snapshot?.tasks ?? []).filter { $0.startDate <= selectedDate && selectedDate <= $0.endDate }
+    }
+
+    private var habitsForSelectedDate: [Habit] {
+        (snapshot?.habits ?? []).filter { habit in
+            switch habit.recurType {
+            case .daily:
+                return true
+            case .weekly:
+                return habit.recurDays?.contains(JDDate.weekday(selectedDate)) ?? false
+            }
+        }
     }
 
     private var tasksForJustDoMode: [Task] {
@@ -1257,6 +1332,49 @@ private struct HomeRootView: View {
         }
     }
 
+    private func saveCategory(_ category: JDCategory) {
+        guard let snapshotStore else {
+            actionMessage = "Local mirror is unavailable."
+            return
+        }
+
+        let trimmedName = category.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            actionMessage = "Category name is required."
+            return
+        }
+
+        var updated = category
+        updated.name = trimmedName
+
+        do {
+            try snapshotStore.applyAndEnqueue(
+                QueuedMutation(
+                    id: UUID(),
+                    updatedAt: JDDate.nowISODateTime,
+                    mutation: .categoryUpsert(updated)
+                )
+            )
+            loadSnapshot(preserveViewSelection: true)
+            syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
+            actionMessage = "Category updated."
+        } catch {
+            actionMessage = "Could not update category."
+        }
+    }
+
+    private func setWidgetColors(_ colors: WidgetModeColors) {
+        do {
+            try AppGroupWidgetDisplayModeStore().writeColors(colors)
+            #if canImport(WidgetKit)
+            WidgetCenter.shared.reloadAllTimelines()
+            #endif
+            actionMessage = "Widget colors updated."
+        } catch {
+            actionMessage = "Could not update widget colors."
+        }
+    }
+
     private func deleteCategory(_ category: JDCategory) {
         guard let snapshotStore else {
             actionMessage = "Local mirror is unavailable."
@@ -1614,6 +1732,157 @@ private struct MonthArrow: View {
                 .foregroundStyle(JDTheme.primaryText.opacity(0.7))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct HomeDisplayModePicker: View {
+    @Binding var selection: HomeDisplayMode
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(HomeDisplayMode.allCases) { mode in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selection = mode
+                    }
+                } label: {
+                    Label(mode.title, systemImage: mode.systemName)
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(selection == mode ? .white : JDTheme.secondaryText)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 30)
+                        .background(selection == mode ? JDTheme.accent : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(JDTheme.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: 9))
+    }
+}
+
+private struct HomeListView: View {
+    let selectedDate: String
+    let tasks: [Task]
+    let habits: [Habit]
+    let categories: [JDCategory]
+    let onMoveDate: (Int) -> Void
+    let onOpenCalendarDay: () -> Void
+    let onToggleTask: (Task) -> Void
+    let onOpenTask: (Task) -> Void
+    let onToggleHabit: (Habit, String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Button { onMoveDate(-1) } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .bold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(JDTheme.secondaryText)
+
+                Button(action: onOpenCalendarDay) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(JDDate.displayDate(selectedDate))
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(JDTheme.primaryText)
+                        Text("\(weekdayName)요일\(selectedDate == JDDate.todayISO ? " · 오늘" : "")")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(JDTheme.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+
+                Button { onMoveDate(1) } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(JDTheme.secondaryText)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 56)
+            .background(JDTheme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if tasks.isEmpty && habits.isEmpty {
+                        EmptyHomeListState()
+                    } else {
+                        ForEach(groupedTasks, id: \.category.id) { group in
+                            TaskGroupSection(
+                                category: group.category,
+                                tasks: group.tasks,
+                                onToggleTask: onToggleTask,
+                                onOpenTask: onOpenTask
+                            )
+                        }
+                        let uncategorized = uncategorizedTasks
+                        if !uncategorized.isEmpty {
+                            JustDoTaskSectionView(
+                                title: "Task",
+                                tasks: uncategorized,
+                                categories: categories,
+                                onToggleTask: onToggleTask,
+                                onOpenTask: onOpenTask
+                            )
+                        }
+                        if !habits.isEmpty {
+                            HabitGroupSection(
+                                habits: habits,
+                                selectedDate: selectedDate,
+                                onToggleHabit: onToggleHabit
+                            )
+                        }
+                    }
+                }
+                .padding(.bottom, 18)
+            }
+        }
+    }
+
+    private var groupedTasks: [(category: JDCategory, tasks: [Task])] {
+        categories.compactMap { category in
+            let items = tasks.filter { $0.categoryID == category.id }
+            return items.isEmpty ? nil : (category, items)
+        }
+    }
+
+    private var uncategorizedTasks: [Task] {
+        let categoryIDs = Set(categories.map(\.id))
+        return tasks.filter { task in
+            guard let categoryID = task.categoryID else {
+                return true
+            }
+            return !categoryIDs.contains(categoryID)
+        }
+    }
+
+    private var weekdayName: String {
+        ["일", "월", "화", "수", "목", "금", "토"][JDDate.weekday(selectedDate)]
+    }
+}
+
+private struct EmptyHomeListState: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "checklist")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(JDTheme.tertiaryText)
+            Text("이 날의 할 일과 습관이 없어요")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(JDTheme.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 64)
     }
 }
 
@@ -3140,7 +3409,9 @@ private struct SettingsRootTabView: View {
     let onAddHabit: (String, String) -> Void
     let onDeleteHabit: (Habit) -> Void
     let onAddCategory: (String, String) -> Void
+    let onSaveCategory: (JDCategory) -> Void
     let onDeleteCategory: (JDCategory) -> Void
+    let onSetWidgetColors: (WidgetModeColors) -> Void
     let onExportData: () -> Void
     let onResetData: () -> Void
     let onRetrySync: () -> Void
@@ -3158,8 +3429,13 @@ private struct SettingsRootTabView: View {
     @State private var isShowingStats = false
     @State private var isShowingGoalManager = false
     @State private var isShowingCategoryManager = false
+    @State private var isShowingWidgetColorSheet = false
     @State private var legalDocument: LegalDocument?
     @State private var settingsMessage: String?
+    @State private var widgetColors = WidgetModeColors(
+        task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
+        habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
+    )
 
     private var resolvedProfile: AuthProfile {
         authProfile ?? AuthProfile(email: nil, displayName: nil, avatarURL: nil, authProvider: nil)
@@ -3232,10 +3508,19 @@ private struct SettingsRootTabView: View {
                         title: "캘린더 시작 요일",
                         detail: (settings?.weekStart ?? 0) == 0 ? "일요일" : "월요일",
                         chevron: true,
-                        isLast: true,
                         action: {
                             weekStartValue = settings?.weekStart ?? 0
                             isShowingWeekStartPicker = true
+                        }
+                    )
+                    SettingsRow(
+                        title: "위젯 토글 색상",
+                        detail: "기본",
+                        chevron: true,
+                        isLast: true,
+                        action: {
+                            widgetColors = (try? AppGroupWidgetDisplayModeStore().readColors()) ?? widgetColors
+                            isShowingWidgetColorSheet = true
                         }
                     )
                 }
@@ -3297,6 +3582,10 @@ private struct SettingsRootTabView: View {
             localNotify = settings?.notify ?? true
             notifyTimeValue = Self.date(fromTime: settings?.notifyTime ?? "09:00")
             weekStartValue = settings?.weekStart ?? 0
+            widgetColors = (try? AppGroupWidgetDisplayModeStore().readColors()) ?? WidgetModeColors(
+                task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
+                habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
+            )
         }
         .onChange(of: settings?.notify ?? true) { _, value in
             localNotify = value
@@ -3350,6 +3639,7 @@ private struct SettingsRootTabView: View {
             CategoryManagementSheet(
                 categories: snapshot?.categories ?? [],
                 onAdd: onAddCategory,
+                onSave: onSaveCategory,
                 onDelete: onDeleteCategory
             )
         }
@@ -3376,6 +3666,23 @@ private struct SettingsRootTabView: View {
                 }
             )
             .presentationDetents([.height(280)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
+        .sheet(isPresented: $isShowingWidgetColorSheet) {
+            WidgetColorPickerSheet(
+                colors: $widgetColors,
+                onDone: {
+                    onSetWidgetColors(widgetColors)
+                    isShowingWidgetColorSheet = false
+                },
+                onCancel: {
+                    widgetColors = (try? AppGroupWidgetDisplayModeStore().readColors()) ?? widgetColors
+                    isShowingWidgetColorSheet = false
+                }
+            )
+            .presentationDetents([.height(430)])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
@@ -3889,12 +4196,15 @@ private struct HabitManagementSheet: View {
 private struct CategoryManagementSheet: View {
     let categories: [JDCategory]
     let onAdd: (String, String) -> Void
+    let onSave: (JDCategory) -> Void
     let onDelete: (JDCategory) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var selectedColor = "#558CB9"
-    private let colors = ["#558CB9", "#C87A6D", "#69A17D", "#4F6FD8", "#D36A3A"]
+    @State private var editingCategoryID: UUID?
+    @State private var editingName = ""
+    @State private var editingColor = "#558CB9"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3904,23 +4214,7 @@ private struct CategoryManagementSheet: View {
                     TextField("카테고리 이름", text: $name)
                         .font(.system(size: 14, weight: .medium))
                     HStack(spacing: 10) {
-                        ForEach(colors, id: \.self) { color in
-                            Button {
-                                selectedColor = color
-                            } label: {
-                                Circle()
-                                    .fill(Color(hex: color) ?? JDTheme.me)
-                                    .frame(width: 24, height: 24)
-                                    .overlay {
-                                        if selectedColor == color {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 9, weight: .bold))
-                                                .foregroundStyle(.white)
-                                        }
-                                    }
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        CategoryColorSwatches(selectedColor: $selectedColor)
                     }
                     Button("카테고리 추가") {
                         onAdd(name, selectedColor)
@@ -3933,27 +4227,51 @@ private struct CategoryManagementSheet: View {
 
                 Section("카테고리 목록") {
                     ForEach(categories) { category in
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(category.displayColor)
-                                .frame(width: 10, height: 10)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(category.name)
-                                    .font(.system(size: 14, weight: .semibold))
-                                Text(category.isDefault ? "기본 카테고리" : "사용자 카테고리")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(.secondary)
+                        if editingCategoryID == category.id {
+                            CategoryEditRow(
+                                name: $editingName,
+                                color: $editingColor,
+                                onCancel: { editingCategoryID = nil },
+                                onSave: {
+                                    var updated = category
+                                    updated.name = editingName
+                                    updated.color = editingColor
+                                    onSave(updated)
+                                    editingCategoryID = nil
+                                }
+                            )
+                        } else {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(category.displayColor)
+                                    .frame(width: 10, height: 10)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(category.name)
+                                        .font(.system(size: 14, weight: .semibold))
+                                    Text(category.isDefault ? "기본 카테고리" : "사용자 카테고리")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button {
+                                    editingCategoryID = category.id
+                                    editingName = category.name
+                                    editingColor = category.color
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .buttonStyle(.plain)
+                                Button(role: .destructive) {
+                                    onDelete(category)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .buttonStyle(.plain)
                             }
-                            Spacer()
-                            Button(role: .destructive) {
-                                onDelete(category)
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .buttonStyle(.plain)
+                            .padding(.vertical, 2)
                         }
-                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -3963,6 +4281,63 @@ private struct CategoryManagementSheet: View {
         }
         .background(JDTheme.background)
     }
+}
+
+private struct CategoryEditRow: View {
+    @Binding var name: String
+    @Binding var color: String
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("카테고리 이름", text: $name)
+                .font(.system(size: 14, weight: .semibold))
+            CategoryColorSwatches(selectedColor: $color)
+            HStack {
+                Button("취소", action: onCancel)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(JDTheme.secondaryText)
+                Spacer()
+                Button("저장", action: onSave)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(JDTheme.accent)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+private struct CategoryColorSwatches: View {
+    @Binding var selectedColor: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(CategoryColorPalette.colors, id: \.self) { color in
+                Button {
+                    selectedColor = color
+                } label: {
+                    Circle()
+                        .fill(Color(hex: color) ?? JDTheme.me)
+                        .frame(width: 24, height: 24)
+                        .overlay {
+                            if selectedColor.uppercased() == color.uppercased() {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("색상 \(color)")
+            }
+        }
+    }
+}
+
+private enum CategoryColorPalette {
+    static let colors = ["#558CB9", "#C87A6D", "#69A17D", "#4F6FD8", "#D36A3A", "#8B6FD8", "#D89B4F"]
 }
 
 private struct CategoryProgressStat {
@@ -6481,6 +6856,122 @@ private struct SettingsRow: View {
                     .padding(.leading, avatar ? 54 : 14)
             }
         }
+    }
+}
+
+private struct WidgetColorPickerSheet: View {
+    @Binding var colors: WidgetModeColors
+    let onDone: () -> Void
+    let onCancel: () -> Void
+
+    @State private var taskHex = ""
+    @State private var habitHex = ""
+    @State private var message: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button("취소", action: onCancel)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(JDTheme.secondaryText)
+                Spacer()
+                Text("위젯 토글 색상")
+                    .font(.system(size: 17, weight: .bold))
+                Spacer()
+                Button("저장") {
+                    guard let task = normalizedHex(taskHex),
+                          let habit = normalizedHex(habitHex)
+                    else {
+                        message = "색상 코드는 #RRGGBB 형식으로 입력해주세요."
+                        return
+                    }
+                    colors = WidgetModeColors(task: task, habit: habit)
+                    onDone()
+                }
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(JDTheme.accent)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            VStack(alignment: .leading, spacing: 18) {
+                WidgetColorEditorSection(
+                    title: "Task",
+                    hex: $taskHex
+                )
+                WidgetColorEditorSection(
+                    title: "Habit",
+                    hex: $habitHex
+                )
+                if let message {
+                    Text(message)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(JDTheme.external)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+            Spacer(minLength: 0)
+        }
+        .background(JDTheme.surface)
+        .onAppear {
+            taskHex = colors.task
+            habitHex = colors.habit
+        }
+    }
+
+    private func normalizedHex(_ value: String) -> String? {
+        var value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("#") {
+            value.removeFirst()
+        }
+        guard value.count == 6, Int(value, radix: 16) != nil else {
+            return nil
+        }
+        return "#\(value.uppercased())"
+    }
+}
+
+private struct WidgetColorEditorSection: View {
+    let title: String
+    @Binding var hex: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color(hex: hex) ?? JDTheme.dividerStrong)
+                    .frame(width: 18, height: 18)
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(JDTheme.primaryText)
+                Spacer()
+            }
+            CategoryColorSwatches(selectedColor: Binding(
+                get: { normalizedForSwatch(hex) },
+                set: { hex = $0 }
+            ))
+            TextField("#4F6FD8", text: $hex)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .padding(.horizontal, 12)
+                .frame(height: 42)
+                .background(JDTheme.surfaceAlt)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func normalizedForSwatch(_ value: String) -> String {
+        var value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("#") {
+            value.removeFirst()
+        }
+        guard value.count == 6, Int(value, radix: 16) != nil else {
+            return ""
+        }
+        return "#\(value.uppercased())"
     }
 }
 

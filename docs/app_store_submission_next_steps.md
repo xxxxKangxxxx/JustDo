@@ -1,6 +1,6 @@
 # App Store Submission Next Steps
 
-Updated: 2026-06-21
+Updated: 2026-06-24
 
 ## Ready Assets
 
@@ -43,6 +43,12 @@ Store Connect review notes.
 ## Current TestFlight State
 
 - Internal TestFlight build 1 is installed.
+- Build 2 was uploaded to App Store Connect on 2026-06-23 via
+  `xcodebuild -exportArchive` after Xcode Organizer's Distribute flow returned
+  an App Store Connect 500 error.
+- Build 3 was uploaded to App Store Connect on 2026-06-24 via
+  `xcodebuild -exportArchive` for the Home segmented-control placement/color
+  tweak and widget color picker sheet.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information
@@ -56,8 +62,8 @@ Store Connect review notes.
 - App Review notes are saved with Sign in with Apple as the primary review path,
   the Google demo account as fallback, and explicit confirmation that this iOS
   build has no IAP, purchase flow, external payment link, or purchase CTA.
-- Next: wait for Beta App Review approval, then have external testers install
-  through TestFlight. Continue internal build 1 smoke in parallel.
+- Next: wait for build 3 processing, attach it to internal TestFlight, then run
+  internal smoke on build 3 before public App Review.
 
 ## Final Local Checks Before Archive
 

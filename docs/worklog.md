@@ -5498,3 +5498,63 @@ as a follow-up.
   question; Just Do does not provide third-party media/content catalogs.
 - Next: continue internal TestFlight build 1 smoke from Apple Sign-In while
   external TestFlight remains in Beta App Review.
+
+## 2026-06-23 iOS build 2 feature pass before TestFlight smoke
+
+### Codex
+
+- Implemented three requested iOS adjustments before continuing TestFlight smoke:
+  - Settings → Display now controls the widget Task/Habit toggle colors. The
+    values are stored in the App Group defaults, read by the widget provider,
+    and trigger `WidgetCenter.reloadAllTimelines()` after changes.
+  - Home now has a top segmented control for `캘린더` / `리스트`. Calendar keeps
+    the existing month grid; List shows the selected date's tasks grouped by
+    category plus active habits, with date prev/next controls and task/habit
+    completion actions.
+  - Settings → 카테고리 관리 now supports editing category name and color, not
+    only adding/deleting. Saves enqueue the existing `categoryUpsert` mutation.
+- Bumped iOS `CURRENT_PROJECT_VERSION` from 1 to 2 for the next TestFlight
+  upload.
+- Verification:
+  - `swift test` in `apps/ios` passed: 69 tests.
+  - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+    -destination 'generic/platform=iOS' build` passed.
+  - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+    -configuration Release -destination 'generic/platform=iOS' build` passed.
+  - `xcodebuild ... -archivePath apps/ios/build/JustDoApp-b2.xcarchive archive`
+    passed.
+- Xcode Organizer's `Distribute App` flow returned `Error Downloading App
+  Information` / App Store Connect status code 500 even after product selection,
+  Xcode restart, account refresh, and Apple system status checks.
+- Workaround succeeded: uploaded build 2 with
+  `xcodebuild -exportArchive -archivePath apps/ios/build/JustDoApp-b2.xcarchive
+  -exportOptionsPlist apps/ios/build/ExportOptions-AppStoreConnect.plist
+  -allowProvisioningUpdates`. Xcode reported `Upload succeeded` and App Store
+  Connect package processing started.
+- Next: wait for build 2 processing, attach it to internal TestFlight, install
+  it, then start smoke from Apple Sign-In using
+  `docs/testflight_smoke_checklist.md`.
+
+## 2026-06-24 iOS build 3 TestFlight upload
+
+### Codex
+
+- Refined the build 2 UI changes based on real-device review:
+  - Moved the Home `캘린더 / 리스트` segmented control directly below the
+    logo/settings header and above the year/month row.
+  - Changed the active Home segmented-control color from dark primary text to
+    the app accent color.
+  - Replaced the inline Settings widget color controls with a standard
+    left-aligned `위젯 토글 색상` row. Tapping it opens a sheet where Task/Habit
+    colors can be set via swatches or `#RRGGBB` hex input.
+- Bumped iOS `CURRENT_PROJECT_VERSION` from 2 to 3 for TestFlight verification.
+- Verification:
+  - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+    -configuration Release -destination 'generic/platform=iOS' build` passed.
+  - `xcodebuild ... -archivePath apps/ios/build/JustDoApp-b3.xcarchive archive`
+    passed.
+  - `xcodebuild -exportArchive -archivePath apps/ios/build/JustDoApp-b3.xcarchive
+    -exportOptionsPlist apps/ios/build/ExportOptions-AppStoreConnect.plist
+    -allowProvisioningUpdates` passed with `Upload succeeded`.
+- Next: wait for build 3 processing in App Store Connect, attach it to internal
+  TestFlight, install it, then continue real-device UI review/smoke.
