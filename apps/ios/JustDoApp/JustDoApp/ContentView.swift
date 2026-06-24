@@ -610,6 +610,7 @@ private struct HomeRootView: View {
                 onToggleHabit: toggleHabit(_:on:),
                 onSaveTask: saveTask(_:),
                 onDeleteTask: deleteTask(_:),
+                onSaveHabit: saveHabit(_:),
                 onAdd: { useJustDoMode in
                     isShowingDayPanel = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
@@ -801,7 +802,8 @@ private struct HomeRootView: View {
                 onOpenCalendarDay: { isShowingDayPanel = true },
                 onToggleTask: toggleTask(_:),
                 onOpenTask: { editingTask = $0 },
-                onToggleHabit: toggleHabit(_:on:)
+                onToggleHabit: toggleHabit(_:on:),
+                onOpenHabit: { editingHabit = $0 }
             )
             .padding(.horizontal, 20)
         }
@@ -896,8 +898,11 @@ private struct HomeRootView: View {
 
     private func moveMonth(_ delta: Int) {
         let moved = JDDate.addMonths(year: displayYear, month: displayMonth, delta: delta)
+        let selected = JDDate.parts(selectedDate)
+        let clampedDay = min(selected.day, JDDate.days(year: moved.year, month: moved.month))
         displayYear = moved.year
         displayMonth = moved.month
+        selectedDate = JDDate.iso(year: moved.year, month: moved.month, day: clampedDay)
     }
 
     private func moveToToday() {
@@ -1774,6 +1779,7 @@ private struct HomeListView: View {
     let onToggleTask: (Task) -> Void
     let onOpenTask: (Task) -> Void
     let onToggleHabit: (Habit, String) -> Void
+    let onOpenHabit: (Habit) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1839,7 +1845,8 @@ private struct HomeListView: View {
                             HabitGroupSection(
                                 habits: habits,
                                 selectedDate: selectedDate,
-                                onToggleHabit: onToggleHabit
+                                onToggleHabit: onToggleHabit,
+                                onOpenHabit: onOpenHabit
                             )
                         }
                     }
@@ -2169,9 +2176,11 @@ private struct SelectedDayPanel: View {
     let onToggleHabit: (Habit, String) -> Void
     let onSaveTask: (Task) -> Void
     let onDeleteTask: (Task) -> Void
+    let onSaveHabit: (Habit) -> Void
     let onAdd: (Bool) -> Void
 
     @State private var editingTask: Task?
+    @State private var editingHabit: Habit?
     @State private var isShowingJustDoMode = false
 
     var body: some View {
@@ -2191,6 +2200,18 @@ private struct SelectedDayPanel: View {
                         onDelete: { deleted in
                             onDeleteTask(deleted)
                             editingTask = nil
+                        }
+                    )
+                }
+            }
+            .fullScreenCover(item: $editingHabit) { habit in
+                EditorScreen {
+                    HabitDetailEditor(
+                        habit: habit,
+                        onCancel: { editingHabit = nil },
+                        onSave: { updated in
+                            onSaveHabit(updated)
+                            editingHabit = nil
                         }
                     )
                 }
@@ -2231,7 +2252,8 @@ private struct SelectedDayPanel: View {
                             HabitGroupSection(
                                 habits: habits,
                                 selectedDate: selectedDate,
-                                onToggleHabit: onToggleHabit
+                                onToggleHabit: onToggleHabit,
+                                onOpenHabit: { habit in editingHabit = habit }
                             )
                         }
 
@@ -2402,6 +2424,7 @@ private struct HabitGroupSection: View {
     let habits: [Habit]
     let selectedDate: String
     let onToggleHabit: (Habit, String) -> Void
+    let onOpenHabit: (Habit) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2411,7 +2434,8 @@ private struct HabitGroupSection: View {
                     habit: habit,
                     selectedDate: selectedDate,
                     isLast: index == habits.count - 1,
-                    onToggle: { onToggleHabit(habit, selectedDate) }
+                    onToggle: { onToggleHabit(habit, selectedDate) },
+                    onOpen: { onOpenHabit(habit) }
                 )
             }
         }
@@ -2522,6 +2546,7 @@ private struct HabitRow: View {
     let selectedDate: String
     let isLast: Bool
     let onToggle: () -> Void
+    let onOpen: () -> Void
 
     private var isDone: Bool {
         habit.log[selectedDate] == 1
@@ -2535,18 +2560,21 @@ private struct HabitRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(isDone ? "Habit 완료 취소" : "Habit 완료")
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(habit.emoji) \(habit.title)")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(isDone ? JDTheme.tertiaryText : JDTheme.primaryText)
-                        .strikethrough(isDone)
-                    Text("🔥 \(JDDate.habitStreak(habit, selectedDate: selectedDate))일째")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(JDTheme.habit)
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(habit.emoji) \(habit.title)")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(isDone ? JDTheme.tertiaryText : JDTheme.primaryText)
+                            .strikethrough(isDone)
+                        Text("🔥 \(JDDate.habitStreak(habit, selectedDate: selectedDate))일째")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(JDTheme.habit)
+                    }
+                    Spacer()
                 }
-                Spacer()
             }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 11)
         .overlay(alignment: .bottom) {
@@ -7647,6 +7675,8 @@ private struct HabitDetailEditor: View {
     @State private var recurType: HabitRecurType
     @State private var selectedDays: Set<Int>
     @State private var reminderTime: String
+    @State private var reminderDate: Date
+    @State private var isShowingReminderPicker = false
 
     private let weekdays: [(Int, String)] = [
         (0, "일"), (1, "월"), (2, "화"), (3, "수"), (4, "목"), (5, "금"), (6, "토")
@@ -7662,6 +7692,7 @@ private struct HabitDetailEditor: View {
         _recurType = State(initialValue: habit.recurType)
         _selectedDays = State(initialValue: Set(habit.recurDays ?? []))
         _reminderTime = State(initialValue: habit.reminderTime ?? "")
+        _reminderDate = State(initialValue: Self.date(fromTime: habit.reminderTime ?? "09:00"))
     }
 
     var body: some View {
@@ -7715,10 +7746,20 @@ private struct HabitDetailEditor: View {
                 }
             }
             AddSheetFieldRow(label: "알림") {
-                HStack {
-                    TextField("HH:MM", text: $reminderTime)
-                        .font(.system(size: 13, weight: .medium))
-                        .textInputAutocapitalization(.never)
+                HStack(spacing: 8) {
+                    Button {
+                        reminderDate = Self.date(fromTime: reminderTime.isEmpty ? "09:00" : reminderTime)
+                        isShowingReminderPicker = true
+                    } label: {
+                        Text(reminderTime.isEmpty ? "없음" : reminderTime)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(reminderTime.isEmpty ? JDTheme.secondaryText : JDTheme.accent)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(JDTheme.surfaceAlt)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                    }
+                    .buttonStyle(.plain)
                     if !reminderTime.isEmpty {
                         Button("지우기") {
                             reminderTime = ""
@@ -7746,6 +7787,20 @@ private struct HabitDetailEditor: View {
                 )
             }
         }
+        .sheet(isPresented: $isShowingReminderPicker) {
+            TimePickerSheet(
+                title: "알림 시간",
+                date: $reminderDate,
+                onDone: {
+                    reminderTime = Self.timeString(from: reminderDate)
+                    isShowingReminderPicker = false
+                }
+            )
+            .presentationDetents([.height(280)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(22)
+            .presentationBackground(JDTheme.surface)
+        }
     }
 
     private func toggleDay(_ day: Int) {
@@ -7754,6 +7809,19 @@ private struct HabitDetailEditor: View {
         } else {
             selectedDays.insert(day)
         }
+    }
+
+    private static func date(fromTime time: String) -> Date {
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        var components = DateComponents()
+        components.hour = parts.first ?? 9
+        components.minute = parts.dropFirst().first ?? 0
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
+    private static func timeString(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0)
     }
 }
 

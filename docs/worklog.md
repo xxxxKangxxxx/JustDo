@@ -5558,3 +5558,80 @@ as a follow-up.
     -allowProvisioningUpdates` passed with `Upload succeeded`.
 - Next: wait for build 3 processing in App Store Connect, attach it to internal
   TestFlight, install it, then continue real-device UI review/smoke.
+
+## 2026-06-24 TestFlight build 3 smoke fixes + build 4 upload
+
+### Codex
+
+- User confirmed build 3 processed and was attached to internal TestFlight.
+- Continued internal smoke on build 3:
+  - Apple Sign-In passed.
+  - Google demo sign-in passed; Home opened and seeded demo data appeared.
+  - Home calendar/list smoke mostly passed: segmented control placement/color,
+    list display, category grouping, habits, clipping, bottom bar, and Settings
+    entry/close were all confirmed.
+  - Task add/edit smoke passed: add, keyboard/header stability, settings, save,
+    edit, complete/delete, and relaunch persistence.
+- Found and patched two build 3 issues:
+  - H-001: In Home List mode, moving the displayed month should also move
+    `selectedDate` to the same day in the target month, clamped to the target
+    month's last day. Updated `moveMonth(_:)` accordingly.
+  - H-002: In the selected-date sheet, tapping a habit row did not open the
+    habit editor like task rows do. Added habit edit state to `SelectedDayPanel`,
+    wired `HabitGroupSection` / `HabitRow` open callbacks, and enabled the same
+    habit edit entry from Home List.
+- Bumped iOS `CURRENT_PROJECT_VERSION` from 3 to 4.
+- Verification:
+  - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+    -configuration Release -destination 'generic/platform=iOS' build` passed.
+  - `xcodebuild ... -archivePath apps/ios/build/JustDoApp-b4.xcarchive archive`
+    passed.
+  - `xcodebuild -exportArchive -archivePath apps/ios/build/JustDoApp-b4.xcarchive
+    -exportOptionsPlist apps/ios/build/ExportOptions-AppStoreConnect.plist
+    -allowProvisioningUpdates` passed with `Upload succeeded`.
+- Next: wait for build 4 processing in App Store Connect, attach it to internal
+  TestFlight, install it, then verify H-001/H-002 before continuing Habit
+  recurrence/reminder smoke and the remaining checklist.
+
+## 2026-06-25 TestFlight build 4 smoke fix + build 5 upload
+
+### Codex
+
+- User installed build 4 and verified both build 3 smoke fixes:
+  - H-001 Home List month navigation now moves the selected date with the month.
+  - H-002 tapping a habit row opens the habit editor from the selected-day sheet
+    and Home List.
+- During habit edit review, user requested the reminder-time UI to match the
+  Task/add-flow wheel picker style instead of the raw `HH:MM` text field.
+- Updated `HabitDetailEditor`:
+  - Replaced the reminder-time `TextField` with a value button.
+  - Button opens the existing `TimePickerSheet`.
+  - Kept the existing `지우기` action.
+  - Added local `reminderDate` state and time parse/format helpers.
+- Bumped iOS `CURRENT_PROJECT_VERSION` from 4 to 5.
+- Verification:
+  - `xcodebuild -project JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp
+    -configuration Release -destination 'generic/platform=iOS' build` passed.
+  - `xcodebuild ... -archivePath apps/ios/build/JustDoApp-b5.xcarchive archive`
+    passed.
+  - `xcodebuild -exportArchive -archivePath apps/ios/build/JustDoApp-b5.xcarchive
+    -exportOptionsPlist apps/ios/build/ExportOptions-AppStoreConnect.plist
+    -allowProvisioningUpdates` passed with `Upload succeeded`.
+- Next: wait for build 5 processing, attach it to internal TestFlight, install
+  it, then verify the habit edit reminder-time picker before continuing the
+  remaining smoke checklist.
+
+## 2026-06-25 TestFlight build 5 smoke pause
+
+### Codex
+
+- User installed build 5 and verified the habit edit reminder-time refinement:
+  editor opens, reminder row is button-style, wheel time picker opens, selected
+  time is reflected, `지우기` works, and the saved value persists after reopening.
+- Current internal smoke progress:
+  - Passed: Install/Launch, Apple Sign-In, Google demo sign-in, Home/Calendar,
+    Task add/edit, Habit add/edit.
+  - Next starting point: `docs/testflight_smoke_checklist.md` section 7,
+    Goal Management.
+- Work paused intentionally for the day. Resume tomorrow from Goal Management
+  on the installed build 5 unless a newer build is uploaded first.

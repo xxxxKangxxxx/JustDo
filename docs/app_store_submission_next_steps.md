@@ -49,6 +49,18 @@ Store Connect review notes.
 - Build 3 was uploaded to App Store Connect on 2026-06-24 via
   `xcodebuild -exportArchive` for the Home segmented-control placement/color
   tweak and widget color picker sheet.
+- Build 3 finished processing and was attached to internal TestFlight on
+  2026-06-24.
+- Build 4 was archived and uploaded to App Store Connect on 2026-06-24. It
+  includes the TestFlight smoke fixes for Home List month navigation and habit
+  row edit entry.
+- Build 4 finished processing, was attached to internal TestFlight, and was
+  installed on 2026-06-24.
+- Build 5 was archived and uploaded to App Store Connect on 2026-06-25. It
+  includes the habit edit reminder-time wheel-sheet refinement found during
+  build 4 smoke.
+- Build 5 finished processing, was attached to internal TestFlight, installed,
+  and the habit edit reminder-time refinement was verified on 2026-06-25.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information
@@ -62,8 +74,7 @@ Store Connect review notes.
 - App Review notes are saved with Sign in with Apple as the primary review path,
   the Google demo account as fallback, and explicit confirmation that this iOS
   build has no IAP, purchase flow, external payment link, or purchase CTA.
-- Next: wait for build 3 processing, attach it to internal TestFlight, then run
-  internal smoke on build 3 before public App Review.
+- Next: continue internal smoke from Goal Management.
 
 ## Final Local Checks Before Archive
 
