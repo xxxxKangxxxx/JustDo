@@ -1,14 +1,15 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-06-24
+Updated: 2026-07-01
 
-Purpose: validate TestFlight internal build 5 before deciding whether to submit
-the iOS v1 build for public App Review.
+Purpose: validate TestFlight internal build 6 follow-ups before deciding whether
+to submit the iOS v1 build for public App Review.
 
 ## Test Setup
 
 - Device: real iPhone with the TestFlight build installed.
-- Build: App Store Connect / TestFlight internal build 5.
+- Build: App Store Connect / TestFlight internal build 6 after processing and
+  TestFlight attachment.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -39,7 +40,11 @@ Current progress:
 - [x] 4. Home and Calendar — passed on build 4; H-001 verified.
 - [x] 5. Task Add and Edit — passed on build 3, 2026-06-24.
 - [x] 6. Habit Add and Edit — passed on build 5; H-002 and H-003 verified.
-- [ ] 7. Goal Management — next starting point.
+- [x] 7. Goal Management — passed on build 5 except H-004 known issue for build 6 verification.
+- [x] 8. Report Entry — passed on build 5, 2026-07-01.
+- [x] 9. Settings and Subscription Copy — passed on build 5, 2026-07-01.
+- [x] 10. Widget — passed on build 5 with H-005 build 6 follow-up.
+- [x] 11. Short Offline Check — passed on build 5, 2026-07-01.
 
 ### 1. Install and Launch
 
@@ -157,8 +162,8 @@ Notes: User confirmed habit add and emoji setting on build 3. Issue H-002 was pa
 Result:
 
 ```text
-Status:
-Notes:
+Status: PASS WITH KNOWN ISSUE
+Notes: User confirmed Goal Management entry/close, add, target save/denominator update, lock/unlock, locked-card confirmation, unlocked-card edit/save, delete confirmation/delete, and Settings/Home return on build 5. H-004 remains: task completion did not update goal progress immediately; patch is included in uploaded build 6 and needs verification.
 ```
 
 ### 8. Report Entry
@@ -174,8 +179,8 @@ Notes:
 Result:
 
 ```text
-Status:
-Notes:
+Status: PASS
+Notes: User confirmed Home report banner appears, report opens from Home, report sections scroll with readable text, Settings -> 목표 supporting report entry works, and no purchase CTA or external payment link was visible in Free/Pro gating copy.
 ```
 
 ### 9. Settings and Subscription Copy
@@ -193,8 +198,8 @@ Notes:
 Result:
 
 ```text
-Status:
-Notes:
+Status: PASS
+Notes: User confirmed account state/sign-out clarity, Settings -> Display -> 위젯 토글 색상 entry, Task/Habit color changes, clean return, Terms/Privacy login mention, no Pro upgrade row, no purchase button, no external payment link, and Just Do Mode gating does not route to purchase.
 ```
 
 ### 10. Widget
@@ -208,8 +213,8 @@ Notes:
 Result:
 
 ```text
-Status:
-Notes:
+Status: PASS WITH FOLLOW-UP
+Notes: User confirmed Home Screen widget add, widget item display, widget task/habit toggle, app reflection after opening, and widget refresh after app foregrounding. H-005 follow-up identified: widget mutations are queued locally and flushed when the app foregrounds/refreshes; uploaded build 6 adds a 3-second pending-sync retry loop while the app is active.
 ```
 
 ### 11. Short Offline Check
@@ -224,8 +229,8 @@ Notes:
 Result:
 
 ```text
-Status:
-Notes:
+Status: PASS
+Notes: User confirmed Airplane Mode, offline low-risk task/habit change, immediate local UI update, network restore, foreground wait, kill/relaunch, and final state persistence on build 5.
 ```
 
 ## Issue Log
@@ -280,6 +285,30 @@ Reproducible:
 Notes:
 ```
 
+```text
+ID: H-004
+Severity: medium
+Area: Goal Management / progress refresh
+Steps: Create or edit a monthly goal with a target, create a related task, complete the task, then check the goal card progress.
+Expected: The goal card progress updates immediately after the related task completion is reflected locally.
+Actual: The target denominator updated correctly, and the related task eventually changed progress, but the progress did not refresh immediately after completion.
+Screenshot or screen recording: Not needed; user reported during build 5 Goal Management smoke.
+Reproducible: Yes, from user smoke.
+Notes: Patched in uploaded build 6 by changing GoalManagementSheet semantic-match refresh from count-only to a data-derived key that includes goal text/target, task title/tags/completion/date, and habit log changes. Needs build 6 affected-section verification after processing/TestFlight install.
+```
+
+```text
+ID: H-005
+Severity: low
+Area: Widget / sync timing
+Steps: Toggle a task or habit from the Home Screen widget and observe backend sync timing without reopening/foregrounding the app.
+Expected: Ideally, widget mutations would reach Supabase immediately when network/session are available, or at least clearly flush on app foreground.
+Actual: Build 5 widget actions optimistically update the App Group widget snapshot and append `mutation_queue.jsonl`. The app drains and flushes this queue during launch/foreground widget refresh, so server sync may wait until the app is opened/foregrounded/refreshed.
+Screenshot or screen recording: Not needed; user reported during build 5 widget smoke.
+Reproducible: Expected from current architecture.
+Notes: Not an App Review blocker for build 5 because local widget feedback and app reflection after foreground work. Patched in uploaded build 6 with app-side 3-second pending-sync retry while active; larger future option is immediate widget-extension upload when session/network are available.
+```
+
 ## Release Decision
 
 - [ ] PASS: submit current build for public App Review.
@@ -291,7 +320,7 @@ Notes:
 Decision:
 
 ```text
-Status:
-Reason:
-Next action:
+Status: FIX REQUIRED
+Reason: Build 5 smoke passed the full checklist, and build 6 has been uploaded with H-004, H-005, web/iOS pending-sync retry, and account nickname editing changes. Those changes still need TestFlight verification before App Review submission.
+Next action: Wait for build 6 processing, attach/install it through internal TestFlight, then rerun affected sections: Goal Management progress refresh, Widget/sync retry, Settings account nickname editing, and a short offline/pending-sync check.
 ```

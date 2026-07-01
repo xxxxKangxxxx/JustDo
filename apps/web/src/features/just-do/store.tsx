@@ -172,6 +172,24 @@ export function JustDoProvider({
     })().catch(reportSyncError);
   }, [activeStorage, reportSyncError]);
 
+  const syncNow = useCallback(() => {
+    setSyncStatus((current) => ({ ...current, isOnline: browserOnline(), isSyncing: true }));
+    return activeStorage
+      .load()
+      .then((saved) => {
+        if (saved) {
+          setState((current) => mergePersisted(current, saved));
+        }
+        clearSyncError();
+        refreshPendingCount();
+        if (typeof window !== "undefined") {
+          window.setTimeout(refreshPendingCount, 500);
+        }
+      })
+      .catch(reportSyncError)
+      .finally(() => setSyncStatus((current) => ({ ...current, isSyncing: false })));
+  }, [activeStorage, clearSyncError, refreshPendingCount, reportSyncError]);
+
   const persist = useCallback(
     (operation: Promise<void>) => {
       setSyncStatus((current) => ({ ...current, isSyncing: true }));
@@ -214,16 +232,7 @@ export function JustDoProvider({
 
   useEffect(() => {
     const setOnline = () => {
-      setSyncStatus((current) => ({ ...current, isOnline: true, isSyncing: true }));
-      void activeStorage
-        .load()
-        .then(() => {
-          clearSyncError();
-          refreshPendingCount();
-          window.setTimeout(refreshPendingCount, 500);
-        })
-        .catch(reportSyncError)
-        .finally(() => setSyncStatus((current) => ({ ...current, isSyncing: false })));
+      void syncNow();
     };
     const setOffline = () => {
       setSyncStatus((current) => ({ ...current, isOnline: false }));
@@ -237,7 +246,28 @@ export function JustDoProvider({
       window.removeEventListener("online", setOnline);
       window.removeEventListener("offline", setOffline);
     };
-  }, [activeStorage, clearSyncError, refreshPendingCount, reportSyncError]);
+  }, [refreshPendingCount, syncNow]);
+
+  useEffect(() => {
+    if (!isHydrated || !syncStatus.isOnline || syncStatus.isSyncing || syncStatus.pendingCount <= 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void syncNow();
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [isHydrated, syncNow, syncStatus.isOnline, syncStatus.isSyncing, syncStatus.pendingCount]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void syncNow();
+      }
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
+  }, [syncNow]);
 
   const applyRemoteChange = useCallback(
     (change: RemoteChange) => {

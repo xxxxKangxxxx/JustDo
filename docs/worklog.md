@@ -5635,3 +5635,68 @@ as a follow-up.
     Goal Management.
 - Work paused intentionally for the day. Resume tomorrow from Goal Management
   on the installed build 5 unless a newer build is uploaded first.
+
+## 2026-07-01 TestFlight build 5 smoke continuation + build 6 local fixes
+
+### Codex
+
+- Continued internal smoke on installed TestFlight build 5:
+  - Goal Management passed for entry/close, add, target save/denominator update,
+    lock/unlock, locked-card confirmation, unlocked-card edit/save, delete
+    confirmation/delete, and Settings/Home return.
+  - Report Entry passed: Home report banner, Home report open, report
+    scrolling/readability, Settings -> 목표 supporting report entry, and no
+    purchase CTA/external payment link in Free/Pro gating copy.
+  - Settings and Subscription Copy passed: account/sign-out clarity, widget
+    color sheet entry, Task/Habit color changes, clean return, login mention in
+    legal copy, no upgrade row/purchase button/external payment link, and Just
+    Do Mode gating does not route to purchase.
+- Found H-004 during Goal Management smoke: related task completion eventually
+  changed goal progress, but the goal card did not refresh immediately after
+  completion.
+- Patched H-004 locally for the next build by changing Goal Management semantic
+  match refresh from count-only to a data-derived key that includes goal
+  title/note/target, task title/tags/completion/date, and habit log changes.
+- Added account nickname editing for the next build:
+  - Account detail sheet now exposes a 닉네임 text field and 저장 action.
+  - Saving patches `public.users.display_name` via the authenticated Supabase
+    REST API and updates the Keychain-stored session display name so the iOS UI
+    reflects the nickname immediately.
+- Widget smoke passed for Home Screen widget add, item display, task/habit
+  toggle, app reflection after opening, and widget refresh after app
+  foregrounding. H-005 follow-up captured the current widget/server sync timing:
+  build 5 queues widget mutations locally and flushes them when the app
+  foregrounds/refreshes.
+- Short Offline Check passed on build 5: Airplane Mode, offline low-risk
+  task/habit change, immediate local UI update, network restore, foreground
+  wait, kill/relaunch, and final state persistence were user-confirmed.
+- Added build 6 local sync improvements:
+  - iOS now schedules a 3-second retry when sync status is `pending(n)`, calling
+    the existing app sync/queue drain path while the app is active.
+  - Web now runs the same 3-second pending retry through `activeStorage.load()`,
+    merges the returned snapshot into state, and syncs again when the browser tab
+    becomes visible.
+
+### Verification
+
+- `swift test` from `apps/ios` passed: 69 tests.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -configuration Release -destination 'generic/platform=iOS' build` passed.
+- `npm --prefix apps/web run lint` passed.
+- `npm --prefix apps/web test` passed: 140 tests.
+- `npm --prefix apps/web run build` passed after rerunning with elevated
+  permissions; the first sandboxed run hit Turbopack's local helper/port binding
+  restriction.
+
+### Notes
+
+- Build 5 smoke checklist is complete. Release decision is still FIX REQUIRED
+  because H-004, H-005, web/iOS pending-sync retry, and nickname editing need
+  build 6 upload and affected-section verification.
+- Bumped iOS `CURRENT_PROJECT_VERSION` from 5 to 6.
+- Release build, archive, and App Store Connect upload completed for build 6.
+- Build 6 upload succeeded and the uploaded package is processing in App Store
+  Connect.
+- Next: wait for build 6 processing, attach/install it through internal
+  TestFlight, then verify Goal Management progress refresh, pending-sync retry
+  behavior, Settings account nickname editing, and a short offline/pending-sync
+  flow.

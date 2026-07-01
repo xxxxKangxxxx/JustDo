@@ -82,6 +82,8 @@ struct ContentView: View {
                 syncStatus: syncStatus,
                 authProfile: auth.profile,
                 pendingDetailRoute: $pendingDetailRoute,
+                onUpdateDisplayName: auth.updateDisplayName(_:),
+                onRequestSync: onSessionChanged,
                 onSignOut: {
                     auth.signOut()
                     _Concurrency.Task { await onSessionChanged() }
@@ -497,6 +499,8 @@ private struct HomeRootView: View {
     @ObservedObject var syncStatus: AppSyncStatusStore
     let authProfile: AuthProfile?
     @Binding var pendingDetailRoute: JustDoDetailRoute?
+    let onUpdateDisplayName: (String) async throws -> Void
+    let onRequestSync: () async -> Void
     let onSignOut: () -> Void
 
     @State private var snapshot: AppSnapshot?
@@ -517,6 +521,7 @@ private struct HomeRootView: View {
     @State private var goalReportPresentation: GoalReportPresentation?
     @State private var goalPromptPresentation: GoalPromptPresentation?
     @State private var suppressedGoalPromptIDs: Set<String> = []
+    @State private var pendingSyncTask: _Concurrency.Task<Void, Never>?
     @State private var loadError: String?
     @State private var actionMessage: String?
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
@@ -567,6 +572,7 @@ private struct HomeRootView: View {
                 onExportData: exportData,
                 onResetData: resetAllData,
                 onRetrySync: retrySync,
+                onUpdateDisplayName: onUpdateDisplayName,
                 onSignOut: onSignOut,
                 onDismiss: { isShowingSettings = false }
             )
@@ -642,7 +648,10 @@ private struct HomeRootView: View {
             switch status {
             case .synced, .pending:
                 loadSnapshot(preserveViewSelection: true)
+                schedulePendingSyncIfNeeded(status)
             case .unknown, .syncing, .failed:
+                pendingSyncTask?.cancel()
+                pendingSyncTask = nil
                 break
             }
         }
@@ -1721,6 +1730,20 @@ private struct HomeRootView: View {
             } catch {
                 syncStatus.markFailed(error, snapshotStore: snapshotStore)
             }
+        }
+    }
+
+    private func schedulePendingSyncIfNeeded(_ status: AppSyncStatus) {
+        guard case .pending(let count) = status, count > 0 else {
+            pendingSyncTask?.cancel()
+            pendingSyncTask = nil
+            return
+        }
+        pendingSyncTask?.cancel()
+        pendingSyncTask = _Concurrency.Task {
+            try? await _Concurrency.Task.sleep(nanoseconds: 3_000_000_000)
+            guard !_Concurrency.Task.isCancelled else { return }
+            await onRequestSync()
         }
     }
 }
@@ -3443,6 +3466,7 @@ private struct SettingsRootTabView: View {
     let onExportData: () -> Void
     let onResetData: () -> Void
     let onRetrySync: () -> Void
+    let onUpdateDisplayName: (String) async throws -> Void
     let onSignOut: () -> Void
     let onDismiss: () -> Void
 
@@ -3623,6 +3647,10 @@ private struct SettingsRootTabView: View {
                 profile: resolvedProfile,
                 plan: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free",
                 message: accountMessage,
+                onSaveDisplayName: { name in
+                    try await onUpdateDisplayName(name)
+                    accountMessage = "닉네임이 변경되었습니다."
+                },
                 onChangeAccount: {
                     isShowingAccountDetail = false
                     onSignOut()
@@ -3845,9 +3873,14 @@ private struct AccountDetailSheet: View {
     let profile: AuthProfile
     let plan: String
     let message: String?
+    let onSaveDisplayName: (String) async throws -> Void
     let onChangeAccount: () -> Void
     let onSignOut: () -> Void
     let onDeleteAccount: () -> Void
+
+    @State private var displayNameText = ""
+    @State private var isSavingDisplayName = false
+    @State private var displayNameMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -3872,6 +3905,47 @@ private struct AccountDetailSheet: View {
                 Spacer()
             }
             .padding(.top, 10)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("닉네임")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(JDTheme.tertiaryText)
+                HStack(spacing: 10) {
+                    TextField("닉네임", text: $displayNameText)
+                        .font(.system(size: 14, weight: .semibold))
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                        .padding(.horizontal, 12)
+                        .frame(height: 42)
+                        .background(JDTheme.surface)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    Button {
+                        _Concurrency.Task { await saveDisplayName() }
+                    } label: {
+                        if isSavingDisplayName {
+                            ProgressView()
+                                .tint(.white)
+                                .frame(width: 44, height: 38)
+                        } else {
+                            Text("저장")
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(width: 44, height: 38)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .background(canSaveDisplayName ? JDTheme.primaryText : JDTheme.divider)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .disabled(!canSaveDisplayName || isSavingDisplayName)
+                }
+                if let displayNameMessage {
+                    Text(displayNameMessage)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(JDTheme.secondaryText)
+                }
+            }
 
             VStack(spacing: 0) {
                 AccountInfoRow(title: "이름", value: profile.title)
@@ -3902,6 +3976,35 @@ private struct AccountDetailSheet: View {
         .padding(.horizontal, 20)
         .padding(.top, 18)
         .background(JDTheme.surface)
+        .onAppear {
+            displayNameText = profile.displayName ?? ""
+        }
+        .onChange(of: profile.displayName ?? "") { _, value in
+            guard !isSavingDisplayName else { return }
+            displayNameText = value
+        }
+    }
+
+    private var trimmedDisplayName: String {
+        displayNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSaveDisplayName: Bool {
+        !trimmedDisplayName.isEmpty && trimmedDisplayName != (profile.displayName ?? "")
+    }
+
+    @MainActor
+    private func saveDisplayName() async {
+        guard canSaveDisplayName else { return }
+        isSavingDisplayName = true
+        displayNameMessage = nil
+        do {
+            try await onSaveDisplayName(trimmedDisplayName)
+            displayNameMessage = "저장되었습니다."
+        } catch {
+            displayNameMessage = "닉네임을 저장하지 못했습니다."
+        }
+        isSavingDisplayName = false
     }
 }
 
@@ -5710,6 +5813,27 @@ private struct GoalManagementSheet: View {
 
     private var yearlyKey: String { GoalSelectors.periodKey(.yearly, iso: JDDate.todayISO) }
     private var monthlyKey: String { GoalSelectors.periodKey(.monthly, iso: JDDate.todayISO) }
+    private var matchRefreshKey: String {
+        let goalPart = goals
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .map { "\($0.id.uuidString):\($0.title):\($0.note ?? ""):\($0.target ?? 0)" }
+            .joined(separator: "|")
+        let taskPart = tasks
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .map { "\($0.id.uuidString):\($0.title):\($0.tags.joined(separator: ",")):\($0.isCompleted ? 1 : 0):\($0.startDate):\($0.endDate)" }
+            .joined(separator: "|")
+        let habitPart = habits
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .map { habit in
+                let logPart = habit.log
+                    .sorted { $0.key < $1.key }
+                    .map { "\($0.key)=\($0.value)" }
+                    .joined(separator: ",")
+                return "\(habit.id.uuidString):\(habit.title):\(logPart)"
+            }
+            .joined(separator: "|")
+        return "\(yearlyKey)#\(monthlyKey)#\(goalPart)#\(taskPart)#\(habitPart)"
+    }
 
     private var supportingReports: [GoalReportAvailability] {
         let today = JDDate.todayComponents
@@ -5796,7 +5920,7 @@ private struct GoalManagementSheet: View {
                     onClose: { reportPresentation = nil }
                 )
             }
-            .task(id: goals.count + tasks.count + habits.count) {
+            .task(id: matchRefreshKey) {
                 let provider = GoalMatchProvider()
                 yearlyMatches = await provider.fetch(periodType: .yearly, periodKey: yearlyKey)
                 monthlyMatches = await provider.fetch(periodType: .monthly, periodKey: monthlyKey)

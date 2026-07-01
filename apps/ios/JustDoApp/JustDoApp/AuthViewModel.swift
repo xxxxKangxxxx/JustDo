@@ -174,6 +174,39 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    func updateDisplayName(_ displayName: String) async throws {
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            throw SupabaseProfileError.invalidDisplayName
+        }
+        guard let configuration = configurationLoader.load() else {
+            throw SupabaseAuthError.missingConfiguration
+        }
+        guard var session = try sessionStore.load() else {
+            throw SupabaseAuthError.invalidResponse
+        }
+
+        if session.isExpired() {
+            guard let refreshToken = session.refreshToken else {
+                throw SupabaseAuthError.invalidResponse
+            }
+            session = try await authClient.refreshSession(
+                configuration: configuration,
+                refreshToken: refreshToken
+            )
+        }
+
+        try await authClient.updateDisplayName(
+            configuration: configuration,
+            session: session,
+            displayName: trimmedName
+        )
+        session.displayName = trimmedName
+        try sessionStore.save(session)
+        profile = session.profile
+        status = .signedIn
+    }
+
     private static func presentationAnchor() -> ASPresentationAnchor? {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }

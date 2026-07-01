@@ -45,6 +45,12 @@ enum SupabaseAuthError: Error {
     case appleAuthorizationFailed(String)
 }
 
+enum SupabaseProfileError: Error {
+    case invalidDisplayName
+    case invalidResponse
+    case httpStatus(Int, String)
+}
+
 struct SupabaseAuthClient {
     private let session: URLSession
     private let callbackScheme = "justdo"
@@ -149,6 +155,46 @@ struct SupabaseAuthClient {
             body: RefreshTokenRequest(refreshToken: refreshToken)
         )
         return try response.storedSession()
+    }
+
+    func updateDisplayName(
+        configuration: SupabaseAppConfiguration,
+        session storedSession: SupabaseStoredSession,
+        displayName: String
+    ) async throws {
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            throw SupabaseProfileError.invalidDisplayName
+        }
+
+        var components = URLComponents(
+            url: configuration.projectURL.appendingPathComponent("rest/v1/users"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [URLQueryItem(name: "id", value: "eq.\(storedSession.userID.uuidString)")]
+        guard let url = components?.url else {
+            throw SupabaseProfileError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue(configuration.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(storedSession.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+        request.httpBody = try encoder.encode(DisplayNameUpdateRequest(displayName: trimmedName))
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseProfileError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw SupabaseProfileError.httpStatus(
+                httpResponse.statusCode,
+                String(data: data, encoding: .utf8) ?? ""
+            )
+        }
     }
 
     private func authorizeURL(
@@ -397,6 +443,14 @@ private struct RefreshTokenRequest: Encodable {
 
     private enum CodingKeys: String, CodingKey {
         case refreshToken = "refresh_token"
+    }
+}
+
+private struct DisplayNameUpdateRequest: Encodable {
+    var displayName: String
+
+    private enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
     }
 }
 

@@ -1,6 +1,6 @@
 # App Store Submission Next Steps
 
-Updated: 2026-06-24
+Updated: 2026-07-01
 
 ## Ready Assets
 
@@ -61,6 +61,12 @@ Store Connect review notes.
   build 4 smoke.
 - Build 5 finished processing, was attached to internal TestFlight, installed,
   and the habit edit reminder-time refinement was verified on 2026-06-25.
+- Build 6 was archived and uploaded to App Store Connect on 2026-07-01. It
+  includes the build 5 smoke follow-ups for immediate Goal Management progress
+  refresh, active pending-sync retry on iOS and web, and iOS account nickname
+  editing.
+- Build 6 upload succeeded and the uploaded package is processing in App Store
+  Connect.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information
@@ -74,7 +80,8 @@ Store Connect review notes.
 - App Review notes are saved with Sign in with Apple as the primary review path,
   the Google demo account as fallback, and explicit confirmation that this iOS
   build has no IAP, purchase flow, external payment link, or purchase CTA.
-- Next: continue internal smoke from Goal Management.
+- Next: wait for build 6 processing, attach it to internal TestFlight, install
+  it, then rerun the affected smoke sections.
 
 ## Final Local Checks Before Archive
 
