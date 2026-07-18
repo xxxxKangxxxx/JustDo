@@ -41,8 +41,10 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > 모듈 캐시(TTL 30초) + in-flight 디듀프 + 디바운스 250ms + 창 focus force refetch를
 > 추가하고, 표시값을 렌더 중 `useMemo`로 파생(E1 폴백 깜빡임 방지 + effect 내 동기
 > setState 금지 lint 회피). iOS는 `.task(id:)` supersession으로 이미 합쳐져 미변경.
-> 자세한 내용·주의(TTL이 항목 추가 직후 즉시 refetch를 막음, 로그아웃 시 캐시 미클리어)는
-> 2026-06-11 handoff "E3 매칭 fetch 디바운스/캐시" 블록 참고.
+> 자세한 내용·주의(TTL이 항목 추가 직후 즉시 refetch를 막음)는 2026-06-11
+> handoff "E3 매칭 fetch 디바운스/캐시" 블록 참고. 2026-07-16에 web cache
+> key를 user id로 스코프하고 auth user 변경 시 `clearGoalMatchCache()`를
+> 호출하도록 보강해 멀티계정 sign-out/re-login 노출 리스크는 처리 완료.
 >
 > **Next**: (0) ✅ iOS editor sheet keyboard displacement — 2026-06-18 해결. 원인은
 > UIKit `UISheetPresentationController` 동작(detent 시트가 키보드 피해 올라가며
@@ -57,8 +59,8 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > blocker는 코드 외 자산(스크린샷·데모 계정·아이콘·Archive/제출) — `docs/app_store_listing_draft.md`
 > §0 참고; (2) ~~debounce/cache the `goal_semantic_matches`
 > fetch~~ **DONE 2026-06-11 (web)** — follow-ups가 남으면: 항목 mutation 시 해당
-> period 키 캐시 invalidate(즉시 반영), sign-out에서 `cache.clear()`(멀티계정),
-> iOS 공유 actor 캐시(두 화면 중복 제거); (3) E3 threshold tuning / consider a
+> period 키 캐시 invalidate(즉시 반영), iOS 공유 actor 캐시(두 화면 중복 제거).
+> sign-out/re-login 멀티계정 캐시 격리는 2026-07-16 처리 완료; (3) E3 threshold tuning / consider a
 > stored global mean for stability, or merging near-duplicate goals; (4)
 > ~~report **활동 요약 rollups**~~ **DONE 2026-06-14** (web+iOS, 커밋 `689e9b6`:
 > 할 일 완료율·카테고리별 완료율·Habit 달성률·최고 스트릭·가장 많이 밀린 작업,
@@ -186,9 +188,13 @@ Recommended order for the next coding session:
 4. **Toss external track in parallel**
    - Continue owner-side business registration / mail-order sales report /
      Toss Payments merchant review.
-   - Code-side remaining billing work is still Toss test-key E2E, webhook
-     signature verification after dashboard details are available, and DLQ
-     shortly before live billing.
+   - 2026-07-16 code hardening done: temporary `TOSS_WEBHOOK_SECRET` gate for
+     the unregistered Toss webhook, stable webhook event-id rejection, billing
+     month-end clamping, cron secret timing-safe comparison, and
+     `next_billing_at` anchor-based renewal.
+   - Code-side remaining billing work is still Toss test-key/live E2E, official
+     webhook signature verification after dashboard details are available, and
+     DLQ shortly before live billing.
 
 5. **TestFlight/App Store preparation**
    - **Listing draft + submission checklist: `docs/app_store_listing_draft.md`**
@@ -1180,8 +1186,9 @@ Recommended order for the next coding session:
       `POST /api/billing/charge`, `POST /api/webhook/toss`,
       `POST /api/billing/cancel`. 모두 `service-role` client 사용. 테스트 키
       기준 REST 래퍼와 endpoint 골격, webhook 멱등 처리는 구현 완료.
-      Toss webhook signature 검증은 운영 심사/대시보드 설정 단계에서 공식
-      secret/헤더 스펙 확인 후 enable할 남은 항목.
+      2026-07-16에 webhook 등록 전 임시 shared-secret gate와 빈 event-id
+      거절을 추가했다. Toss webhook official signature 검증은 운영 심사/대시보드
+      설정 단계에서 공식 secret/헤더 스펙 확인 후 enable할 남은 항목.
     - [x] B3 정기결제 cron 방향 결정 — AWS EventBridge Scheduler -> Lambda ->
       `/api/billing/charge`, 매일 05:30 KST. Lambda wrapper:
       `infra/aws/billing-cron-lambda.mjs`, 운영 설정 문서:

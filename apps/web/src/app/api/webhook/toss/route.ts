@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  addBillingInterval,
+  authorizedSharedSecret,
+} from "@/lib/billing/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -21,7 +25,17 @@ const subscriptionIdFromOrderId = (orderId: string | null) => {
   return match?.[1] ?? null;
 };
 
+const authorized = (request: Request) =>
+  authorizedSharedSecret(
+    request.headers.get("x-justdo-webhook-secret"),
+    process.env.TOSS_WEBHOOK_SECRET,
+  );
+
 export async function POST(request: Request) {
+  if (!authorized(request)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   let body: TossWebhookBody;
   try {
     body = (await request.json()) as TossWebhookBody;
@@ -29,8 +43,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const eventType =
-    typeof body.eventType === "string" ? body.eventType : "UNKNOWN";
+  const rawEventType = typeof body.eventType === "string" ? body.eventType : null;
+  const eventType = rawEventType ?? "UNKNOWN";
+  const createdAt = typeof body.createdAt === "string" ? body.createdAt : null;
   const data = body.data ?? {};
   const paymentKey =
     typeof data.paymentKey === "string" ? data.paymentKey : null;
@@ -38,7 +53,13 @@ export async function POST(request: Request) {
   const providerEventId =
     typeof body.eventId === "string"
       ? body.eventId
-      : [eventType, paymentKey, orderId, body.createdAt].filter(Boolean).join(":");
+      : rawEventType && paymentKey && orderId && createdAt
+        ? [rawEventType, paymentKey, orderId, createdAt].join(":")
+        : null;
+
+  if (!providerEventId) {
+    return NextResponse.json({ error: "missing_event_id" }, { status: 400 });
+  }
 
   const supabase = getSupabaseServiceRoleClient();
   const payload = JSON.parse(JSON.stringify(body)) as Json;
@@ -81,12 +102,8 @@ export async function POST(request: Request) {
   if (subscription && data.status === "DONE") {
     const approvedAt =
       typeof data.approvedAt === "string" ? data.approvedAt : new Date().toISOString();
-    const next = new Date(approvedAt);
-    if (subscription.plan_interval === "yearly") {
-      next.setFullYear(next.getFullYear() + 1);
-    } else {
-      next.setMonth(next.getMonth() + 1);
-    }
+    const interval = subscription.plan_interval === "yearly" ? "yearly" : "monthly";
+    const next = addBillingInterval(new Date(approvedAt), interval);
 
     const { error } = await supabase
       .from("user_subscriptions")

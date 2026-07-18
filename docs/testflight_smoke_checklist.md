@@ -1,14 +1,14 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-07-01
+Updated: 2026-07-18
 
-Purpose: validate TestFlight internal build 6 follow-ups before deciding whether
+Purpose: validate TestFlight internal build 9 follow-ups before deciding whether
 to submit the iOS v1 build for public App Review.
 
 ## Test Setup
 
 - Device: real iPhone with the TestFlight build installed.
-- Build: App Store Connect / TestFlight internal build 6 after processing and
+- Build: App Store Connect / TestFlight internal build 9 after processing and
   TestFlight attachment.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
@@ -162,8 +162,8 @@ Notes: User confirmed habit add and emoji setting on build 3. Issue H-002 was pa
 Result:
 
 ```text
-Status: PASS WITH KNOWN ISSUE
-Notes: User confirmed Goal Management entry/close, add, target save/denominator update, lock/unlock, locked-card confirmation, unlocked-card edit/save, delete confirmation/delete, and Settings/Home return on build 5. H-004 remains: task completion did not update goal progress immediately; patch is included in uploaded build 6 and needs verification.
+Status: PASS
+Notes: User confirmed Goal Management entry/close, add, target save/denominator update, lock/unlock, locked-card confirmation, unlocked-card edit/save, delete confirmation/delete, and Settings/Home return on build 5. H-004 immediate progress refresh passed on build 6 and passed a light regression check again on build 8.
 ```
 
 ### 8. Report Entry
@@ -213,8 +213,8 @@ Notes: User confirmed account state/sign-out clarity, Settings -> Display -> 위
 Result:
 
 ```text
-Status: PASS WITH FOLLOW-UP
-Notes: User confirmed Home Screen widget add, widget item display, widget task/habit toggle, app reflection after opening, and widget refresh after app foregrounding. H-005 follow-up identified: widget mutations are queued locally and flushed when the app foregrounds/refreshes; uploaded build 6 adds a 3-second pending-sync retry loop while the app is active.
+Status: PASS
+Notes: User confirmed Home Screen widget add, widget item display, widget task/habit toggle, app reflection after opening, and widget refresh after app foregrounding. Build 8 regression verification also confirmed the widget change synced after app foregrounding and remained after relaunch.
 ```
 
 ### 11. Short Offline Check
@@ -231,6 +231,29 @@ Result:
 ```text
 Status: PASS
 Notes: User confirmed Airplane Mode, offline low-risk task/habit change, immediate local UI update, network restore, foreground wait, kill/relaunch, and final state persistence on build 5.
+```
+
+### 12. Build 9 Sheet Presentation
+
+- [ ] Open account detail and confirm nickname editing remains usable.
+- [ ] Open Task start/end date and time pickers from add and edit flows.
+- [ ] Open Task/Habit reminder-time pickers.
+- [ ] Open Settings notification-time, week-start, and widget-color sheets.
+- [ ] Open a selected calendar day with tasks/habits.
+- [ ] Open Settings `습관`, nested `습관 관리`, `목표`, and
+  `카테고리 관리`.
+- [ ] Confirm each surface uses the same large-sheet position as Terms/Privacy.
+- [ ] Confirm no bottom corner or underlying screen is visible below the sheet.
+- [ ] Confirm close, complete, cancel, save, scrolling, and keyboard behavior.
+- [ ] Tap `데이터 내보내기` and confirm its sheet appears immediately above
+  Settings without returning to Home.
+- [ ] Share the generated CSV and dismiss the sheet.
+
+Result:
+
+```text
+Status: PENDING BUILD 9 TESTFLIGHT
+Notes: Build 8 reproduced the detached-bottom presentation in every affected compact sheet and delayed data-export presentation until Settings was dismissed. Build 9 was uploaded on 2026-07-18 and is processing in App Store Connect.
 ```
 
 ## Issue Log
@@ -294,7 +317,7 @@ Expected: The goal card progress updates immediately after the related task comp
 Actual: The target denominator updated correctly, and the related task eventually changed progress, but the progress did not refresh immediately after completion.
 Screenshot or screen recording: Not needed; user reported during build 5 Goal Management smoke.
 Reproducible: Yes, from user smoke.
-Notes: Patched in uploaded build 6 by changing GoalManagementSheet semantic-match refresh from count-only to a data-derived key that includes goal text/target, task title/tags/completion/date, and habit log changes. Needs build 6 affected-section verification after processing/TestFlight install.
+Notes: Patched in build 6 by changing GoalManagementSheet semantic-match refresh from count-only to a data-derived key that includes goal text/target, task title/tags/completion/date, and habit log changes. Passed on build 6 and passed a light regression check on build 8.
 ```
 
 ```text
@@ -306,7 +329,31 @@ Expected: Ideally, widget mutations would reach Supabase immediately when networ
 Actual: Build 5 widget actions optimistically update the App Group widget snapshot and append `mutation_queue.jsonl`. The app drains and flushes this queue during launch/foreground widget refresh, so server sync may wait until the app is opened/foregrounded/refreshed.
 Screenshot or screen recording: Not needed; user reported during build 5 widget smoke.
 Reproducible: Expected from current architecture.
-Notes: Not an App Review blocker for build 5 because local widget feedback and app reflection after foreground work. Patched in uploaded build 6 with app-side 3-second pending-sync retry while active; larger future option is immediate widget-extension upload when session/network are available.
+Notes: Not an App Review blocker for build 5 because local widget feedback and app reflection after foreground work. Patched in build 6 with app-side 3-second pending-sync retry while active. Build 8 regression verification passed, including persistence after relaunch.
+```
+
+```text
+ID: H-006
+Severity: medium
+Area: iOS sheet presentation
+Steps: Open account, date/time, notification-time, week-start, widget-color, data-export, or selected-day sheets on build 8.
+Expected: The sheet uses the same bottom-attached presentation as Terms and Privacy, with no underlying screen visible below it.
+Actual: The compact sheet appeared detached from the bottom edge and exposed the underlying screen below its rounded bottom corners.
+Screenshot or screen recording: User supplied a build 7 account-sheet screenshot and confirmed the same behavior across build 8 affected sheets.
+Reproducible: Yes, on build 8 real device.
+Notes: Build 9 replaces the affected fixed-height detents with large sheets and also aligns Habit, Habit Management, Goal, and Category Management presentation. Pending TestFlight verification.
+```
+
+```text
+ID: H-007
+Severity: medium
+Area: Settings / data export presentation
+Steps: Open Settings and tap 데이터 내보내기 with a Pro tester account.
+Expected: The CSV share sheet appears immediately above Settings.
+Actual: No sheet appeared until Settings was closed and Home became visible.
+Screenshot or screen recording: Not needed; user reported during build 8 smoke.
+Reproducible: Yes, on build 8 real device.
+Notes: Build 9 moves export-file sheet state from HomeRootView to SettingsRootTabView. Pending TestFlight verification.
 ```
 
 ## Release Decision
@@ -321,6 +368,6 @@ Decision:
 
 ```text
 Status: FIX REQUIRED
-Reason: Build 5 smoke passed the full checklist, and build 6 has been uploaded with H-004, H-005, web/iOS pending-sync retry, and account nickname editing changes. Those changes still need TestFlight verification before App Review submission.
-Next action: Wait for build 6 processing, attach/install it through internal TestFlight, then rerun affected sections: Goal Management progress refresh, Widget/sync retry, Settings account nickname editing, and a short offline/pending-sync check.
+Reason: Build 7 verified task add, task completion, and Goal add automatic sync. Build 8 still reproduced the detached-bottom presentation across all affected compact sheets and delayed data export until Settings was dismissed. Build 9 has been uploaded with the fixes but is not yet verified on a real device.
+Next action: Wait for build 9 processing, attach/install it through internal TestFlight, then run section 12. Widget mutation flush and Goal Management regression both passed on build 8.
 ```

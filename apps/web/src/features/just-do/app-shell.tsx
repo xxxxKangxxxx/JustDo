@@ -40,7 +40,7 @@ import {
   periodTaskCompletion,
   tasksOnDate,
 } from "./selectors";
-import { useGoalMatches } from "./semantic-matches";
+import { clearGoalMatchCache, useGoalMatches } from "./semantic-matches";
 import { JustDoProvider, useJustDo } from "./store";
 import { isTagCommitKey, mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
@@ -213,6 +213,16 @@ export function JustDoApp({ storage }: { storage?: JustDoStorage } = {}) {
 
 function JustDoAppWithAuth({ storage }: { storage?: JustDoStorage }) {
   const { status, user } = useAuth();
+  const previousUserId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const nextUserId = user?.id ?? null;
+    if (previousUserId.current !== nextUserId) {
+      clearGoalMatchCache();
+      previousUserId.current = nextUserId;
+    }
+  }, [user?.id]);
+
   if (status === "loading") return <LoadingViewport mode="light" />;
   return (
     <JustDoProvider userId={user?.id ?? null} storage={storage}>
@@ -2645,7 +2655,7 @@ function GoalPeriodSection({
 }) {
   const t = webTokens(mode);
   const auth = useAuth();
-  const matches = useGoalMatches(periodType, periodKey, !!auth.user, goals.length + tasks.length + habits.length);
+  const matches = useGoalMatches(periodType, periodKey, !!auth.user, goals.length + tasks.length + habits.length, auth.user?.id ?? null);
   const progress = goalProgressForPeriod(goals, tasks, habits, periodType, periodKey, todayISO(), matches);
   const color = periodType === "yearly" ? t.me : t.habit;
   return (
@@ -2850,7 +2860,7 @@ function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: T
   const auth = useAuth();
   const t = webTokens(mode);
   const [step, setStep] = useState(0);
-  const matches = useGoalMatches(target.periodType, target.periodKey, !!auth.user, s.state.goals.length + s.state.tasks.length + s.state.habits.length);
+  const matches = useGoalMatches(target.periodType, target.periodKey, !!auth.user, s.state.goals.length + s.state.tasks.length + s.state.habits.length, auth.user?.id ?? null);
   const progress = goalProgressForPeriod(s.state.goals, s.state.tasks, s.state.habits, target.periodType, target.periodKey, todayISO(), matches);
   const heatmap = periodActivityHeatmap(s.state.tasks, s.state.habits, target.periodType, target.periodKey);
   // 활동 요약 rollups (period-wide, independent of goals).

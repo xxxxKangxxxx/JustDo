@@ -517,11 +517,11 @@ private struct HomeRootView: View {
     @State private var editingHabit: Habit?
     @State private var isShowingDayPanel = false
     @AppStorage("justdo.isDarkMode") private var isDarkMode = false
-    @State private var exportURL: ExportFile?
     @State private var goalReportPresentation: GoalReportPresentation?
     @State private var goalPromptPresentation: GoalPromptPresentation?
     @State private var suppressedGoalPromptIDs: Set<String> = []
     @State private var pendingSyncTask: _Concurrency.Task<Void, Never>?
+    @State private var automaticSyncRetryCount = 0
     @State private var loadError: String?
     @State private var actionMessage: String?
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
@@ -597,13 +597,6 @@ private struct HomeRootView: View {
                 )
             }
         }
-        .sheet(item: $exportURL) { file in
-            DataExportSheet(url: file.url)
-                .presentationDetents([.height(220)])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(22)
-                .presentationBackground(JDTheme.surface)
-        }
         .sheet(isPresented: $isShowingDayPanel) {
             SelectedDayPanel(
                 selectedDate: selectedDate,
@@ -624,9 +617,8 @@ private struct HomeRootView: View {
                     }
                 }
             )
-            .presentationDetents([.height(500), .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 30)
@@ -646,12 +638,21 @@ private struct HomeRootView: View {
         }
         .onChange(of: syncStatus.status) { _, status in
             switch status {
-            case .synced, .pending:
-                loadSnapshot(preserveViewSelection: true)
-                schedulePendingSyncIfNeeded(status)
-            case .unknown, .syncing, .failed:
+            case .synced:
+                automaticSyncRetryCount = 0
                 pendingSyncTask?.cancel()
                 pendingSyncTask = nil
+                loadSnapshot(preserveViewSelection: true)
+            case .pending:
+                loadSnapshot(preserveViewSelection: true)
+                schedulePendingSyncIfNeeded(status)
+            case .failed:
+                schedulePendingSyncIfNeeded(status)
+            case .unknown:
+                pendingSyncTask?.cancel()
+                pendingSyncTask = nil
+                break
+            case .syncing:
                 break
             }
         }
@@ -1661,10 +1662,10 @@ private struct HomeRootView: View {
         }
     }
 
-    private func exportData() {
+    private func exportData() -> ExportFile? {
         guard let snapshot else {
             actionMessage = "Export data is unavailable."
-            return
+            return nil
         }
 
         do {
@@ -1672,10 +1673,11 @@ private struct HomeRootView: View {
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("justdo-export-\(JDDate.todayISO).csv")
             try csv.write(to: url, atomically: true, encoding: .utf8)
-            exportURL = ExportFile(url: url)
             actionMessage = "Export file is ready."
+            return ExportFile(url: url)
         } catch {
             actionMessage = "Could not export data."
+            return nil
         }
     }
 
@@ -1718,6 +1720,7 @@ private struct HomeRootView: View {
             actionMessage = "Local mirror is unavailable."
             return
         }
+        automaticSyncRetryCount = 0
         syncStatus.markSyncing()
         _Concurrency.Task {
             do {
@@ -1734,15 +1737,41 @@ private struct HomeRootView: View {
     }
 
     private func schedulePendingSyncIfNeeded(_ status: AppSyncStatus) {
-        guard case .pending(let count) = status, count > 0 else {
+        let count: Int
+        let isFailed: Bool
+        switch status {
+        case .pending(let pendingCount):
+            count = pendingCount
+            isFailed = false
+            automaticSyncRetryCount = 0
+        case .failed(_, let pendingCount):
+            count = pendingCount
+            isFailed = true
+        default:
+            count = 0
+            isFailed = false
+        }
+
+        guard count > 0 else {
             pendingSyncTask?.cancel()
             pendingSyncTask = nil
             return
+        }
+        if isFailed {
+            guard automaticSyncRetryCount < 3 else {
+                pendingSyncTask?.cancel()
+                pendingSyncTask = nil
+                return
+            }
+            automaticSyncRetryCount += 1
         }
         pendingSyncTask?.cancel()
         pendingSyncTask = _Concurrency.Task {
             try? await _Concurrency.Task.sleep(nanoseconds: 3_000_000_000)
             guard !_Concurrency.Task.isCancelled else { return }
+            await MainActor.run {
+                pendingSyncTask = nil
+            }
             await onRequestSync()
         }
     }
@@ -2205,11 +2234,19 @@ private struct SelectedDayPanel: View {
     @State private var editingTask: Task?
     @State private var editingHabit: Habit?
     @State private var isShowingJustDoMode = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        listView
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+        VStack(spacing: 0) {
+            SheetCloseHeader(
+                title: "\(components.month)월 \(components.day)일",
+                onClose: { dismiss() }
+            )
+            listView
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+        }
+        .background(JDTheme.background)
             .fullScreenCover(item: $editingTask) { task in
                 EditorScreen {
                     TaskDetailEditor(
@@ -2244,7 +2281,7 @@ private struct SelectedDayPanel: View {
     private var listView: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: 0) {
-                dragHeader
+                daySummary
                 modePicker
                     .padding(.bottom, 8)
 
@@ -2310,10 +2347,8 @@ private struct SelectedDayPanel: View {
         }
     }
 
-    private var dragHeader: some View {
+    private var daySummary: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("\(components.month)월 \(components.day)일")
-                .font(.system(size: 18, weight: .bold))
             Text("\(weekdayName)요일\(selectedDate == JDDate.todayISO ? " · 오늘" : "")")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(JDTheme.secondaryText)
@@ -2322,7 +2357,7 @@ private struct SelectedDayPanel: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(JDTheme.tertiaryText)
         }
-        .padding(.top, 18)
+        .padding(.top, 4)
         .padding(.bottom, 8)
     }
 
@@ -2931,9 +2966,8 @@ private struct AddTaskSheet: View {
                     editingScheduleField = nil
                 }
             )
-            .presentationDetents([.height(330)])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
         .sheet(isPresented: $isShowingReminderPicker) {
@@ -2945,9 +2979,8 @@ private struct AddTaskSheet: View {
                     isShowingReminderPicker = false
                 }
             )
-            .presentationDetents([.height(280)])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
     }
@@ -3116,7 +3149,7 @@ private struct DateTimeWheelSheet: View {
             .frame(height: 220)
             .clipped()
         }
-        .background(JDTheme.surface)
+        .justDoBottomSheetSurface()
     }
 }
 
@@ -3413,12 +3446,15 @@ private struct StatsRootTabView: View {
             .padding(.top, 18)
         }
         .background(JDTheme.background)
-        .fullScreenCover(isPresented: $isShowingHabitManager) {
+        .sheet(isPresented: $isShowingHabitManager) {
             HabitManagementSheet(
                 habits: habits,
                 onAdd: onAddHabit,
                 onDelete: onDeleteHabit
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(JDTheme.surface)
         }
     }
 
@@ -3463,7 +3499,7 @@ private struct SettingsRootTabView: View {
     let onSaveCategory: (JDCategory) -> Void
     let onDeleteCategory: (JDCategory) -> Void
     let onSetWidgetColors: (WidgetModeColors) -> Void
-    let onExportData: () -> Void
+    let onExportData: () -> ExportFile?
     let onResetData: () -> Void
     let onRetrySync: () -> Void
     let onUpdateDisplayName: (String) async throws -> Void
@@ -3482,6 +3518,7 @@ private struct SettingsRootTabView: View {
     @State private var isShowingGoalManager = false
     @State private var isShowingCategoryManager = false
     @State private var isShowingWidgetColorSheet = false
+    @State private var exportURL: ExportFile?
     @State private var legalDocument: LegalDocument?
     @State private var settingsMessage: String?
     @State private var widgetColors = WidgetModeColors(
@@ -3599,7 +3636,7 @@ private struct SettingsRootTabView: View {
                                 settingsMessage = "데이터 내보내기는 Pro 버전에서 사용할 수 있습니다."
                                 return
                             }
-                            onExportData()
+                            exportURL = onExportData()
                         }
                     )
                     SettingsRow(
@@ -3663,12 +3700,11 @@ private struct SettingsRootTabView: View {
                     accountMessage = "회원 탈퇴는 서버 API 연결 후 활성화됩니다."
                 }
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
-        .fullScreenCover(isPresented: $isShowingStats) {
+        .sheet(isPresented: $isShowingStats) {
             StatsRootTabView(
                 snapshot: snapshot,
                 year: year,
@@ -3678,8 +3714,11 @@ private struct SettingsRootTabView: View {
                 onDeleteHabit: onDeleteHabit,
                 onDismiss: { isShowingStats = false }
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(JDTheme.surface)
         }
-        .fullScreenCover(isPresented: $isShowingGoalManager) {
+        .sheet(isPresented: $isShowingGoalManager) {
             GoalManagementSheet(
                 goals: snapshot?.goals ?? [],
                 tasks: snapshot?.tasks ?? [],
@@ -3690,14 +3729,20 @@ private struct SettingsRootTabView: View {
                 onSaveGoal: onSaveGoal,
                 onDeleteGoal: onDeleteGoal
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(JDTheme.surface)
         }
-        .fullScreenCover(isPresented: $isShowingCategoryManager) {
+        .sheet(isPresented: $isShowingCategoryManager) {
             CategoryManagementSheet(
                 categories: snapshot?.categories ?? [],
                 onAdd: onAddCategory,
                 onSave: onSaveCategory,
                 onDelete: onDeleteCategory
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(JDTheme.surface)
         }
         .sheet(isPresented: $isShowingNotifyTimePicker) {
             TimePickerSheet(
@@ -3708,9 +3753,8 @@ private struct SettingsRootTabView: View {
                     isShowingNotifyTimePicker = false
                 }
             )
-            .presentationDetents([.height(280)])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
         .sheet(isPresented: $isShowingWeekStartPicker) {
@@ -3721,9 +3765,8 @@ private struct SettingsRootTabView: View {
                     isShowingWeekStartPicker = false
                 }
             )
-            .presentationDetents([.height(280)])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
         .sheet(isPresented: $isShowingWidgetColorSheet) {
@@ -3738,16 +3781,20 @@ private struct SettingsRootTabView: View {
                     isShowingWidgetColorSheet = false
                 }
             )
-            .presentationDetents([.height(430)])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
         .sheet(item: $legalDocument) { document in
             LegalDocumentSheet(document: document)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationCornerRadius(22)
+                .presentationBackground(JDTheme.surface)
+        }
+        .sheet(item: $exportURL) { file in
+            DataExportSheet(url: file.url)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
                 .presentationBackground(JDTheme.surface)
         }
         .confirmationDialog(
@@ -3831,7 +3878,7 @@ private struct TimePickerSheet: View {
                 .frame(height: 170)
                 .clipped()
         }
-        .background(JDTheme.surface)
+        .justDoBottomSheetSurface()
     }
 }
 
@@ -3865,7 +3912,7 @@ private struct WeekStartPickerSheet: View {
             .frame(height: 170)
             .clipped()
         }
-        .background(JDTheme.surface)
+        .justDoBottomSheetSurface()
     }
 }
 
@@ -3881,101 +3928,107 @@ private struct AccountDetailSheet: View {
     @State private var displayNameText = ""
     @State private var isSavingDisplayName = false
     @State private var displayNameMessage: String?
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 14) {
-                Circle()
-                    .fill(LinearGradient(colors: [JDTheme.me, JDTheme.habit], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 48, height: 48)
-                    .overlay {
-                        Text(profile.initials)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profile.title)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(JDTheme.primaryText)
-                    Text(profile.detail)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(JDTheme.secondaryText)
-                }
-                Spacer()
-            }
-            .padding(.top, 10)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("닉네임")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(JDTheme.tertiaryText)
-                HStack(spacing: 10) {
-                    TextField("닉네임", text: $displayNameText)
-                        .font(.system(size: 14, weight: .semibold))
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                        .padding(.horizontal, 12)
-                        .frame(height: 42)
-                        .background(JDTheme.surface)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                    Button {
-                        _Concurrency.Task { await saveDisplayName() }
-                    } label: {
-                        if isSavingDisplayName {
-                            ProgressView()
-                                .tint(.white)
-                                .frame(width: 44, height: 38)
-                        } else {
-                            Text("저장")
-                                .font(.system(size: 13, weight: .bold))
-                                .frame(width: 44, height: 38)
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: "계정", onClose: { dismiss() })
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 14) {
+                    Circle()
+                        .fill(LinearGradient(colors: [JDTheme.me, JDTheme.habit], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 48, height: 48)
+                        .overlay {
+                            Text(profile.initials)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(.white)
                         }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profile.title)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(JDTheme.primaryText)
+                        Text(profile.detail)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(JDTheme.secondaryText)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
-                    .background(canSaveDisplayName ? JDTheme.primaryText : JDTheme.divider)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .disabled(!canSaveDisplayName || isSavingDisplayName)
+                    Spacer()
                 }
-                if let displayNameMessage {
-                    Text(displayNameMessage)
-                        .font(.system(size: 11.5, weight: .semibold))
+                .padding(.top, 10)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("닉네임")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                    HStack(spacing: 10) {
+                        TextField("닉네임", text: $displayNameText)
+                            .font(.system(size: 14, weight: .semibold))
+                            .textInputAutocapitalization(.never)
+                            .disableAutocorrection(true)
+                            .padding(.horizontal, 12)
+                            .frame(height: 42)
+                            .background(JDTheme.surface)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(JDTheme.divider, lineWidth: 0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                        Button {
+                            _Concurrency.Task { await saveDisplayName() }
+                        } label: {
+                            if isSavingDisplayName {
+                                ProgressView()
+                                    .tint(.white)
+                                    .frame(width: 44, height: 38)
+                            } else {
+                                Text("저장")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .frame(width: 44, height: 38)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                        .background(canSaveDisplayName ? JDTheme.primaryText : JDTheme.divider)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .disabled(!canSaveDisplayName || isSavingDisplayName)
+                    }
+                    if let displayNameMessage {
+                        Text(displayNameMessage)
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(JDTheme.secondaryText)
+                    }
+                }
+
+                VStack(spacing: 0) {
+                    AccountInfoRow(title: "이름", value: profile.title)
+                    AccountInfoRow(title: "이메일", value: profile.email ?? "-")
+                    AccountInfoRow(title: "로그인 방식", value: profile.loginMethodTitle ?? "-")
+                    AccountInfoRow(title: "현재 플랜", value: plan, isLast: true)
+                }
+                .background(JDTheme.surfaceAlt)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                VStack(spacing: 0) {
+                    SettingsRow(title: "계정 변경", chevron: true, action: onChangeAccount)
+                    SettingsRow(title: "로그아웃", danger: true, action: onSignOut)
+                    SettingsRow(title: "회원 탈퇴", danger: true, isLast: true, action: onDeleteAccount)
+                }
+                .background(JDTheme.surfaceAlt)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                if let message {
+                    Text(message)
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(JDTheme.secondaryText)
+                        .padding(.horizontal, 2)
                 }
-            }
 
-            VStack(spacing: 0) {
-                AccountInfoRow(title: "이름", value: profile.title)
-                AccountInfoRow(title: "이메일", value: profile.email ?? "-")
-                AccountInfoRow(title: "로그인 방식", value: profile.loginMethodTitle ?? "-")
-                AccountInfoRow(title: "현재 플랜", value: plan, isLast: true)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .background(JDTheme.surfaceAlt)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            VStack(spacing: 0) {
-                SettingsRow(title: "계정 변경", chevron: true, action: onChangeAccount)
-                SettingsRow(title: "로그아웃", danger: true, action: onSignOut)
-                SettingsRow(title: "회원 탈퇴", danger: true, isLast: true, action: onDeleteAccount)
-            }
-            .background(JDTheme.surfaceAlt)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            if let message {
-                Text(message)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(JDTheme.secondaryText)
-                    .padding(.horizontal, 2)
-            }
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .background(JDTheme.surface)
+        .background(JDTheme.background)
         .onAppear {
             displayNameText = profile.displayName ?? ""
         }
@@ -4057,33 +4110,36 @@ private func dismissKeyboard() {
 
 private struct DataExportSheet: View {
     let url: URL
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("데이터 내보내기")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(JDTheme.primaryText)
-            Text("CSV 파일이 준비되었습니다. Excel 또는 Numbers에서 열 수 있습니다.")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(JDTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            ShareLink(item: url) {
-                HStack(spacing: 8) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("CSV 파일 공유")
-                        .font(.system(size: 14, weight: .semibold))
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: "데이터 내보내기", onClose: { dismiss() })
+            VStack(alignment: .leading, spacing: 16) {
+                Text("CSV 파일이 준비되었습니다. Excel 또는 Numbers에서 열 수 있습니다.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(JDTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                ShareLink(item: url) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("CSV 파일 공유")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(JDTheme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(JDTheme.accent)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
-        .padding(20)
-        .background(JDTheme.surface)
+        .background(JDTheme.background)
     }
 }
 
@@ -7066,7 +7122,7 @@ private struct WidgetColorPickerSheet: View {
             .padding(.top, 4)
             Spacer(minLength: 0)
         }
-        .background(JDTheme.surface)
+        .justDoBottomSheetSurface()
         .onAppear {
             taskHex = colors.task
             habitHex = colors.habit
@@ -7319,6 +7375,13 @@ private enum JDTheme {
         Color(UIColor { traits in
             UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light) ?? .clear
         })
+    }
+}
+
+private extension View {
+    func justDoBottomSheetSurface(alignment: Alignment = .top) -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+            .background(JDTheme.surface.ignoresSafeArea())
     }
 }
 
@@ -7713,9 +7776,8 @@ private struct TaskDetailEditor: View {
                     editingScheduleField = nil
                 }
             )
-            .presentationDetents([.height(330)])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
         .alert("Task 삭제", isPresented: $isShowingDeleteConfirmation) {
@@ -7920,9 +7982,8 @@ private struct HabitDetailEditor: View {
                     isShowingReminderPicker = false
                 }
             )
-            .presentationDetents([.height(280)])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(22)
             .presentationBackground(JDTheme.surface)
         }
     }

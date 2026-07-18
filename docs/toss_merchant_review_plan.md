@@ -18,6 +18,12 @@ Current app state:
 - Toss Payments test-key billing flow is wired in the app.
 - Billing API routes exist, including `/api/billing/issue-key`,
   `/api/billing/charge`, `/api/billing/cancel`, and `/api/webhook/toss`.
+- `/api/webhook/toss` is not registered in the Toss dashboard yet. Until Toss
+  webhook signature secret/header details are confirmed, the route is protected
+  by a Just Do shared-secret header (`x-justdo-webhook-secret` matched against
+  server env `TOSS_WEBHOOK_SECRET`) and should not be exposed as an active Toss
+  webhook without either that temporary gate or Toss official signature
+  verification.
 - Recurring billing cron infrastructure exists: AWS EventBridge Scheduler ->
   Lambda -> `/api/billing/charge`, daily 05:30 KST. Manual and first scheduled
   runs were confirmed. DLQ remains a live-billing-before-launch follow-up.
@@ -136,9 +142,14 @@ These need the owner's confirmation before filing applications.
   `https://www.justdo.co.kr/api/webhook/toss`.
 - [ ] Record the webhook signature secret/header details from the Toss
   dashboard.
+- [ ] Replace the temporary `TOSS_WEBHOOK_SECRET` shared-secret gate with Toss
+  official webhook signature verification if the dashboard does not support a
+  custom `x-justdo-webhook-secret` header.
 - [ ] Update Amplify environment variables:
   - `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`
   - `TOSS_PAYMENTS_SECRET_KEY`
+  - `TOSS_WEBHOOK_SECRET` (temporary, until official Toss signature
+    verification is implemented)
 - [ ] Redeploy Amplify.
 - [ ] Implement/enable Toss webhook signature verification in
   `apps/web/src/app/api/webhook/toss/route.ts`.

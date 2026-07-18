@@ -1,6 +1,6 @@
 # App Store Submission Next Steps
 
-Updated: 2026-07-01
+Updated: 2026-07-18
 
 ## Ready Assets
 
@@ -65,8 +65,31 @@ Store Connect review notes.
   includes the build 5 smoke follow-ups for immediate Goal Management progress
   refresh, active pending-sync retry on iOS and web, and iOS account nickname
   editing.
-- Build 6 upload succeeded and the uploaded package is processing in App Store
-  Connect.
+- Build 6 was installed and targeted validation resumed on 2026-07-16. H-004
+  Goal Management immediate progress refresh passed, but pending-sync automatic
+  retry failed: after a Goal add, sync entered failed state and did not retry
+  automatically; manual `다시 시도` completed sync. Release decision for build 6
+  remains FIX REQUIRED.
+- Build 7 was archived and uploaded to App Store Connect on 2026-07-16. It
+  includes the pending-sync automatic retry self-cancel fix, capped retry for
+  failed sync states with pending mutations, and the account-detail sheet height
+  fix for the added nickname section. Build 7 targeted smoke resumed on
+  2026-07-18: install/login passed, task add sync passed, task completion sync
+  passed, and Goal add sync passed. Account-detail behavior was functional, but
+  the sheet height was too tall and the bottom sheet surface looked visually
+  detached.
+- Build 8 was archived and uploaded to App Store Connect on 2026-07-18. It
+  refines the bottom sheet heights and applies a shared bottom-sheet surface
+  fill to the app's compact sheet views so the sheet background reaches the
+  bottom instead of looking like a floating card. Real-device validation showed
+  the detached-bottom appearance still occurred in all affected compact sheets.
+  Data export also opened only after leaving Settings because its presentation
+  state was owned by Home.
+- Build 9 was archived and uploaded to App Store Connect on 2026-07-18. It
+  converts the affected compact and management surfaces to the same large-sheet
+  presentation used by Terms and Privacy, and moves export presentation
+  ownership into Settings so the share sheet opens immediately. App Store
+  Connect reported that the uploaded package is processing.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information
@@ -80,8 +103,9 @@ Store Connect review notes.
 - App Review notes are saved with Sign in with Apple as the primary review path,
   the Google demo account as fallback, and explicit confirmation that this iOS
   build has no IAP, purchase flow, external payment link, or purchase CTA.
-- Next: wait for build 6 processing, attach it to internal TestFlight, install
-  it, then rerun the affected smoke sections.
+- Next: wait for build 9 processing, attach/install it through internal
+  TestFlight, then verify the unified large-sheet visuals and immediate data
+  export. Widget mutation flush and Goal Management regression passed on build 8.
 
 ## Final Local Checks Before Archive
 

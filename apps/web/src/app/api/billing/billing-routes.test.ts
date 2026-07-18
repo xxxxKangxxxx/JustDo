@@ -86,6 +86,20 @@ beforeEach(() => {
   mocks.chargeTossBillingKey.mockReset();
   mocks.deleteTossBillingKey.mockReset();
   process.env.BILLING_CRON_SECRET = "cron-secret";
+  process.env.TOSS_WEBHOOK_SECRET = "webhook-secret";
+});
+
+describe("billing server helpers", () => {
+  it("advances billing dates to the target month end when needed", async () => {
+    const { addBillingInterval } = await import("@/lib/billing/server");
+
+    expect(addBillingInterval(new Date("2026-01-31T00:00:00.000Z"), "monthly").toISOString())
+      .toBe("2026-02-28T00:00:00.000Z");
+    expect(addBillingInterval(new Date("2028-01-31T00:00:00.000Z"), "monthly").toISOString())
+      .toBe("2028-02-29T00:00:00.000Z");
+    expect(addBillingInterval(new Date("2028-02-29T00:00:00.000Z"), "yearly").toISOString())
+      .toBe("2029-02-28T00:00:00.000Z");
+  });
 });
 
 describe("billing issue-key route", () => {
@@ -159,6 +173,7 @@ describe("billing charge route", () => {
           plan_interval: "monthly",
           amount_krw: 1900,
           payment_failures: 0,
+          next_billing_at: "2026-01-31T00:00:00.000Z",
         },
       ],
       error: null,
@@ -203,6 +218,8 @@ describe("billing charge route", () => {
       expect.objectContaining({
         status: "active",
         payment_failures: 0,
+        expires_at: "2026-02-28T00:00:00.000Z",
+        next_billing_at: "2026-02-28T00:00:00.000Z",
         toss_last_payment_key: "payment-key",
       }),
     );
@@ -227,6 +244,7 @@ describe("billing charge route", () => {
           plan_interval: "monthly",
           amount_krw: 1900,
           payment_failures: 2,
+          next_billing_at: "2026-05-19T00:00:00.000Z",
         },
       ],
       error: null,
@@ -401,18 +419,21 @@ describe("toss webhook route", () => {
 
     const { POST } = await import("../webhook/toss/route");
     const response = await POST(
-      jsonRequest({
-        eventId: "event-1",
-        eventType: "PAYMENT_STATUS_CHANGED",
-        createdAt: "2026-05-19T00:00:00.000Z",
-        data: {
-          paymentKey: "payment-key",
-          orderId: `justdo-${subscriptionId}-1710000000000`,
-          status: "DONE",
-          approvedAt: "2026-05-19T00:00:00.000Z",
-          totalAmount: 9900,
+      jsonRequest(
+        {
+          eventId: "event-1",
+          eventType: "PAYMENT_STATUS_CHANGED",
+          createdAt: "2026-01-31T00:00:00.000Z",
+          data: {
+            paymentKey: "payment-key",
+            orderId: `justdo-${subscriptionId}-1710000000000`,
+            status: "DONE",
+            approvedAt: "2026-01-31T00:00:00.000Z",
+            totalAmount: 9900,
+          },
         },
-      }),
+        { headers: { "x-justdo-webhook-secret": "webhook-secret" } },
+      ),
     );
 
     expect(response.status).toBe(200);
@@ -429,9 +450,40 @@ describe("toss webhook route", () => {
       expect.objectContaining({
         status: "active",
         plan_name: "pro",
+        expires_at: "2027-01-31T00:00:00.000Z",
+        next_billing_at: "2027-01-31T00:00:00.000Z",
         toss_last_payment_key: "payment-key",
         payment_failures: 0,
       }),
     );
+  });
+
+  it("rejects webhook requests without the configured shared secret", async () => {
+    const { POST } = await import("../webhook/toss/route");
+    const response = await POST(
+      jsonRequest({
+        eventId: "event-1",
+        eventType: "PAYMENT_STATUS_CHANGED",
+        data: { status: "DONE" },
+      }),
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects webhook events without a stable provider event id", async () => {
+    const { POST } = await import("../webhook/toss/route");
+    const response = await POST(
+      jsonRequest(
+        {
+          eventType: "PAYMENT_STATUS_CHANGED",
+          data: { status: "DONE" },
+        },
+        { headers: { "x-justdo-webhook-secret": "webhook-secret" } },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "missing_event_id" });
   });
 });

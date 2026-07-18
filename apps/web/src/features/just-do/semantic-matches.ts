@@ -54,8 +54,12 @@ type CacheEntry = { map: GoalMatchMap | null; fetchedAt: number };
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<GoalMatchMap | null>>();
 
-function cacheKey(periodType: GoalPeriodType, periodKey: string): string {
-  return `${periodType}:${periodKey}`;
+function cacheKey(
+  userScope: string | null,
+  periodType: GoalPeriodType,
+  periodKey: string,
+): string {
+  return `${userScope ?? "anonymous"}:${periodType}:${periodKey}`;
 }
 
 function freshCached(key: string): CacheEntry | null {
@@ -74,8 +78,9 @@ export async function loadGoalMatches(
   periodType: GoalPeriodType,
   periodKey: string,
   force = false,
+  userScope: string | null = null,
 ): Promise<GoalMatchMap | null> {
-  const key = cacheKey(periodType, periodKey);
+  const key = cacheKey(userScope, periodType, periodKey);
   if (!force) {
     const cached = freshCached(key);
     if (cached) return cached.map;
@@ -94,6 +99,11 @@ export async function loadGoalMatches(
   return request;
 }
 
+export function clearGoalMatchCache() {
+  cache.clear();
+  inflight.clear();
+}
+
 /**
  * Fetches semantic matches for a period. Returns null while loading, offline, or
  * disabled (guest), in which case the progress selector uses the E1 fallback.
@@ -105,8 +115,9 @@ export function useGoalMatches(
   periodKey: string,
   enabled: boolean,
   revision = 0,
+  userScope: string | null = null,
 ): GoalMatchMap | null {
-  const key = cacheKey(periodType, periodKey);
+  const key = cacheKey(userScope, periodType, periodKey);
   // The async result for the current key. Set only from async callbacks so the
   // effects never call setState synchronously.
   const [resolved, setResolved] = useState<{ key: string; map: GoalMatchMap | null } | null>(null);
@@ -118,7 +129,7 @@ export function useGoalMatches(
     if (freshCached(key)) return; // cache is fresh — rendered below, skip network.
     let cancelled = false;
     const timer = setTimeout(() => {
-      loadGoalMatches(periodType, periodKey).then((map) => {
+      loadGoalMatches(periodType, periodKey, false, userScope).then((map) => {
         if (!cancelled) setResolved({ key, map });
       });
     }, DEBOUNCE_MS);
@@ -126,7 +137,7 @@ export function useGoalMatches(
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [key, periodType, periodKey, enabled, revision]);
+  }, [key, periodType, periodKey, enabled, revision, userScope]);
 
   // Refetch on window focus so items embedded after the last load (pg_cron runs
   // up to ~1 min behind) show up when the user returns to the tab.
@@ -134,7 +145,7 @@ export function useGoalMatches(
     if (!enabled || typeof window === "undefined") return;
     let cancelled = false;
     const onFocus = () => {
-      loadGoalMatches(periodType, periodKey, true).then((map) => {
+      loadGoalMatches(periodType, periodKey, true, userScope).then((map) => {
         if (!cancelled) setResolved({ key, map });
       });
     };
@@ -143,7 +154,7 @@ export function useGoalMatches(
       cancelled = true;
       window.removeEventListener("focus", onFocus);
     };
-  }, [key, periodType, periodKey, enabled]);
+  }, [key, periodType, periodKey, enabled, userScope]);
 
   // Derive the displayed value during render: prefer this key's async result,
   // else serve any cached map immediately (no flash to the E1 fallback), else

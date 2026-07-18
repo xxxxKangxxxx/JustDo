@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { addBillingInterval, authorizedBearer } from "@/lib/billing/server";
 import {
   chargeTossBillingKey,
   TOSS_BILLING_PLANS,
@@ -15,23 +16,14 @@ type SubscriptionRow = {
   plan_interval: string;
   amount_krw: number;
   payment_failures: number;
+  next_billing_at: string | null;
 };
 
-const authorized = (request: Request) => {
-  const secret = process.env.BILLING_CRON_SECRET;
-  if (!secret) return false;
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-};
-
-const nextBillingAt = (interval: string) => {
-  const next = new Date();
-  if (interval === "yearly") {
-    next.setFullYear(next.getFullYear() + 1);
-  } else {
-    next.setMonth(next.getMonth() + 1);
-  }
-  return next.toISOString();
-};
+const authorized = (request: Request) =>
+  authorizedBearer(
+    request.headers.get("authorization"),
+    process.env.BILLING_CRON_SECRET,
+  );
 
 export async function POST(request: Request) {
   if (!authorized(request)) {
@@ -42,7 +34,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("user_subscriptions")
-    .select("id,user_id,toss_billing_key,toss_customer_key,plan_interval,amount_krw,payment_failures")
+    .select("id,user_id,toss_billing_key,toss_customer_key,plan_interval,amount_krw,payment_failures,next_billing_at")
     .not("toss_billing_key", "is", null)
     .not("toss_customer_key", "is", null)
     .lte("next_billing_at", now)
@@ -88,15 +80,21 @@ export async function POST(request: Request) {
         processed_at: new Date().toISOString(),
       });
 
+      const approvedAt = payment.approvedAt ?? new Date().toISOString();
+      const next = addBillingInterval(
+        new Date(subscription.next_billing_at ?? approvedAt),
+        interval,
+      ).toISOString();
+
       const { error: updateError } = await supabase
         .from("user_subscriptions")
         .update({
           status: "active",
           plan_name: "pro",
-          subscribed_at: payment.approvedAt ?? new Date().toISOString(),
-          expires_at: nextBillingAt(interval),
-          next_billing_at: nextBillingAt(interval),
-          last_payment_at: payment.approvedAt ?? new Date().toISOString(),
+          subscribed_at: approvedAt,
+          expires_at: next,
+          next_billing_at: next,
+          last_payment_at: approvedAt,
           toss_last_payment_key: payment.paymentKey,
           payment_failures: 0,
         })

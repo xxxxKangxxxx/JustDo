@@ -5700,3 +5700,206 @@ as a follow-up.
   TestFlight, then verify Goal Management progress refresh, pending-sync retry
   behavior, Settings account nickname editing, and a short offline/pending-sync
   flow.
+
+## 2026-07-16 Web semantic match cache account-scope fix
+
+### Codex
+
+- Addressed the high-priority web follow-up from
+  `docs/project_review_2026-07-12.md`: semantic goal-match results were cached
+  by period only, and sign-out did not clear the module cache.
+- Updated `apps/web/src/features/just-do/semantic-matches.ts` so cache keys now
+  include a user scope (`userId:periodType:periodKey`) and exported
+  `clearGoalMatchCache()`.
+- Updated `apps/web/src/features/just-do/app-shell.tsx` to clear the semantic
+  match cache when the authenticated user id changes, and to pass the current
+  user id into goal-management/report semantic-match hooks.
+- Added `apps/web/src/features/just-do/semantic-matches.test.ts` covering
+  per-user cache isolation and explicit cache clearing.
+
+### Verification
+
+- `npm --prefix apps/web test -- semantic-matches.test.ts` passed.
+- `npm --prefix apps/web run lint` passed.
+- `npm --prefix apps/web test` passed: 142 tests.
+- `npm --prefix apps/web run build` passed after rerunning with elevated
+  permissions; the first sandboxed run hit the known Turbopack local helper /
+  port-binding restriction.
+
+### Notes
+
+- This fixes the multi-account data exposure risk called out in the review.
+- Remaining E3 cache follow-ups: invalidate the matching period cache
+  immediately after item/goal mutations, and consider an iOS shared actor cache
+  only as a request de-duplication optimization.
+
+## 2026-07-16 Toss webhook and billing date hardening
+
+### Codex
+
+- Addressed the urgent billing/security items from
+  `docs/project_review_2026-07-12.md`, with the current constraint that Toss
+  dashboard webhook registration has not happened yet.
+- Added `apps/web/src/lib/billing/server.ts` for server-only billing helpers:
+  constant-time secret comparison, bearer authorization, temporary shared-secret
+  webhook authorization, and calendar-month billing interval calculation with
+  month-end clamping.
+- Hardened `apps/web/src/app/api/webhook/toss/route.ts`:
+  - Requires `x-justdo-webhook-secret` to match server env
+    `TOSS_WEBHOOK_SECRET`.
+  - Rejects events with no stable provider event id instead of writing
+    `provider_event_id = null`.
+  - Uses the shared billing interval helper for `expires_at` /
+    `next_billing_at`.
+- Hardened `apps/web/src/app/api/billing/charge/route.ts`:
+  - Replaced direct `===` cron secret comparison with constant-time comparison.
+  - Selects `next_billing_at` and advances from that anchor after successful
+    charge, avoiding cron-runtime drift.
+  - Uses month-end clamping instead of `Date#setMonth`.
+- Updated `amplify.yml` and `apps/web/.env.local.example` so
+  `TOSS_WEBHOOK_SECRET` is available to the Next.js server bundle.
+- Updated `docs/toss_merchant_review_plan.md` to state that the Toss webhook is
+  not registered yet and the current shared-secret gate is temporary until Toss
+  official signature details are available.
+
+### Verification
+
+- `npm --prefix apps/web test -- billing-routes.test.ts` passed: 12 tests.
+- `npm --prefix apps/web run lint` passed.
+- `npm --prefix apps/web test` passed: 145 tests.
+- `npm --prefix apps/web run build` passed after rerunning with elevated
+  permissions; the first sandboxed run hit the known Turbopack local helper /
+  port-binding restriction.
+
+### Notes
+
+- This does not claim Toss official webhook signature verification is complete.
+  The project still needs to confirm Toss dashboard signature/header behavior
+  after merchant review and webhook registration, then replace or remove the
+  temporary `x-justdo-webhook-secret` gate as appropriate.
+- Live billing still needs Toss test/live E2E and the planned DLQ before
+  production charging.
+
+## 2026-07-16 TestFlight build 6 smoke: pending-sync retry fix
+
+### Codex
+
+- User resumed internal TestFlight build 6 validation on a signed-in tester
+  account.
+- H-004 passed: Goal Management progress updated immediately after completing a
+  related task.
+- Found build 6 pending-sync retry issue during Goal add:
+  - Goal save showed the success toast (`목표가 추가되었습니다`).
+  - Sync status changed to failed.
+  - Waiting 5-10 seconds did not trigger an automatic retry.
+  - Tapping `다시 시도` manually completed sync successfully.
+- Root cause in `ContentView.swift`: the scheduled automatic sync task called
+  `onRequestSync()`, which immediately changed sync status to `.syncing`.
+  The `.syncing` status handler then cancelled `pendingSyncTask`, which was the
+  same task currently executing the automatic sync. Manual `다시 시도` succeeded
+  because it runs outside `pendingSyncTask`.
+- Patched `ContentView.swift` so the scheduled task clears its
+  `pendingSyncTask` reference before calling `onRequestSync()`, and `.syncing`
+  no longer cancels the executing automatic sync. Also kept the failed-state
+  retry coverage: failed sync states with pending mutations schedule automatic
+  retry, capped at 3 attempts to avoid infinite retries on permanent
+  server/payload errors. Manual `다시 시도` still resets the automatic retry
+  counter and uses the existing retry path.
+- Account nickname editing itself passed in build 6 real-device smoke, but the
+  account-detail sheet kept its old `.medium` height after the nickname section
+  was added, causing the top content to be clipped. Updated that sheet to use
+  `.height(620), .large` detents and wrapped its content in a `ScrollView` for
+  smaller screens / keyboard cases.
+- Bumped iOS `CURRENT_PROJECT_VERSION` from 6 to 7 for the next TestFlight
+  upload.
+
+### Verification
+
+- `swift test` from `apps/ios` passed: 69 tests.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -configuration Release -destination 'generic/platform=iOS' build` passed.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -configuration Release -destination 'generic/platform=iOS' -archivePath apps/ios/build/JustDoApp-b7.xcarchive archive` passed.
+- `xcodebuild -exportArchive -archivePath apps/ios/build/JustDoApp-b7.xcarchive -exportOptionsPlist apps/ios/build/ExportOptions-AppStoreConnect.plist -allowProvisioningUpdates` uploaded build 7 successfully; App Store Connect reported the uploaded package is processing.
+
+### Notes
+
+- Build 6 release decision remains FIX REQUIRED because pending-sync retry
+  failed in real-device smoke.
+- Build 7 is now uploaded. Next: wait for processing, attach/install through
+  internal TestFlight, then re-run the affected checks: pending-sync automatic
+  retry, H-005 widget mutation flush, and account nickname/detail sheet. H-004
+  only needs a light regression check because it passed on build 6.
+
+## 2026-07-18 TestFlight build 7 smoke continuation + build 8 sheet polish
+
+### Codex
+
+- User installed TestFlight build 7 and completed the first targeted checks:
+  - Install/login state check passed.
+  - Task add automatic sync passed.
+  - Task completion / reopening automatic sync passed.
+  - Goal add automatic sync passed.
+- Account nickname behavior worked, but the account-detail sheet was too tall
+  and looked visually detached because the sheet content/background did not fill
+  the detent cleanly at the bottom. User noted the same bottom-sheet structure
+  affects other compact sheets too.
+- Updated `ContentView.swift`:
+  - Reduced compact bottom-sheet detents: export, selected-day panel,
+    date/time wheel sheets, reminder/time pickers, account detail, week-start
+    picker, and widget color picker.
+  - Added shared `justDoBottomSheetSurface()` modifier so compact sheet content
+    fills the detent surface and the bottom no longer reads as a floating card.
+  - Applied that modifier to selected-day, date/time, time, week-start, account,
+    data-export, and widget-color sheets.
+  - Bumped iOS `CURRENT_PROJECT_VERSION` from 7 to 8 for the next TestFlight
+    upload.
+
+### Verification
+
+- `swift test` from `apps/ios` passed: 69 tests.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -configuration Release -destination 'generic/platform=iOS' build` passed.
+- `xcodebuild -project apps/ios/JustDoApp/JustDoApp.xcodeproj -scheme JustDoApp -configuration Release -destination 'generic/platform=iOS' -archivePath apps/ios/build/JustDoApp-b8-sheets.xcarchive archive` passed.
+- `xcodebuild -exportArchive -archivePath apps/ios/build/JustDoApp-b8-sheets.xcarchive -exportOptionsPlist apps/ios/build/ExportOptions-AppStoreConnect.plist -allowProvisioningUpdates` uploaded build 8 successfully; App Store Connect reported the uploaded package is processing.
+
+### Notes
+
+- Build 7 validated the pending-sync automatic retry fix for task and Goal
+  mutations, so the remaining build 8 focus is visual sheet verification plus
+  Widget mutation flush and light Goal Management regression.
+
+## 2026-07-18 Build 8 sheet findings + build 9 local fix
+
+### Codex
+
+- Build 8 real-device validation confirmed the account-detail height was more
+  appropriate, but the sheet still appeared detached from the bottom edge.
+- The same detached-bottom presentation reproduced in date/time, notification
+  time, week-start, widget-color, data-export, and selected-day sheets.
+- Tapping `데이터 내보내기` from Settings generated the file behind the
+  Settings full-screen cover; its share sheet only appeared after returning to
+  Home.
+- Updated `ContentView.swift` for build 9:
+  - Replaced every affected compact fixed-height detent with the same `.large`
+    presentation used by Terms and Privacy.
+  - Added consistent close headers to account detail, data export, and the
+    selected-day sheet while preserving picker `완료` and color `취소/저장`
+    actions.
+  - Converted Settings `습관`, nested `습관 관리`, `목표`, and
+    `카테고리 관리` full-screen covers to large sheets.
+  - Moved export-file presentation state into Settings so the export sheet opens
+    immediately above Settings.
+- iOS `CURRENT_PROJECT_VERSION` is 9.
+
+### Verification
+
+- `swift test` from `apps/ios` passed: 69 tests.
+- iOS generic-device Release build passed.
+- `git diff --check` passed.
+- Build 8 real-device widget mutation regression passed: the widget change was
+  reflected after app foregrounding, sync completed, and the state survived app
+  relaunch.
+- Build 8 Goal Management regression passed: completing a related Task updated
+  goal progress immediately without manual refresh or relaunch.
+- `xcodebuild ... -archivePath apps/ios/build/JustDoApp-b9-sheets.xcarchive archive`
+  succeeded for app version 1.0, build 9, bundle id `kr.justdo.app`.
+- `xcodebuild -exportArchive` uploaded build 9 successfully; App Store Connect
+  reported that the uploaded package is processing.
