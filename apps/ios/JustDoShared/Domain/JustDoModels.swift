@@ -11,6 +11,12 @@ public enum Priority: String, Codable, Equatable, Sendable {
     case low
 }
 
+public enum TaskReminderMode: String, Codable, Equatable, Sendable {
+    case defaultValue = "default"
+    case custom
+    case none
+}
+
 public enum TabID: String, Codable, Equatable, Sendable {
     case home
     case habit
@@ -48,6 +54,8 @@ public struct Task: Identifiable, Codable, Equatable, Sendable {
     public var priority: Priority?
     public var isCompleted: Bool
     public var scheduledTime: String?
+    public var reminderMode: TaskReminderMode
+    public var reminderOffsetsMinutes: [Int]
     public var tags: [String]
 
     public init(
@@ -59,7 +67,9 @@ public struct Task: Identifiable, Codable, Equatable, Sendable {
         priority: Priority?,
         isCompleted: Bool,
         scheduledTime: String?,
-        tags: [String]
+        tags: [String],
+        reminderMode: TaskReminderMode = .defaultValue,
+        reminderOffsetsMinutes: [Int] = []
     ) {
         self.id = id
         self.title = title
@@ -69,6 +79,10 @@ public struct Task: Identifiable, Codable, Equatable, Sendable {
         self.priority = priority
         self.isCompleted = isCompleted
         self.scheduledTime = scheduledTime
+        self.reminderMode = reminderMode
+        self.reminderOffsetsMinutes = reminderMode == .custom
+            ? Self.normalizedReminderOffsets(reminderOffsetsMinutes)
+            : []
         self.tags = tags
     }
 
@@ -81,7 +95,36 @@ public struct Task: Identifiable, Codable, Equatable, Sendable {
         case priority
         case isCompleted
         case scheduledTime
+        case reminderMode
+        case reminderOffsetsMinutes
         case tags
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        categoryID = try container.decodeIfPresent(UUID.self, forKey: .categoryID)
+        startDate = try container.decode(String.self, forKey: .startDate)
+        endDate = try container.decode(String.self, forKey: .endDate)
+        priority = try container.decodeIfPresent(Priority.self, forKey: .priority)
+        isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
+        scheduledTime = try container.decodeIfPresent(String.self, forKey: .scheduledTime)
+        reminderMode = try container.decodeIfPresent(TaskReminderMode.self, forKey: .reminderMode) ?? .defaultValue
+        reminderOffsetsMinutes = reminderMode == .custom
+            ? Self.normalizedReminderOffsets(
+                try container.decodeIfPresent([Int].self, forKey: .reminderOffsetsMinutes) ?? []
+            )
+            : []
+        tags = try container.decode([String].self, forKey: .tags)
+    }
+
+    public static func normalizedReminderOffsets(_ offsets: [Int]) -> [Int] {
+        Array(
+            Array(Set(offsets.filter { (0...10_080).contains($0) }))
+                .sorted()
+                .prefix(3)
+        )
     }
 }
 
@@ -189,13 +232,31 @@ public struct GoalPromptDismissal: Identifiable, Codable, Equatable, Sendable {
 public struct Settings: Codable, Equatable, Sendable {
     public var notify: Bool
     public var notifyTime: String
+    public var taskBriefingNotify: Bool
+    public var taskScheduleNotify: Bool
+    public var habitNotify: Bool
+    public var defaultTaskReminderMinutes: Int
     public var weekStart: Int
     public var plan: String
     public var justDoMode: Bool
 
-    public init(notify: Bool, notifyTime: String, weekStart: Int, plan: String, justDoMode: Bool = false) {
+    public init(
+        notify: Bool,
+        notifyTime: String,
+        taskBriefingNotify: Bool = true,
+        taskScheduleNotify: Bool = true,
+        habitNotify: Bool = true,
+        defaultTaskReminderMinutes: Int = 10,
+        weekStart: Int,
+        plan: String,
+        justDoMode: Bool = false
+    ) {
         self.notify = notify
         self.notifyTime = notifyTime
+        self.taskBriefingNotify = taskBriefingNotify
+        self.taskScheduleNotify = taskScheduleNotify
+        self.habitNotify = habitNotify
+        self.defaultTaskReminderMinutes = Self.normalizedReminderMinutes(defaultTaskReminderMinutes)
         self.weekStart = weekStart
         self.plan = plan
         self.justDoMode = justDoMode
@@ -204,6 +265,10 @@ public struct Settings: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case notify
         case notifyTime
+        case taskBriefingNotify
+        case taskScheduleNotify
+        case habitNotify
+        case defaultTaskReminderMinutes
         case weekStart
         case plan
         case justDoMode
@@ -213,9 +278,19 @@ public struct Settings: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         notify = try container.decode(Bool.self, forKey: .notify)
         notifyTime = try container.decode(String.self, forKey: .notifyTime)
+        taskBriefingNotify = try container.decodeIfPresent(Bool.self, forKey: .taskBriefingNotify) ?? notify
+        taskScheduleNotify = try container.decodeIfPresent(Bool.self, forKey: .taskScheduleNotify) ?? notify
+        habitNotify = try container.decodeIfPresent(Bool.self, forKey: .habitNotify) ?? notify
+        defaultTaskReminderMinutes = Self.normalizedReminderMinutes(
+            try container.decodeIfPresent(Int.self, forKey: .defaultTaskReminderMinutes) ?? 10
+        )
         weekStart = try container.decode(Int.self, forKey: .weekStart)
         plan = try container.decode(String.self, forKey: .plan)
         justDoMode = try container.decodeIfPresent(Bool.self, forKey: .justDoMode) ?? false
+    }
+
+    private static func normalizedReminderMinutes(_ minutes: Int) -> Int {
+        min(max(minutes, 0), 10_080)
     }
 }
 

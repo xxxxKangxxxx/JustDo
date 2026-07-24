@@ -16,7 +16,7 @@ final class SupabaseRestSyncTests: XCTestCase {
             [{"task_id":"11111111-1111-1111-1111-111111111111","tag_id":"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"}]
             """,
             "tasks": """
-            [{"id":"11111111-1111-1111-1111-111111111111","category_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","title":"Proposal draft","priority":"high","start_date":"2026-04-30","end_date":"2026-04-30","scheduled_time":"09:30","is_completed":false}]
+            [{"id":"11111111-1111-1111-1111-111111111111","category_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","title":"Proposal draft","priority":"high","start_date":"2026-04-30","end_date":"2026-04-30","scheduled_time":"09:30","is_completed":false,"reminder_mode":"custom","reminder_offsets_minutes":[10,1440]}]
             """,
             "habits": """
             [{"id":"33333333-3333-3333-3333-333333333333","title":"Walk","emoji":"*","created_at":"2026-04-01T00:00:00Z","recur_type":"weekly","recur_days":[2,4],"reminder_at":"08:30"}]
@@ -44,6 +44,8 @@ final class SupabaseRestSyncTests: XCTestCase {
         XCTAssertEqual(snapshot.categories.map(\.name), ["Focus"])
         XCTAssertEqual(snapshot.tasks.map(\.title), ["Proposal draft"])
         XCTAssertEqual(snapshot.tasks.first?.tags, ["focus"])
+        XCTAssertEqual(snapshot.tasks.first?.reminderMode, .custom)
+        XCTAssertEqual(snapshot.tasks.first?.reminderOffsetsMinutes, [10, 1440])
         XCTAssertEqual(snapshot.habits.first?.recurType, .weekly)
         XCTAssertEqual(snapshot.habits.first?.recurDays, [2, 4])
         XCTAssertEqual(snapshot.habits.first?.log["2026-04-30"], 1)
@@ -149,7 +151,9 @@ final class SupabaseRestSyncTests: XCTestCase {
                     priority: .high,
                     isCompleted: true,
                     scheduledTime: "09:30",
-                    tags: ["focus"]
+                    tags: ["focus"],
+                    reminderMode: .custom,
+                    reminderOffsetsMinutes: [1_440, 10, 10]
                 )
             )
         )
@@ -189,6 +193,8 @@ final class SupabaseRestSyncTests: XCTestCase {
         XCTAssertEqual(taskBody["user_id"] as? String, userID.uuidString.uppercased())
         XCTAssertEqual(taskBody["title"] as? String, "Proposal draft")
         XCTAssertEqual(taskBody["is_completed"] as? Bool, true)
+        XCTAssertEqual(taskBody["reminder_mode"] as? String, "custom")
+        XCTAssertEqual(taskBody["reminder_offsets_minutes"] as? [Int], [10, 1_440])
 
         let tagBody = try XCTUnwrap(transport.upserts[1].json)
         XCTAssertEqual(tagBody["user_id"] as? String, userID.uuidString.uppercased())

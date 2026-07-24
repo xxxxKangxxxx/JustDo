@@ -473,7 +473,7 @@ public final class SupabaseSnapshotClient {
     private func fetchTasks() async throws -> [SupabaseTaskRow] {
         try await fetch(
             "tasks",
-            select: "id,category_id,title,priority,start_date,end_date,scheduled_time,is_completed",
+            select: "id,category_id,title,priority,start_date,end_date,scheduled_time,is_completed,reminder_mode,reminder_offsets_minutes",
             filteredByUser: true
         )
     }
@@ -667,6 +667,8 @@ struct SupabaseTaskRow: Decodable, Equatable {
     var endDate: String?
     var scheduledTime: String?
     var isCompleted: Bool
+    var reminderMode: String?
+    var reminderOffsetsMinutes: [Int]?
 
     func domain(tags: [String]) -> Task {
         Task(
@@ -678,7 +680,9 @@ struct SupabaseTaskRow: Decodable, Equatable {
             priority: priority.flatMap(Priority.init(rawValue:)),
             isCompleted: isCompleted,
             scheduledTime: scheduledTime,
-            tags: tags
+            tags: tags,
+            reminderMode: reminderMode.flatMap(TaskReminderMode.init(rawValue:)) ?? .defaultValue,
+            reminderOffsetsMinutes: reminderOffsetsMinutes ?? []
         )
     }
 
@@ -691,6 +695,8 @@ struct SupabaseTaskRow: Decodable, Equatable {
         case endDate = "end_date"
         case scheduledTime = "scheduled_time"
         case isCompleted = "is_completed"
+        case reminderMode = "reminder_mode"
+        case reminderOffsetsMinutes = "reminder_offsets_minutes"
     }
 }
 
@@ -703,6 +709,8 @@ private struct SupabaseTaskMutationRow: Encodable {
     var startDate: String?
     var endDate: String?
     var scheduledTime: String?
+    var reminderMode: String
+    var reminderOffsetsMinutes: [Int]
     var isCompleted: Bool
     var completedAt: String?
 
@@ -715,6 +723,10 @@ private struct SupabaseTaskMutationRow: Encodable {
         self.startDate = task.startDate.isEmpty ? nil : task.startDate
         self.endDate = task.endDate.isEmpty ? nil : task.endDate
         self.scheduledTime = task.scheduledTime
+        self.reminderMode = task.reminderMode.rawValue
+        self.reminderOffsetsMinutes = task.reminderMode == .custom
+            ? Task.normalizedReminderOffsets(task.reminderOffsetsMinutes)
+            : []
         self.isCompleted = task.isCompleted
         self.completedAt = task.isCompleted ? Self.timestamp() : nil
     }
@@ -734,6 +746,8 @@ private struct SupabaseTaskMutationRow: Encodable {
         case startDate = "start_date"
         case endDate = "end_date"
         case scheduledTime = "scheduled_time"
+        case reminderMode = "reminder_mode"
+        case reminderOffsetsMinutes = "reminder_offsets_minutes"
         case isCompleted = "is_completed"
         case completedAt = "completed_at"
     }

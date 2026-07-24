@@ -17,22 +17,28 @@ private typealias JDCategory = JustDoShared.Category
 struct ContentView: View {
     @StateObject private var auth = AuthViewModel()
     @ObservedObject private var syncStatus: AppSyncStatusStore
+    @ObservedObject private var notificationPermission: NotificationPermissionController
     @State private var pendingDetailRoute: JustDoDetailRoute?
     @State private var didOpenInitialUITestURL = false
     @AppStorage("justdo.isDarkMode") private var isDarkMode = false
     @Environment(\.scenePhase) private var scenePhase
     var snapshotStore: CoreDataAppSnapshotStore?
     var onSessionChanged: () async -> Void = {}
+    var onSnapshotChanged: (AppSnapshot) async -> Void = { _ in }
 
     @MainActor
     init(
         snapshotStore: CoreDataAppSnapshotStore? = nil,
         syncStatus: AppSyncStatusStore,
-        onSessionChanged: @escaping () async -> Void = {}
+        notificationPermission: NotificationPermissionController,
+        onSessionChanged: @escaping () async -> Void = {},
+        onSnapshotChanged: @escaping (AppSnapshot) async -> Void = { _ in }
     ) {
         self.snapshotStore = snapshotStore
         self.onSessionChanged = onSessionChanged
+        self.onSnapshotChanged = onSnapshotChanged
         _syncStatus = ObservedObject(wrappedValue: syncStatus)
+        _notificationPermission = ObservedObject(wrappedValue: notificationPermission)
     }
 
     var body: some View {
@@ -47,7 +53,10 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
-            _Concurrency.Task { await auth.reload() }
+            _Concurrency.Task {
+                await auth.reload()
+                await notificationPermission.refresh()
+            }
         }
         .onOpenURL { url in
             open(url)
@@ -80,10 +89,12 @@ struct ContentView: View {
             HomeRootView(
                 snapshotStore: snapshotStore,
                 syncStatus: syncStatus,
+                notificationPermission: notificationPermission,
                 authProfile: auth.profile,
                 pendingDetailRoute: $pendingDetailRoute,
                 onUpdateDisplayName: auth.updateDisplayName(_:),
                 onRequestSync: onSessionChanged,
+                onSnapshotChanged: onSnapshotChanged,
                 onSignOut: {
                     auth.signOut()
                     _Concurrency.Task { await onSessionChanged() }
@@ -177,6 +188,8 @@ private struct TaskDraft {
     var endDate: String
     var priority: Priority
     var scheduledTime: String?
+    var reminderMode: TaskReminderMode
+    var reminderOffsetsMinutes: [Int]
     var tags: [String]
 }
 
@@ -497,10 +510,12 @@ private struct EmailIcon: View {
 private struct HomeRootView: View {
     let snapshotStore: CoreDataAppSnapshotStore?
     @ObservedObject var syncStatus: AppSyncStatusStore
+    @ObservedObject var notificationPermission: NotificationPermissionController
     let authProfile: AuthProfile?
     @Binding var pendingDetailRoute: JustDoDetailRoute?
     let onUpdateDisplayName: (String) async throws -> Void
     let onRequestSync: () async -> Void
+    let onSnapshotChanged: (AppSnapshot) async -> Void
     let onSignOut: () -> Void
 
     @State private var snapshot: AppSnapshot?
@@ -524,6 +539,9 @@ private struct HomeRootView: View {
     @State private var automaticSyncRetryCount = 0
     @State private var loadError: String?
     @State private var actionMessage: String?
+    @AppStorage("justdo.didExplainNotificationPermission")
+    private var didExplainNotificationPermission = false
+    @State private var isShowingInitialNotificationExplanation = false
     private let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
 
     var body: some View {
@@ -556,8 +574,12 @@ private struct HomeRootView: View {
                 actionMessage: actionMessage,
                 syncStatus: syncStatus.status,
                 onToggleHabit: toggleHabit(_:on:),
-                onSetNotify: setNotify(_:),
                 onSetNotifyTime: setNotifyTime(_:),
+                onSetTaskBriefingNotify: setTaskBriefingNotify(_:),
+                onSetTaskScheduleNotify: setTaskScheduleNotify(_:),
+                onSetHabitNotify: setHabitNotify(_:),
+                onSetDefaultTaskReminderMinutes: setDefaultTaskReminderMinutes(_:),
+                notificationPermission: notificationPermission,
                 onSetWeekStart: setWeekStart(_:),
                 onSetJustDoMode: setJustDoModeFromSettings(_:),
                 onAddGoal: addGoal(_:),
@@ -617,7 +639,7 @@ private struct HomeRootView: View {
                     }
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
             .simultaneousGesture(
@@ -635,6 +657,13 @@ private struct HomeRootView: View {
         .task {
             loadSnapshot()
             presentPendingDetailRouteIfNeeded()
+            await notificationPermission.refresh()
+            if !didExplainNotificationPermission,
+               notificationPermission.state == .notDetermined,
+               !JustDoUITestSupport.isEnabled {
+                didExplainNotificationPermission = true
+                isShowingInitialNotificationExplanation = true
+            }
         }
         .onChange(of: syncStatus.status) { _, status in
             switch status {
@@ -659,6 +688,13 @@ private struct HomeRootView: View {
         .onChange(of: pendingDetailRoute) { _, _ in
             presentPendingDetailRouteIfNeeded()
         }
+        .onChange(of: notificationPermission.requestedHomeDate) { _, date in
+            guard let date else {
+                return
+            }
+            openHome(on: date)
+            notificationPermission.consumeRequestedHomeDate()
+        }
         .fullScreenCover(item: $goalReportPresentation) { presentation in
             GoalReportFullScreen(
                 presentation: presentation,
@@ -675,6 +711,19 @@ private struct HomeRootView: View {
                 onSave: saveGoalPrompt(_:entries:),
                 onDismiss: dismissGoalPrompt(_:dismissedPermanentlyForPeriod:)
             )
+        }
+        .alert(
+            "필요한 일정을 놓치지 않도록 알려드릴게요",
+            isPresented: $isShowingInitialNotificationExplanation
+        ) {
+            Button("알림 허용") {
+                _Concurrency.Task {
+                    _ = await notificationPermission.requestAuthorization()
+                }
+            }
+            Button("나중에", role: .cancel) {}
+        } message: {
+            Text("매일 아침 할 일을 정리해 알려드리고, 설정한 일정과 습관 시간에 맞춰 안내합니다. 알림 종류와 시간은 설정에서 각각 변경할 수 있습니다.")
         }
     }
 
@@ -922,6 +971,20 @@ private struct HomeRootView: View {
         displayMonth = today.month
     }
 
+    private func openHome(on iso: String) {
+        let normalized = JDDate.normalizedISODate(iso, fallback: JDDate.todayISO)
+        let parts = JDDate.parts(normalized)
+        selectedTab = .home
+        selectedDate = normalized
+        displayYear = parts.year
+        displayMonth = parts.month
+        isShowingSettings = false
+        isShowingDayPanel = false
+        isShowingAddTask = false
+        editingTask = nil
+        editingHabit = nil
+    }
+
     private func loadSnapshot(preserveViewSelection: Bool = false) {
         guard let snapshotStore else {
             loadError = "Local mirror is unavailable."
@@ -935,6 +998,9 @@ private struct HomeRootView: View {
             try WidgetSnapshotBootstrap.seedIfNeeded(into: snapshotStore)
             let loaded = try snapshotStore.loadSnapshot()
             snapshot = loaded
+            _Concurrency.Task {
+                await onSnapshotChanged(loaded)
+            }
             if preserveViewSelection {
                 selectedDate = currentSelectedDate
                 displayYear = currentDisplayYear
@@ -953,7 +1019,8 @@ private struct HomeRootView: View {
     }
 
     private func presentGoalPromptIfNeeded(from loaded: AppSnapshot) {
-        guard goalPromptPresentation == nil,
+        guard !JustDoUITestSupport.isEnabled,
+              goalPromptPresentation == nil,
               goalReportPresentation == nil,
               !isShowingSettings,
               !isShowingAddTask,
@@ -1035,7 +1102,9 @@ private struct HomeRootView: View {
             priority: draft.priority,
             isCompleted: false,
             scheduledTime: draft.scheduledTime?.nilIfBlank,
-            tags: draft.tags
+            tags: draft.tags,
+            reminderMode: draft.reminderMode,
+            reminderOffsetsMinutes: draft.reminderOffsetsMinutes
         )
 
         do {
@@ -1232,6 +1301,16 @@ private struct HomeRootView: View {
         var updated = task
         updated.isCompleted.toggle()
         let updatedAt = JDDate.nowISODateTime
+        var completionMessage: String?
+        if updated.isCompleted,
+           task.startDate <= JDDate.todayISO,
+           JDDate.todayISO <= task.endDate {
+            var tasks = snapshot?.tasks ?? []
+            if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
+                tasks[index].isCompleted = true
+            }
+            completionMessage = TaskCompletionMessageBuilder.message(tasks: tasks)
+        }
 
         do {
             try snapshotStore.applyAndEnqueue(
@@ -1248,6 +1327,9 @@ private struct HomeRootView: View {
             loadSnapshot(preserveViewSelection: true)
             syncStatus.refreshPendingCount(snapshotStore: snapshotStore)
             actionMessage = "Task updated."
+            if let completionMessage {
+                InAppBannerPresenter.shared.show(completionMessage)
+            }
         } catch {
             actionMessage = "Could not update task."
         }
@@ -1258,12 +1340,50 @@ private struct HomeRootView: View {
         setWeekStart(current == 0 ? 1 : 0)
     }
 
-    private func setNotify(_ isOn: Bool) {
-        setPreference(.notify, value: isOn ? 1 : 0, successMessage: "Notification settings updated.")
-    }
-
     private func setNotifyTime(_ time: String) {
         setPreference(.notifyTime, value: Self.minutes(fromTime: time), successMessage: "Notification time updated.")
+    }
+
+    private func setTaskBriefingNotify(_ isOn: Bool) {
+        enableNotificationMasterIfNeeded(isOn)
+        setPreference(
+            .taskBriefingNotify,
+            value: isOn ? 1 : 0,
+            successMessage: "Task briefing notification settings updated."
+        )
+    }
+
+    private func setTaskScheduleNotify(_ isOn: Bool) {
+        enableNotificationMasterIfNeeded(isOn)
+        setPreference(
+            .taskScheduleNotify,
+            value: isOn ? 1 : 0,
+            successMessage: "Task schedule notification settings updated."
+        )
+    }
+
+    private func setHabitNotify(_ isOn: Bool) {
+        enableNotificationMasterIfNeeded(isOn)
+        setPreference(
+            .habitNotify,
+            value: isOn ? 1 : 0,
+            successMessage: "Habit notification settings updated."
+        )
+    }
+
+    private func setDefaultTaskReminderMinutes(_ minutes: Int) {
+        setPreference(
+            .defaultTaskReminderMinutes,
+            value: minutes,
+            successMessage: "Default Task reminder updated."
+        )
+    }
+
+    private func enableNotificationMasterIfNeeded(_ isOn: Bool) {
+        guard isOn, snapshot?.settings.notify == false else {
+            return
+        }
+        setPreference(.notify, value: 1, successMessage: "Notification settings updated.")
     }
 
     private func setWeekStart(_ weekStart: Int) {
@@ -2742,6 +2862,8 @@ private struct AddTaskSheet: View {
     @State private var includesTime = false
     @State private var editingScheduleField: ScheduleField?
     @State private var selectedPriority: Priority = .medium
+    @State private var taskReminderMode: TaskReminderMode = .defaultValue
+    @State private var taskReminderOffsets: [Int] = []
     @State private var selectedEmoji = "🌱"
     @State private var tags: [String] = []
     @State private var tagDraft = ""
@@ -2790,6 +2912,13 @@ private struct AddTaskSheet: View {
                     ScheduleValueButton(date: endDateValue, includesTime: includesTime) {
                         editingScheduleField = .end
                     }
+                }
+                AddSheetFieldRow(label: "알림", alignTop: true) {
+                    TaskReminderEditor(
+                        mode: $taskReminderMode,
+                        offsets: $taskReminderOffsets,
+                        includesTime: includesTime
+                    )
                 }
                 if !categories.isEmpty {
                     AddSheetFieldRow(label: "카테고리") {
@@ -2966,7 +3095,7 @@ private struct AddTaskSheet: View {
                     editingScheduleField = nil
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -2979,7 +3108,7 @@ private struct AddTaskSheet: View {
                     isShowingReminderPicker = false
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -3007,6 +3136,8 @@ private struct AddTaskSheet: View {
                     endDate: Self.isoDate(from: endDateValue),
                     priority: selectedPriority,
                     scheduledTime: includesTime ? Self.timeString(from: startDateValue) : nil,
+                    reminderMode: taskReminderMode,
+                    reminderOffsetsMinutes: taskReminderOffsets,
                     tags: mergeTaskTags(tags, parseTaskTags(tagDraft))
                 )
             )
@@ -3356,34 +3487,18 @@ private struct StatsRootTabView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center) {
-                    Text("습관")
-                        .font(.system(size: 28, weight: .bold))
-                    Spacer()
-                    Button {
-                        isShowingHabitManager = true
-                    } label: {
-                        Label("편집", systemImage: "slider.horizontal.3")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(JDTheme.accent)
-                            .padding(.horizontal, 12)
-                            .frame(height: 32)
-                            .background(JDTheme.accent.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(JDTheme.secondaryText)
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("닫기")
-                }
-
+        VStack(spacing: 0) {
+            SheetCloseHeader(
+                title: "습관",
+                actionTitle: "편집",
+                actionSystemImage: "slider.horizontal.3",
+                onAction: {
+                    isShowingHabitManager = true
+                },
+                onClose: onDismiss
+            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: "\(year)년 \(month)월")
                         .font(.system(size: 11, weight: .semibold))
@@ -3441,9 +3556,11 @@ private struct StatsRootTabView: View {
                 .padding(16)
                 .background(JDTheme.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
         }
         .background(JDTheme.background)
         .sheet(isPresented: $isShowingHabitManager) {
@@ -3486,8 +3603,12 @@ private struct SettingsRootTabView: View {
     let actionMessage: String?
     let syncStatus: AppSyncStatus
     let onToggleHabit: (Habit, String) -> Void
-    let onSetNotify: (Bool) -> Void
     let onSetNotifyTime: (String) -> Void
+    let onSetTaskBriefingNotify: (Bool) -> Void
+    let onSetTaskScheduleNotify: (Bool) -> Void
+    let onSetHabitNotify: (Bool) -> Void
+    let onSetDefaultTaskReminderMinutes: (Int) -> Void
+    @ObservedObject var notificationPermission: NotificationPermissionController
     let onSetWeekStart: (Int) -> Void
     let onSetJustDoMode: (Bool) -> Void
     let onAddGoal: (GoalDraft) -> Void
@@ -3506,10 +3627,8 @@ private struct SettingsRootTabView: View {
     let onSignOut: () -> Void
     let onDismiss: () -> Void
 
-    @State private var localNotify = true
     @State private var isShowingAccountDetail = false
-    @State private var isShowingNotifyTimePicker = false
-    @State private var notifyTimeValue = Date()
+    @State private var isShowingNotificationSettings = false
     @State private var isShowingWeekStartPicker = false
     @State private var weekStartValue = 0
     @State private var accountMessage: String?
@@ -3577,18 +3696,11 @@ private struct SettingsRootTabView: View {
                 }
                 SettingGroup(label: "알림") {
                     SettingsRow(
-                        title: "알림",
-                        right: AnyView(ToggleSwitch(isOn: notifyBinding))
-                    )
-                    SettingsRow(
-                        title: "알림 시간",
-                        detail: settings?.notifyTime ?? "09:00",
+                        title: "알림 설정",
+                        detail: notificationPermission.state.settingsLabel,
                         chevron: true,
                         isLast: true,
-                        action: {
-                            notifyTimeValue = Self.date(fromTime: settings?.notifyTime ?? "09:00")
-                            isShowingNotifyTimePicker = true
-                        }
+                        action: { isShowingNotificationSettings = true }
                     )
                 }
                 SettingGroup(label: "디스플레이") {
@@ -3668,16 +3780,11 @@ private struct SettingsRootTabView: View {
         // presentation, so the open cover needs its own to react immediately.
         .preferredColorScheme(isDarkMode ? .dark : .light)
         .onAppear {
-            localNotify = settings?.notify ?? true
-            notifyTimeValue = Self.date(fromTime: settings?.notifyTime ?? "09:00")
             weekStartValue = settings?.weekStart ?? 0
             widgetColors = (try? AppGroupWidgetDisplayModeStore().readColors()) ?? WidgetModeColors(
                 task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
                 habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
             )
-        }
-        .onChange(of: settings?.notify ?? true) { _, value in
-            localNotify = value
         }
         .sheet(isPresented: $isShowingAccountDetail) {
             AccountDetailSheet(
@@ -3700,7 +3807,7 @@ private struct SettingsRootTabView: View {
                     accountMessage = "회원 탈퇴는 서버 API 연결 후 활성화됩니다."
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -3740,20 +3847,22 @@ private struct SettingsRootTabView: View {
                 onSave: onSaveCategory,
                 onDelete: onDeleteCategory
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
-        .sheet(isPresented: $isShowingNotifyTimePicker) {
-            TimePickerSheet(
-                title: "알림 시간",
-                date: $notifyTimeValue,
-                onDone: {
-                    onSetNotifyTime(Self.timeString(from: notifyTimeValue))
-                    isShowingNotifyTimePicker = false
-                }
+        .sheet(isPresented: $isShowingNotificationSettings) {
+            NotificationSettingsSheet(
+                settings: settings ?? AppSnapshotDefaults.settings(),
+                permission: notificationPermission,
+                onSetNotifyTime: onSetNotifyTime,
+                onSetTaskBriefingNotify: onSetTaskBriefingNotify,
+                onSetTaskScheduleNotify: onSetTaskScheduleNotify,
+                onSetHabitNotify: onSetHabitNotify,
+                onSetDefaultTaskReminderMinutes: onSetDefaultTaskReminderMinutes,
+                onClose: { isShowingNotificationSettings = false }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -3765,7 +3874,7 @@ private struct SettingsRootTabView: View {
                     isShowingWeekStartPicker = false
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -3781,7 +3890,7 @@ private struct SettingsRootTabView: View {
                     isShowingWidgetColorSheet = false
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -3793,7 +3902,7 @@ private struct SettingsRootTabView: View {
         }
         .sheet(item: $exportURL) { file in
             DataExportSheet(url: file.url)
-                .presentationDetents([.large])
+                .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(JDTheme.surface)
         }
@@ -3811,16 +3920,6 @@ private struct SettingsRootTabView: View {
         }
     }
 
-    private var notifyBinding: Binding<Bool> {
-        Binding(
-            get: { localNotify },
-            set: { value in
-                localNotify = value
-                onSetNotify(value)
-            }
-        )
-    }
-
     private var justDoModeBinding: Binding<Bool> {
         Binding(
             get: { isProPlan && (settings?.justDoMode ?? false) },
@@ -3834,9 +3933,206 @@ private struct SettingsRootTabView: View {
         )
     }
 
+}
+
+private struct NotificationSettingsSheet: View {
+    let settings: Settings
+    @ObservedObject var permission: NotificationPermissionController
+    let onSetNotifyTime: (String) -> Void
+    let onSetTaskBriefingNotify: (Bool) -> Void
+    let onSetTaskScheduleNotify: (Bool) -> Void
+    let onSetHabitNotify: (Bool) -> Void
+    let onSetDefaultTaskReminderMinutes: (Int) -> Void
+    let onClose: () -> Void
+
+    @State private var isShowingPermissionExplanation = false
+    @State private var isShowingBriefingTime = false
+    @State private var briefingTime = Date()
+
+    private let reminderOptions = [0, 5, 10, 15, 30, 60, 1_440, 2_880, 10_080]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: "알림 설정", onClose: onClose)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if permission.state == .denied {
+                        permissionWarning
+                    }
+                    VStack(spacing: 0) {
+                        SettingsRow(
+                            title: "아침 브리핑",
+                            right: AnyView(ToggleSwitch(isOn: briefingBinding))
+                        )
+                        SettingsRow(
+                            title: "브리핑 시간",
+                            detail: settings.notifyTime,
+                            chevron: true,
+                            action: {
+                                briefingTime = Self.date(fromTime: settings.notifyTime)
+                                isShowingBriefingTime = true
+                            }
+                        )
+                        SettingsRow(
+                            title: "일정 알림",
+                            right: AnyView(ToggleSwitch(isOn: taskScheduleBinding))
+                        )
+                        SettingsRow(
+                            title: "기본 알림",
+                            isLast: false,
+                            right: AnyView(defaultReminderMenu)
+                        )
+                        SettingsRow(
+                            title: "습관 알림",
+                            isLast: true,
+                            right: AnyView(ToggleSwitch(isOn: habitBinding))
+                        )
+                    }
+                    .background(JDTheme.surfaceAlt)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                    Text("시간을 설정하지 않으면 아침 브리핑에는 포함되지만 다음 일정 안내에는 표시되지 않습니다.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
+            }
+        }
+        .background(JDTheme.surface)
+        .task {
+            await permission.refresh()
+            briefingTime = Self.date(fromTime: settings.notifyTime)
+        }
+        .sheet(isPresented: $isShowingBriefingTime) {
+            TimePickerSheet(
+                title: "브리핑 시간",
+                date: $briefingTime,
+                usesCloseHeader: true,
+                onDone: {
+                    onSetNotifyTime(Self.timeString(from: briefingTime))
+                    isShowingBriefingTime = false
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(JDTheme.surface)
+        }
+        .alert(
+            "알림을 허용할까요?",
+            isPresented: $isShowingPermissionExplanation
+        ) {
+            Button("알림 허용") {
+                _Concurrency.Task {
+                    _ = await permission.requestAuthorization()
+                }
+            }
+            Button("나중에", role: .cancel) {}
+        } message: {
+            Text("선택한 브리핑, 일정, 습관 알림을 보내려면 시스템 알림 권한이 필요합니다.")
+        }
+    }
+
+    private var permissionWarning: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("시스템 알림이 꺼져 있습니다.")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(JDTheme.primaryText)
+                Text("선택한 설정은 보존되며, iPhone 설정에서 권한을 켜면 다시 동작합니다.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(JDTheme.tertiaryText)
+            }
+            Spacer()
+            Button("설정 열기") {
+                permission.openSystemSettings()
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(JDTheme.accent)
+        }
+        .padding(14)
+        .background(JDTheme.accent.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var defaultReminderMenu: some View {
+        Menu {
+            ForEach(reminderOptions, id: \.self) { minutes in
+                Button(Self.reminderLabel(minutes)) {
+                    onSetDefaultTaskReminderMinutes(minutes)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(Self.reminderLabel(settings.defaultTaskReminderMinutes))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(JDTheme.accent)
+        }
+    }
+
+    private var briefingBinding: Binding<Bool> {
+        notificationBinding(
+            value: settings.taskBriefingNotify,
+            setter: onSetTaskBriefingNotify
+        )
+    }
+
+    private var taskScheduleBinding: Binding<Bool> {
+        notificationBinding(
+            value: settings.taskScheduleNotify,
+            setter: onSetTaskScheduleNotify
+        )
+    }
+
+    private var habitBinding: Binding<Bool> {
+        notificationBinding(
+            value: settings.habitNotify,
+            setter: onSetHabitNotify
+        )
+    }
+
+    private func notificationBinding(
+        value: Bool,
+        setter: @escaping (Bool) -> Void
+    ) -> Binding<Bool> {
+        Binding(
+            get: { value },
+            set: { newValue in
+                setter(newValue)
+                if newValue && permission.state == .notDetermined {
+                    isShowingPermissionExplanation = true
+                } else if newValue && permission.state == .denied {
+                    permission.openSystemSettings()
+                }
+            }
+        )
+    }
+
+    private static func reminderLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0:
+            "정시"
+        case 60:
+            "1시간 전"
+        case 1_440:
+            "1일 전"
+        case 2_880:
+            "2일 전"
+        case 10_080:
+            "1주일 전"
+        default:
+            "\(minutes)분 전"
+        }
+    }
+
     private static func date(fromTime time: String) -> Date {
         let parts = time.split(separator: ":").compactMap { Int($0) }
-        var components = DateComponents()
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
         components.hour = min(max(parts.first ?? 9, 0), 23)
         components.minute = min(max(parts.dropFirst().first ?? 0, 0), 59)
         return Calendar.current.date(from: components) ?? Date()
@@ -3851,23 +4147,28 @@ private struct SettingsRootTabView: View {
 private struct TimePickerSheet: View {
     let title: String
     @Binding var date: Date
+    var usesCloseHeader = false
     let onDone: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(JDTheme.primaryText)
-                Spacer()
-                Button("완료", action: onDone)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(JDTheme.accent)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+        VStack(spacing: usesCloseHeader ? 0 : 12) {
+            if usesCloseHeader {
+                SheetCloseHeader(title: title, onClose: onDone)
+            } else {
+                HStack {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(JDTheme.primaryText)
+                    Spacer()
+                    Button("완료", action: onDone)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(JDTheme.accent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
 
-            Divider()
+                Divider()
+            }
 
             DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel)
@@ -3887,20 +4188,8 @@ private struct WeekStartPickerSheet: View {
     let onDone: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("캘린더 시작 요일")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(JDTheme.primaryText)
-                Spacer()
-                Button("완료", action: onDone)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(JDTheme.accent)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-
-            Divider()
+        VStack(spacing: 0) {
+            SheetCloseHeader(title: "캘린더 시작 요일", onClose: onDone)
 
             Picker("캘린더 시작 요일", selection: $selection) {
                 Text("일요일").tag(0)
@@ -4254,6 +4543,9 @@ private enum LegalDocument: String, Identifiable {
 /// ToolbarItem buttons in a circular background.
 private struct SheetCloseHeader: View {
     let title: String
+    var actionTitle: String?
+    var actionSystemImage: String?
+    var onAction: (() -> Void)?
     let onClose: () -> Void
 
     var body: some View {
@@ -4262,6 +4554,18 @@ private struct SheetCloseHeader: View {
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(JDTheme.primaryText)
             Spacer()
+            if let actionTitle, let onAction {
+                Button(action: onAction) {
+                    if let actionSystemImage {
+                        Label(actionTitle, systemImage: actionSystemImage)
+                    } else {
+                        Text(actionTitle)
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(JDTheme.accent)
+                .buttonStyle(.plain)
+            }
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .bold))
@@ -7078,30 +7382,12 @@ private struct WidgetColorPickerSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button("취소", action: onCancel)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(JDTheme.secondaryText)
-                Spacer()
-                Text("위젯 토글 색상")
-                    .font(.system(size: 17, weight: .bold))
-                Spacer()
-                Button("저장") {
-                    guard let task = normalizedHex(taskHex),
-                          let habit = normalizedHex(habitHex)
-                    else {
-                        message = "색상 코드는 #RRGGBB 형식으로 입력해주세요."
-                        return
-                    }
-                    colors = WidgetModeColors(task: task, habit: habit)
-                    onDone()
-                }
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(JDTheme.accent)
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
+            SheetCloseHeader(
+                title: "위젯 토글 색상",
+                actionTitle: "저장",
+                onAction: save,
+                onClose: onCancel
+            )
 
             VStack(alignment: .leading, spacing: 18) {
                 WidgetColorEditorSection(
@@ -7138,6 +7424,17 @@ private struct WidgetColorPickerSheet: View {
             return nil
         }
         return "#\(value.uppercased())"
+    }
+
+    private func save() {
+        guard let task = normalizedHex(taskHex),
+              let habit = normalizedHex(habitHex)
+        else {
+            message = "색상 코드는 #RRGGBB 형식으로 입력해주세요."
+            return
+        }
+        colors = WidgetModeColors(task: task, habit: habit)
+        onDone()
     }
 }
 
@@ -7357,7 +7654,7 @@ private struct CalendarDay: Hashable {
     let isCurrentMonth: Bool
 }
 
-private enum JDTheme {
+enum JDTheme {
     static let background = adaptive(light: "#F6F4EF", dark: "#131210")
     static let surface = adaptive(light: "#FFFFFF", dark: "#1C1B18")
     static let surfaceAlt = adaptive(light: "#FBF9F4", dark: "#26241F")
@@ -7624,6 +7921,8 @@ private struct TaskDetailEditor: View {
     @State private var editingScheduleField: ScheduleField?
     @State private var selectedCategoryID: UUID?
     @State private var selectedPriority: Priority
+    @State private var reminderMode: TaskReminderMode
+    @State private var reminderOffsets: [Int]
     @State private var tags: [String]
     @State private var tagDraft = ""
     @State private var isShowingDeleteConfirmation = false
@@ -7648,6 +7947,8 @@ private struct TaskDetailEditor: View {
         _includesTime = State(initialValue: task.scheduledTime != nil)
         _selectedCategoryID = State(initialValue: task.categoryID)
         _selectedPriority = State(initialValue: task.priority ?? .medium)
+        _reminderMode = State(initialValue: task.reminderMode)
+        _reminderOffsets = State(initialValue: task.reminderOffsetsMinutes)
         _tags = State(initialValue: task.tags)
     }
 
@@ -7673,6 +7974,13 @@ private struct TaskDetailEditor: View {
                 ScheduleValueButton(date: endDateValue, includesTime: includesTime) {
                     editingScheduleField = .end
                 }
+            }
+            AddSheetFieldRow(label: "알림", alignTop: true) {
+                TaskReminderEditor(
+                    mode: $reminderMode,
+                    offsets: $reminderOffsets,
+                    includesTime: includesTime
+                )
             }
             if !categories.isEmpty {
                 AddSheetFieldRow(label: "카테고리") {
@@ -7776,7 +8084,7 @@ private struct TaskDetailEditor: View {
                     editingScheduleField = nil
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -7816,7 +8124,9 @@ private struct TaskDetailEditor: View {
                 priority: selectedPriority,
                 isCompleted: task.isCompleted,
                 scheduledTime: includesTime ? Self.timeString(from: startDateValue) : nil,
-                tags: parsedTags
+                tags: parsedTags,
+                reminderMode: reminderMode,
+                reminderOffsetsMinutes: reminderOffsets
             )
         )
     }
@@ -7982,7 +8292,7 @@ private struct HabitDetailEditor: View {
                     isShowingReminderPicker = false
                 }
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -8027,5 +8337,8 @@ private struct DetailEditorActions: View {
 }
 
 #Preview {
-    ContentView(syncStatus: AppSyncStatusStore())
+    ContentView(
+        syncStatus: AppSyncStatusStore(),
+        notificationPermission: NotificationPermissionController()
+    )
 }

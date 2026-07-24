@@ -549,6 +549,8 @@ export function JustDoProvider({
           id: crypto.randomUUID(),
           isCompleted: false,
           ...input,
+          reminderMode: input.reminderMode ?? "default",
+          reminderOffsetsMinutes: input.reminderOffsetsMinutes ?? [],
           tags: input.tags ?? [],
         };
         setState((s) => ({ ...s, tasks: [...s.tasks, created] }));

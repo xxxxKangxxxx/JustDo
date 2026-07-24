@@ -60,7 +60,9 @@ final class CoreDataMapperTests: XCTestCase {
             priority: .high,
             isCompleted: false,
             scheduledTime: nil,
-            tags: ["취업", "서류"]
+            tags: ["취업", "서류"],
+            reminderMode: .custom,
+            reminderOffsetsMinutes: [1_440, 10]
         )
 
         let object = try CoreDataMappers.insertTask(task, in: context)

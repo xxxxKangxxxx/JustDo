@@ -39,6 +39,8 @@ const taskRow = (over: Partial<TaskRow> = {}): TaskRow => ({
   recur_days: null,
   recur_end_date: null,
   reminder_at: null,
+  reminder_mode: "default",
+  reminder_offsets_minutes: [],
   created_at: "2026-04-29T00:00:00Z",
   updated_at: "2026-04-29T00:00:00Z",
   ...over,
@@ -132,6 +134,8 @@ describe("taskRowToDomain", () => {
         priority: "high",
         is_completed: true,
         scheduled_time: "14:00",
+        reminder_mode: "custom",
+        reminder_offsets_minutes: [1440, 10, 10, -1, 10081],
         category_id: "cat-ext",
       }),
       ["#취업", "#면접"],
@@ -145,6 +149,8 @@ describe("taskRowToDomain", () => {
       priority: "high",
       isCompleted: true,
       scheduledTime: "14:00",
+      reminderMode: "custom",
+      reminderOffsetsMinutes: [10, 1440],
       tags: ["#취업", "#면접"],
     });
   });
@@ -176,6 +182,8 @@ describe("taskDomainToInsert", () => {
       priority: "low",
       isCompleted: true,
       scheduledTime: null,
+      reminderMode: "none",
+      reminderOffsetsMinutes: [],
       tags: [],
     };
     const insert = taskDomainToInsert(task, "u1");
@@ -183,6 +191,8 @@ describe("taskDomainToInsert", () => {
     expect(insert.category_id).toBe("cat-me");
     expect(insert.priority).toBe("low");
     expect(insert.is_completed).toBe(true);
+    expect(insert.reminder_mode).toBe("none");
+    expect(insert.reminder_offsets_minutes).toEqual([]);
     expect(insert.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
@@ -195,12 +205,16 @@ describe("taskDomainToInsert", () => {
       endDate: "",
       isCompleted: false,
       scheduledTime: null,
+      reminderMode: "custom",
+      reminderOffsetsMinutes: [10080, 10, 0, 10, -5],
       tags: [],
     };
     const insert = taskDomainToInsert(task, "u1");
     expect(insert.completed_at).toBeNull();
     expect(insert.start_date).toBeNull();
     expect(insert.end_date).toBeNull();
+    expect(insert.reminder_mode).toBe("custom");
+    expect(insert.reminder_offsets_minutes).toEqual([0, 10, 10080]);
   });
 });
 

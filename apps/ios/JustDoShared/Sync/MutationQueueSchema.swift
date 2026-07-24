@@ -133,6 +133,10 @@ public enum LocalMutation: Codable, Equatable, Sendable {
 public enum PreferenceKey: String, Codable, Equatable, Sendable {
     case notify
     case notifyTime = "notify_time"
+    case taskBriefingNotify = "task_briefing_notify"
+    case taskScheduleNotify = "task_schedule_notify"
+    case habitNotify = "habit_notify"
+    case defaultTaskReminderMinutes = "default_task_reminder_minutes"
     case weekStart = "week_start"
     case justDoMode = "just_do_mode"
 }
@@ -165,6 +169,7 @@ public enum RemoteChange: Equatable, Sendable {
 public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var generatedAt: String
     public var selectedDate: String
+    public var weekStart: Int
     public var categories: [Category]
     public var tasks: [Task]
     public var habits: [Habit]
@@ -172,14 +177,35 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public init(
         generatedAt: String,
         selectedDate: String,
+        weekStart: Int = 0,
         categories: [Category],
         tasks: [Task],
         habits: [Habit]
     ) {
         self.generatedAt = generatedAt
         self.selectedDate = selectedDate
+        self.weekStart = weekStart == 1 ? 1 : 0
         self.categories = categories
         self.tasks = tasks
         self.habits = habits
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case generatedAt
+        case selectedDate
+        case weekStart
+        case categories
+        case tasks
+        case habits
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        generatedAt = try container.decode(String.self, forKey: .generatedAt)
+        selectedDate = try container.decode(String.self, forKey: .selectedDate)
+        weekStart = (try container.decodeIfPresent(Int.self, forKey: .weekStart) ?? 0) == 1 ? 1 : 0
+        categories = try container.decode([Category].self, forKey: .categories)
+        tasks = try container.decode([Task].self, forKey: .tasks)
+        habits = try container.decode([Habit].self, forKey: .habits)
     }
 }

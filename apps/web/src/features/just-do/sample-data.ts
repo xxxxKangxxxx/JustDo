@@ -27,6 +27,8 @@ export const createInitialState = (): AppState => ({
       priority: "medium",
       isCompleted: false,
       scheduledTime: null,
+      reminderMode: "default",
+      reminderOffsetsMinutes: [],
       tags: ["#작업"],
     },
     {
@@ -38,6 +40,8 @@ export const createInitialState = (): AppState => ({
       priority: "high",
       isCompleted: false,
       scheduledTime: "19:00",
+      reminderMode: "default",
+      reminderOffsetsMinutes: [],
       tags: ["#취업", "#면접"],
     },
     {
@@ -49,6 +53,8 @@ export const createInitialState = (): AppState => ({
       priority: "high",
       isCompleted: false,
       scheduledTime: "14:00",
+      reminderMode: "default",
+      reminderOffsetsMinutes: [],
       tags: ["#미팅"],
     },
     {
@@ -60,6 +66,8 @@ export const createInitialState = (): AppState => ({
       priority: "medium",
       isCompleted: false,
       scheduledTime: null,
+      reminderMode: "default",
+      reminderOffsetsMinutes: [],
       tags: [],
     },
     {
@@ -71,6 +79,8 @@ export const createInitialState = (): AppState => ({
       priority: "low",
       isCompleted: true,
       scheduledTime: null,
+      reminderMode: "default",
+      reminderOffsetsMinutes: [],
       tags: [],
     },
   ],

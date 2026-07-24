@@ -54,6 +54,15 @@ public enum CoreDataMappers {
         object.setValue(task.startDate, forKey: "startDate")
         object.setValue(task.endDate, forKey: "endDate")
         object.setValue(task.scheduledTime, forKey: "scheduledTime")
+        object.setValue(task.reminderMode.rawValue, forKey: "reminderMode")
+        object.setValue(
+            try encoder.encode(
+                task.reminderMode == .custom
+                    ? Task.normalizedReminderOffsets(task.reminderOffsetsMinutes)
+                    : []
+            ),
+            forKey: "reminderOffsetsJSON"
+        )
         object.setValue(task.isCompleted, forKey: "isCompleted")
         object.setValue(try encoder.encode(task.tags), forKey: "tagsJSON")
     }
@@ -66,6 +75,12 @@ public enum CoreDataMappers {
             }
             return value
         }
+        let reminderModeRaw = object.value(forKey: "reminderMode") as? String
+        let reminderMode = reminderModeRaw.flatMap(TaskReminderMode.init(rawValue:)) ?? .defaultValue
+        let reminderOffsetsData = object.value(forKey: "reminderOffsetsJSON") as? Data
+        let reminderOffsets = try reminderOffsetsData.map {
+            try decoder.decode([Int].self, from: $0)
+        } ?? []
 
         return Task(
             id: object.value(forKey: "id") as! UUID,
@@ -76,7 +91,9 @@ public enum CoreDataMappers {
             priority: priority,
             isCompleted: object.value(forKey: "isCompleted") as! Bool,
             scheduledTime: object.value(forKey: "scheduledTime") as? String,
-            tags: try decoder.decode([String].self, from: object.value(forKey: "tagsJSON") as! Data)
+            tags: try decoder.decode([String].self, from: object.value(forKey: "tagsJSON") as! Data),
+            reminderMode: reminderMode,
+            reminderOffsetsMinutes: reminderOffsets
         )
     }
 

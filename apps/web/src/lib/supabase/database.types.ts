@@ -504,6 +504,8 @@ export type Database = {
           recur_end_date: string | null
           recur_type: string | null
           reminder_at: string | null
+          reminder_mode: string
+          reminder_offsets_minutes: number[]
           scheduled_time: string | null
           start_date: string | null
           title: string
@@ -524,6 +526,8 @@ export type Database = {
           recur_end_date?: string | null
           recur_type?: string | null
           reminder_at?: string | null
+          reminder_mode?: string
+          reminder_offsets_minutes?: number[]
           scheduled_time?: string | null
           start_date?: string | null
           title: string
@@ -544,6 +548,8 @@ export type Database = {
           recur_end_date?: string | null
           recur_type?: string | null
           reminder_at?: string | null
+          reminder_mode?: string
+          reminder_offsets_minutes?: number[]
           scheduled_time?: string | null
           start_date?: string | null
           title?: string

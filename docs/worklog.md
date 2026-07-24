@@ -5903,3 +5903,53 @@ as a follow-up.
   succeeded for app version 1.0, build 9, bundle id `kr.justdo.app`.
 - `xcodebuild -exportArchive` uploaded build 9 successfully; App Store Connect
   reported that the uploaded package is processing.
+
+## 2026-07-24 Notification system + Large widget + TestFlight build 10
+
+### Codex
+
+- Added Task reminder persistence and sync:
+  - `default`, `custom`, and `none` reminder modes.
+  - Up to three reminder offsets from on-time through one week.
+  - Applied `20260724090000_task_notification_preferences.sql` to the connected
+    Supabase project.
+- Added local notification planning and scheduling:
+  - Daily Task briefing at the user-selected time.
+  - Task schedule reminders with same-minute merging and passed-lead fallback.
+  - Habit weekday/time reminders with same-minute merging and completed-day
+    omission.
+  - Independent briefing, Task schedule, and Habit toggles.
+- Added first-use permission explanation, denied-permission Settings routing,
+  preserved notification preferences, Task reminder controls, and the untimed
+  Task warning copy.
+- Added five-second dismissible foreground and Task-completion banners plus
+  notification-tap routing to the target date Home.
+- Reworked the Large widget calendar:
+  - Real month position respecting the week-start preference.
+  - Dynamic 4/5/6 rows with faint adjacent-month dates.
+  - One Task/Habit activity dot even when only completed items exist.
+  - Large-list limits of 7/6/5 for 4/5/6-row months.
+- Bumped `CURRENT_PROJECT_VERSION` from 9 to 10.
+
+### Verification
+
+- `swift test` passed: 84 tests.
+- Web Vitest passed: 146 tests.
+- Web ESLint and production build passed.
+- Debug simulator app + widget build passed.
+- Simulator UI checks passed for Task/Habit deep links, independent
+  notification settings, warning copy, and Task reminder modes.
+- Direct-device build could not start because the paired iPhone runs iOS
+  26.5.2 while the installed Xcode provides the iOS 26.2 developer disk image.
+  Pairing and Developer Mode were both confirmed healthy.
+- `build/JustDoApp-b10-notifications.xcarchive` succeeded for app version 1.0,
+  build 10, bundle id `kr.justdo.app`.
+- `xcodebuild -exportArchive` uploaded build 10 successfully; App Store Connect
+  reported that the uploaded package is processing.
+
+### Next
+
+- The user confirmed on 2026-07-25 that the real device was updated to build 10
+  through TestFlight.
+- Ended this work session after documentation, commit, and push. Resume with
+  real-device sections 12 and 13 of `docs/testflight_smoke_checklist.md`.

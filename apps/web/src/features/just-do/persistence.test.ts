@@ -40,6 +40,8 @@ const sampleTask = (over: Partial<Task> = {}): Task => ({
   scheduledTime: null,
   tags: [],
   ...over,
+  reminderMode: over.reminderMode ?? "default",
+  reminderOffsetsMinutes: over.reminderOffsetsMinutes ?? [],
 });
 
 const sampleHabit = (over: Partial<Habit> = {}): Habit => ({
@@ -130,6 +132,22 @@ describe("mergePersisted", () => {
     expect(merged.settings.plan).toBe("pro");
     expect(merged.settings.notify).toBe(initial.settings.notify);
     expect(merged.settings.weekStart).toBe(initial.settings.weekStart);
+  });
+
+  it("defaults reminder fields for tasks saved by older clients", () => {
+    const initial = createInitialState();
+    const legacyTask: Partial<Task> = { ...sampleTask() };
+    delete legacyTask.reminderMode;
+    delete legacyTask.reminderOffsetsMinutes;
+    const saved: Persisted = {
+      ...stripVolatile(initial),
+      tasks: [legacyTask as Task],
+    };
+
+    const merged = mergePersisted(initial, saved);
+
+    expect(merged.tasks[0].reminderMode).toBe("default");
+    expect(merged.tasks[0].reminderOffsetsMinutes).toEqual([]);
   });
 });
 

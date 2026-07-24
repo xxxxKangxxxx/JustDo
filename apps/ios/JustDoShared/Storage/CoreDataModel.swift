@@ -44,6 +44,8 @@ public enum CoreDataModelFactory {
                 attribute("startDate", .stringAttributeType, optional: false),
                 attribute("endDate", .stringAttributeType, optional: false),
                 attribute("scheduledTime", .stringAttributeType, optional: true),
+                attribute("reminderMode", .stringAttributeType, optional: true),
+                attribute("reminderOffsetsJSON", .binaryDataAttributeType, optional: true),
                 attribute("isCompleted", .booleanAttributeType, optional: false),
                 attribute("tagsJSON", .binaryDataAttributeType, optional: false),
                 attribute("updatedAt", .dateAttributeType, optional: true),

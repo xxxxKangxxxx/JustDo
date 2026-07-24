@@ -584,23 +584,36 @@ private struct MonthGrid: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 1) {
-            ForEach(days) { day in
-                VStack(spacing: 2) {
-                    Text("\(day.day)")
-                        .font(.system(size: 10, weight: day.isToday ? .bold : .medium))
-                        .frame(width: 17, height: 17)
-                        .foregroundStyle(day.isToday ? .white : .primary)
-                        .background(day.isToday ? Color.accentColor : .clear)
-                        .clipShape(Circle())
-                    HStack(spacing: 1) {
-                        ForEach(Array(day.dotColors.prefix(3).enumerated()), id: \.offset) { _, color in
+        VStack(spacing: 2) {
+            HStack(spacing: 0) {
+                ForEach(Array(days.prefix(7))) { day in
+                    Text(weekdayLabel(day.weekday))
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            LazyVGrid(columns: columns, spacing: 1) {
+                ForEach(days) { day in
+                    VStack(spacing: 2) {
+                        Text("\(day.day)")
+                            .font(.system(size: 10, weight: day.isToday ? .bold : .medium))
+                            .frame(width: 17, height: 17)
+                            .foregroundStyle(
+                                day.isToday
+                                    ? Color.white
+                                    : (day.isCurrentMonth ? Color.primary : Color.primary.opacity(0.28))
+                            )
+                            .background(day.isToday ? Color.accentColor : .clear)
+                            .clipShape(Circle())
+                        if let color = day.dotColors.first {
                             Circle()
                                 .fill(Color(hex: color))
-                                .frame(width: 2, height: 2)
+                                .frame(width: 3, height: 3)
+                        } else {
+                            Color.clear.frame(width: 3, height: 3)
                         }
                     }
-                    .frame(height: 2)
                 }
             }
         }

@@ -355,6 +355,7 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
     private func fetchSettings(defaults: Settings) throws -> Settings {
         var settings = defaults
         let decoder = JSONDecoder()
+        var integerPreferences: [PreferenceKey: Int] = [:]
         for object: NSManagedObject in try fetchObjects("CDUserPreference") {
             guard
                 let rawKey = object.value(forKey: "key") as? String,
@@ -372,17 +373,36 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
             else {
                 continue
             }
+            integerPreferences[key] = value
+        }
 
-            switch key {
-            case .notify:
-                settings.notify = value == 1
-            case .notifyTime:
-                settings.notifyTime = Self.timeString(fromMinutes: value)
-            case .weekStart:
-                settings.weekStart = value == 1 ? 1 : 0
-            case .justDoMode:
-                settings.justDoMode = value == 1
-            }
+        if let value = integerPreferences[.notify] {
+            let enabled = value == 1
+            settings.notify = enabled
+            settings.taskBriefingNotify = enabled
+            settings.taskScheduleNotify = enabled
+            settings.habitNotify = enabled
+        }
+        if let value = integerPreferences[.notifyTime] {
+            settings.notifyTime = Self.timeString(fromMinutes: value)
+        }
+        if let value = integerPreferences[.taskBriefingNotify] {
+            settings.taskBriefingNotify = value == 1
+        }
+        if let value = integerPreferences[.taskScheduleNotify] {
+            settings.taskScheduleNotify = value == 1
+        }
+        if let value = integerPreferences[.habitNotify] {
+            settings.habitNotify = value == 1
+        }
+        if let value = integerPreferences[.defaultTaskReminderMinutes] {
+            settings.defaultTaskReminderMinutes = min(max(value, 0), 10_080)
+        }
+        if let value = integerPreferences[.weekStart] {
+            settings.weekStart = value == 1 ? 1 : 0
+        }
+        if let value = integerPreferences[.justDoMode] {
+            settings.justDoMode = value == 1
         }
         return settings
     }
@@ -430,6 +450,10 @@ public enum AppSnapshotDefaults {
         Settings(
             notify: true,
             notifyTime: "09:00",
+            taskBriefingNotify: true,
+            taskScheduleNotify: true,
+            habitNotify: true,
+            defaultTaskReminderMinutes: 10,
             weekStart: 1,
             plan: "free",
             justDoMode: false

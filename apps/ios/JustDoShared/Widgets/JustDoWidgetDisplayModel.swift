@@ -56,6 +56,7 @@ public struct JustDoWidgetDay: Identifiable, Equatable, Sendable {
     public var day: Int
     public var weekday: Int
     public var isToday: Bool
+    public var isCurrentMonth: Bool
     public var dotColors: [String]
 
     public init(
@@ -63,12 +64,14 @@ public struct JustDoWidgetDay: Identifiable, Equatable, Sendable {
         day: Int,
         weekday: Int,
         isToday: Bool,
+        isCurrentMonth: Bool = true,
         dotColors: [String]
     ) {
         self.iso = iso
         self.day = day
         self.weekday = weekday
         self.isToday = isToday
+        self.isCurrentMonth = isCurrentMonth
         self.dotColors = dotColors
     }
 }
@@ -129,6 +132,10 @@ public enum JustDoWidgetDisplayModelFactory {
         let items = prioritizedItems(
             allItems.filter { $0.displayMode == displayMode }
         )
+        let monthDays = monthDays(
+            snapshot: snapshot,
+            dotColor: modeColors.task
+        )
         let limit: Int
         switch size {
         case .small:
@@ -136,7 +143,14 @@ public enum JustDoWidgetDisplayModelFactory {
         case .medium:
             limit = 6
         case .large:
-            limit = 8
+            switch monthDays.count / 7 {
+            case 4:
+                limit = 7
+            case 5:
+                limit = 6
+            default:
+                limit = 5
+            }
         }
 
         return JustDoWidgetDisplayModel(
@@ -149,8 +163,8 @@ public enum JustDoWidgetDisplayModelFactory {
             taskModeColorHex: modeColors.task,
             habitModeColorHex: modeColors.habit,
             items: Array(items.prefix(limit)),
-            weekDays: weekDays(selectedDate: snapshot.selectedDate, items: allItems),
-            monthDays: monthDays(selectedDate: snapshot.selectedDate, items: allItems)
+            weekDays: weekDays(snapshot: snapshot, dotColor: modeColors.task),
+            monthDays: monthDays
         )
     }
 
@@ -170,7 +184,9 @@ public enum JustDoWidgetDisplayModelFactory {
             )
         }
 
-        let habitItems = snapshot.habits.filter { habitActiveOn($0, iso: snapshot.selectedDate) }.map { habit in
+        let habitItems = snapshot.habits.filter {
+            $0.startedAt <= snapshot.selectedDate && habitActiveOn($0, iso: snapshot.selectedDate)
+        }.map { habit in
             JustDoWidgetItem(
                 id: habit.id,
                 title: "\(habit.emoji) \(habit.title)",
@@ -216,51 +232,91 @@ public enum JustDoWidgetDisplayModelFactory {
     }
 
     private static func prioritizedItems(_ items: [JustDoWidgetItem]) -> [JustDoWidgetItem] {
-        items.filter { !$0.isDone } + items.filter(\.isDone)
+        items.sorted { left, right in
+            if left.isDone != right.isDone {
+                return !left.isDone
+            }
+            switch (left.subtitle, right.subtitle) {
+            case let (leftTime?, rightTime?) where leftTime != rightTime:
+                return leftTime < rightTime
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                return left.title.localizedStandardCompare(right.title) == .orderedAscending
+            }
+        }
     }
 
     private static func weekDays(
-        selectedDate: String,
-        items: [JustDoWidgetItem]
+        snapshot: WidgetSnapshot,
+        dotColor: String
     ) -> [JustDoWidgetDay] {
-        guard let date = parseDate(selectedDate) else { return [] }
+        guard let date = parseDate(snapshot.selectedDate) else { return [] }
         let calendar = gregorianCalendar
         let weekday = calendar.component(.weekday, from: date) - 1
-        let start = calendar.date(byAdding: .day, value: -weekday, to: date) ?? date
+        let offset = (weekday - snapshot.weekStart + 7) % 7
+        let start = calendar.date(byAdding: .day, value: -offset, to: date) ?? date
 
         return (0..<7).compactMap { offset in
             guard let current = calendar.date(byAdding: .day, value: offset, to: start) else {
                 return nil
             }
-            return day(current, selectedDate: selectedDate, dotColors: dotColors(from: items))
+            let iso = formatDate(current)
+            return day(
+                current,
+                selectedDate: snapshot.selectedDate,
+                isCurrentMonth: true,
+                hasItems: hasItems(on: iso, snapshot: snapshot),
+                dotColor: dotColor
+            )
         }
     }
 
     private static func monthDays(
-        selectedDate: String,
-        items: [JustDoWidgetItem]
+        snapshot: WidgetSnapshot,
+        dotColor: String
     ) -> [JustDoWidgetDay] {
-        guard let date = parseDate(selectedDate) else { return [] }
+        guard let date = parseDate(snapshot.selectedDate) else { return [] }
         let calendar = gregorianCalendar
         let components = calendar.dateComponents([.year, .month], from: date)
-        guard let first = calendar.date(from: components),
-              let range = calendar.range(of: .day, in: .month, for: first)
+        guard
+            let first = calendar.date(from: components),
+            let range = calendar.range(of: .day, in: .month, for: first)
         else {
             return []
         }
 
-        return range.compactMap { dayIndex in
-            var next = components
-            next.day = dayIndex
-            guard let current = calendar.date(from: next) else { return nil }
-            return day(current, selectedDate: selectedDate, dotColors: dotColors(from: items))
+        let firstWeekday = calendar.component(.weekday, from: first) - 1
+        let leadingCount = (firstWeekday - snapshot.weekStart + 7) % 7
+        let totalCells = leadingCount + range.count
+        let trailingCount = (7 - totalCells % 7) % 7
+        let cellCount = totalCells + trailingCount
+        let gridStart = calendar.date(byAdding: .day, value: -leadingCount, to: first) ?? first
+        let selectedMonth = components.month
+
+        return (0..<cellCount).compactMap { offset in
+            guard let current = calendar.date(byAdding: .day, value: offset, to: gridStart) else {
+                return nil
+            }
+            let iso = formatDate(current)
+            return day(
+                current,
+                selectedDate: snapshot.selectedDate,
+                isCurrentMonth: calendar.component(.month, from: current) == selectedMonth,
+                hasItems: hasItems(on: iso, snapshot: snapshot),
+                dotColor: dotColor
+            )
         }
     }
 
     private static func day(
         _ date: Date,
         selectedDate: String,
-        dotColors: [String]
+        isCurrentMonth: Bool,
+        hasItems: Bool,
+        dotColor: String
     ) -> JustDoWidgetDay {
         let calendar = gregorianCalendar
         let iso = formatDate(date)
@@ -269,12 +325,18 @@ public enum JustDoWidgetDisplayModelFactory {
             day: calendar.component(.day, from: date),
             weekday: calendar.component(.weekday, from: date) - 1,
             isToday: iso == selectedDate,
-            dotColors: iso == selectedDate ? Array(dotColors.prefix(3)) : []
+            isCurrentMonth: isCurrentMonth,
+            dotColors: isCurrentMonth && hasItems ? [dotColor] : []
         )
     }
 
-    private static func dotColors(from items: [JustDoWidgetItem]) -> [String] {
-        Array(Set(items.map(\.colorHex))).sorted()
+    private static func hasItems(on iso: String, snapshot: WidgetSnapshot) -> Bool {
+        if snapshot.tasks.contains(where: { $0.startDate <= iso && iso <= $0.endDate }) {
+            return true
+        }
+        return snapshot.habits.contains {
+            $0.startedAt <= iso && habitActiveOn($0, iso: iso)
+        }
     }
 
     private static func parseDate(_ iso: String) -> Date? {

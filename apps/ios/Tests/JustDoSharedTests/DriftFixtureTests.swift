@@ -18,6 +18,8 @@ final class DriftFixtureTests: XCTestCase {
         XCTAssertEqual(snapshot.categories.map(\.name), ["취업", "업무"])
         XCTAssertEqual(snapshot.tasks.first?.categoryID?.uuidString.lowercased(), "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
         XCTAssertEqual(snapshot.tasks.first?.tags, ["취업", "서류"])
+        XCTAssertEqual(snapshot.tasks.first?.reminderMode, .defaultValue)
+        XCTAssertEqual(snapshot.tasks.first?.reminderOffsetsMinutes, [])
         XCTAssertEqual(snapshot.habits.first?.recurType, .weekly)
         XCTAssertEqual(snapshot.habits.first?.recurDays, [1, 3, 5])
         XCTAssertEqual(snapshot.habits.first?.reminderTime, "08:30")

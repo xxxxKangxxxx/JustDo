@@ -10,6 +10,7 @@ import type {
   HabitRecurType,
   Priority,
   Task,
+  TaskReminderMode,
 } from "@/types/domain";
 
 type CategoryRow = Database["public"]["Tables"]["categories"]["Row"];
@@ -28,6 +29,15 @@ const habitCategoryName = "Habit";
 
 const isPriority = (value: string | null): value is Priority =>
   value === "high" || value === "medium" || value === "low";
+
+const toTaskReminderMode = (value: string): TaskReminderMode =>
+  value === "custom" || value === "none" ? value : "default";
+
+const normalizeTaskReminderOffsets = (offsets: number[]): number[] =>
+  [...new Set(offsets)]
+    .filter((offset) => Number.isInteger(offset) && offset >= 0 && offset <= 10080)
+    .sort((a, b) => a - b)
+    .slice(0, 3);
 
 const toHabitRecurType = (value: string | null): HabitRecurType =>
   value === "weekly" ? "weekly" : "daily";
@@ -72,6 +82,11 @@ export const taskRowToDomain = (row: TaskRow, tags: string[] = []): Task => ({
   priority: isPriority(row.priority) ? row.priority : undefined,
   isCompleted: row.is_completed,
   scheduledTime: row.scheduled_time,
+  reminderMode: toTaskReminderMode(row.reminder_mode),
+  reminderOffsetsMinutes:
+    row.reminder_mode === "custom"
+      ? normalizeTaskReminderOffsets(row.reminder_offsets_minutes)
+      : [],
   tags,
 });
 
@@ -87,6 +102,11 @@ export const taskDomainToInsert = (
   start_date: task.startDate || null,
   end_date: task.endDate || null,
   scheduled_time: task.scheduledTime ?? null,
+  reminder_mode: task.reminderMode,
+  reminder_offsets_minutes:
+    task.reminderMode === "custom"
+      ? normalizeTaskReminderOffsets(task.reminderOffsetsMinutes)
+      : [],
   is_completed: task.isCompleted,
   completed_at: task.isCompleted ? new Date().toISOString() : null,
 });

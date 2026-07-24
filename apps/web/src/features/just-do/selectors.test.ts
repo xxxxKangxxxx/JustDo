@@ -28,6 +28,8 @@ const makeTask = (over: Partial<Task> = {}): Task => ({
   scheduledTime: null,
   tags: [],
   ...over,
+  reminderMode: over.reminderMode ?? "default",
+  reminderOffsetsMinutes: over.reminderOffsetsMinutes ?? [],
 });
 
 describe("tasksOnDate", () => {

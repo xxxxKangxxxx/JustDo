@@ -1,6 +1,7 @@
 export type HabitCategory = "habit";
 export type HabitRecurType = "daily" | "weekly";
 export type Priority = "high" | "medium" | "low";
+export type TaskReminderMode = "default" | "custom" | "none";
 export type TabId = "home" | "habit" | "settings";
 
 export type Category = {
@@ -20,6 +21,8 @@ export type Task = {
   priority?: Priority;
   isCompleted: boolean;
   scheduledTime?: string | null;
+  reminderMode: TaskReminderMode;
+  reminderOffsetsMinutes: number[];
   tags: string[];
 };
 
@@ -101,6 +104,8 @@ export type NewTaskInput = {
   endDate: string;
   priority: Priority;
   scheduledTime?: string | null;
+  reminderMode?: TaskReminderMode;
+  reminderOffsetsMinutes?: number[];
   tags?: string[];
 };
 

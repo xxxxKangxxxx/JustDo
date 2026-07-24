@@ -35,10 +35,72 @@ final class WidgetDisplayModelTests: XCTestCase {
             size: .large
         )
 
-        XCTAssertEqual(model.monthDays.count, 30)
-        XCTAssertEqual(model.monthDays.first?.day, 1)
-        XCTAssertEqual(model.monthDays.last?.day, 30)
-        XCTAssertEqual(model.monthDays.last?.dotColors.isEmpty, false)
+        XCTAssertEqual(model.monthDays.count, 35)
+        XCTAssertEqual(model.monthDays.first?.iso, "2026-03-29")
+        XCTAssertEqual(model.monthDays.first?.isCurrentMonth, false)
+        XCTAssertEqual(model.monthDays.last?.iso, "2026-05-02")
+        XCTAssertEqual(model.monthDays.last?.isCurrentMonth, false)
+        XCTAssertTrue(model.monthDays.first?.dotColors.isEmpty == true)
+        XCTAssertEqual(model.monthDays.first(where: { $0.iso == "2026-04-30" })?.dotColors.count, 1)
+    }
+
+    func testLargeMonthGridRespectsMondayWeekStart() {
+        var fixture = snapshot()
+        fixture.weekStart = 1
+
+        let model = JustDoWidgetDisplayModelFactory.make(from: fixture, size: .large)
+
+        XCTAssertEqual(model.monthDays.first?.iso, "2026-03-30")
+        XCTAssertEqual(model.monthDays.last?.iso, "2026-05-03")
+        XCTAssertEqual(model.monthDays.first?.weekday, 1)
+    }
+
+    func testLargeListLimitChangesWithMonthRowCount() {
+        let fourRows = JustDoWidgetDisplayModelFactory.make(
+            from: busySnapshot(selectedDate: "2026-02-10"),
+            size: .large
+        )
+        let fiveRows = JustDoWidgetDisplayModelFactory.make(
+            from: busySnapshot(selectedDate: "2026-04-10"),
+            size: .large
+        )
+        let sixRows = JustDoWidgetDisplayModelFactory.make(
+            from: busySnapshot(selectedDate: "2026-08-10"),
+            size: .large
+        )
+
+        XCTAssertEqual(fourRows.monthDays.count / 7, 4)
+        XCTAssertEqual(fourRows.items.count, 7)
+        XCTAssertEqual(fiveRows.monthDays.count / 7, 5)
+        XCTAssertEqual(fiveRows.items.count, 6)
+        XCTAssertEqual(sixRows.monthDays.count / 7, 6)
+        XCTAssertEqual(sixRows.items.count, 5)
+        XCTAssertEqual(sixRows.totalCount, 10)
+    }
+
+    func testCompletedOnlyDateStillHasOneUnifiedDot() {
+        var fixture = snapshot()
+        fixture.tasks = [
+            Task(
+                id: uuid("99999999-9999-9999-9999-999999999999"),
+                title: "완료된 일정",
+                categoryID: nil,
+                startDate: "2026-04-15",
+                endDate: "2026-04-15",
+                priority: nil,
+                isCompleted: true,
+                scheduledTime: nil,
+                tags: []
+            ),
+        ]
+        fixture.habits = []
+
+        let model = JustDoWidgetDisplayModelFactory.make(from: fixture, size: .large)
+
+        XCTAssertEqual(
+            model.monthDays.first(where: { $0.iso == "2026-04-15" })?.dotColors,
+            [model.taskModeColorHex]
+        )
     }
 
     func testHabitModeShowsOnlyHabitsWithCompletedCount() {
@@ -146,6 +208,28 @@ final class WidgetDisplayModelTests: XCTestCase {
                     log: ["2026-04-30": 1]
                 ),
             ]
+        )
+    }
+
+    private func busySnapshot(selectedDate: String) -> WidgetSnapshot {
+        WidgetSnapshot(
+            generatedAt: "2026-01-01T00:00:00Z",
+            selectedDate: selectedDate,
+            categories: [],
+            tasks: (1...10).map { index in
+                Task(
+                    id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index))!,
+                    title: "할 일 \(index)",
+                    categoryID: nil,
+                    startDate: selectedDate,
+                    endDate: selectedDate,
+                    priority: nil,
+                    isCompleted: index > 7,
+                    scheduledTime: index <= 5 ? String(format: "%02d:00", 8 + index) : nil,
+                    tags: []
+                )
+            },
+            habits: []
         )
     }
 

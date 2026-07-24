@@ -1,15 +1,15 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-07-18
+Updated: 2026-07-25
 
-Purpose: validate TestFlight internal build 9 follow-ups before deciding whether
+Purpose: validate TestFlight internal build 10 follow-ups before deciding whether
 to submit the iOS v1 build for public App Review.
 
 ## Test Setup
 
 - Device: real iPhone with the TestFlight build installed.
-- Build: App Store Connect / TestFlight internal build 9 after processing and
-  TestFlight attachment.
+- Build: App Store Connect / TestFlight internal build 10, updated on the real
+  device through TestFlight on 2026-07-25.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -45,6 +45,9 @@ Current progress:
 - [x] 9. Settings and Subscription Copy — passed on build 5, 2026-07-01.
 - [x] 10. Widget — passed on build 5 with H-005 build 6 follow-up.
 - [x] 11. Short Offline Check — passed on build 5, 2026-07-01.
+- [ ] 12. Build 9 Sheet Presentation — carry forward on build 10.
+- [ ] 13. Build 10 Notifications and Large Widget — installed; verification
+  resumes in the next work session.
 
 ### 1. Install and Launch
 
@@ -256,6 +259,38 @@ Status: PENDING BUILD 9 TESTFLIGHT
 Notes: Build 8 reproduced the detached-bottom presentation in every affected compact sheet and delayed data-export presentation until Settings was dismissed. Build 9 was uploaded on 2026-07-18 and is processing in App Store Connect.
 ```
 
+### 13. Build 10 Notifications and Large Widget
+
+- [ ] On first authenticated Home entry, confirm the app explanation appears
+  before the iOS notification permission prompt.
+- [ ] Deny permission once, then confirm Settings -> `알림 설정` shows the
+  system Settings shortcut while preserving the selected toggles.
+- [ ] Confirm `아침 브리핑`, `일정 알림`, and `습관 알림` are independent.
+- [ ] Change briefing time and the default Task reminder from 10 minutes.
+- [ ] Create timed and untimed Tasks and confirm the warning text and
+  `기본값 / 직접 설정 / 없음` options; select up to three custom reminders.
+- [ ] Confirm the morning briefing includes both timed and untimed Tasks.
+- [ ] Complete a Task in the app and confirm the five-second dismissible banner
+  shows the next timed schedule, remaining count, or all-complete/tomorrow copy.
+- [ ] Confirm completing a Task in the widget does not show an in-app banner.
+- [ ] Create two Habits at the same weekday/time and confirm one merged
+  notification without emoji; complete one before the time and confirm it is
+  omitted.
+- [ ] Tap a Task or Habit system notification and confirm Home opens on its
+  target date; while the app is foregrounded, confirm an in-app banner appears.
+- [ ] Add the Large widget and verify weekday headers, the real month start
+  position, faint adjacent-month dates without dots, and a single dot for any
+  Task/Habit including completed-only dates.
+- [ ] Check representative 4-, 5-, and 6-row months and confirm the lower list
+  shows at most 7, 6, and 5 items respectively without `외 N개`.
+
+Result:
+
+```text
+Status: PENDING REAL-DEVICE VERIFICATION
+Notes: Build 10 uploaded successfully on 2026-07-24. The user confirmed the TestFlight update on 2026-07-25; targeted real-device verification is intentionally deferred to the next work session. Local verification passed 84 Swift tests, 146 web tests, app/widget build, and simulator UI checks.
+```
+
 ## Issue Log
 
 Use this format for every failure or suspicious behavior.
@@ -368,6 +403,6 @@ Decision:
 
 ```text
 Status: FIX REQUIRED
-Reason: Build 7 verified task add, task completion, and Goal add automatic sync. Build 8 still reproduced the detached-bottom presentation across all affected compact sheets and delayed data export until Settings was dismissed. Build 9 has been uploaded with the fixes but is not yet verified on a real device.
-Next action: Wait for build 9 processing, attach/install it through internal TestFlight, then run section 12. Widget mutation flush and Goal Management regression both passed on build 8.
+Reason: Build 10 contains the notification system, Task reminder UI, completion/foreground banners, and Large widget calendar changes, but still requires real-device TestFlight verification. Build 9 sheet and export checks also carry forward.
+Next action: In the next work session, run sections 12 and 13 on the installed TestFlight build 10.
 ```

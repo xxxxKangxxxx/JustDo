@@ -121,9 +121,11 @@ const normalizeTab = (
   return "home";
 };
 
-type LegacyTask = Omit<Task, "categoryId"> & {
+type LegacyTask = Omit<Task, "categoryId" | "reminderMode" | "reminderOffsetsMinutes"> & {
   category?: "me" | "ext";
   categoryId?: string | null;
+  reminderMode?: Task["reminderMode"];
+  reminderOffsetsMinutes?: number[];
 };
 type LegacyPersisted = Omit<Partial<Persisted>, "tasks"> & { tasks?: LegacyTask[] };
 type LegacyHabit = Omit<Habit, "recurType" | "recurDays"> & {
@@ -150,7 +152,22 @@ const normalizeTasks = (saved: LegacyPersisted): Task[] =>
         : defaultCategories[0].id);
     const rest = { ...task };
     delete rest.category;
-    return { ...rest, categoryId };
+    return {
+      ...rest,
+      categoryId,
+      reminderMode:
+        task.reminderMode === "custom" || task.reminderMode === "none"
+          ? task.reminderMode
+          : "default",
+      reminderOffsetsMinutes:
+        task.reminderMode === "custom"
+          ? (task.reminderOffsetsMinutes ?? [])
+              .filter((offset) => Number.isInteger(offset) && offset >= 0 && offset <= 10080)
+              .filter((offset, index, offsets) => offsets.indexOf(offset) === index)
+              .sort((a, b) => a - b)
+              .slice(0, 3)
+          : [],
+    };
   });
 
 const normalizeHabits = (habits: Habit[] | undefined): Habit[] =>

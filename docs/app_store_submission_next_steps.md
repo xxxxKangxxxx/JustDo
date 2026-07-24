@@ -90,6 +90,11 @@ Store Connect review notes.
   presentation used by Terms and Privacy, and moves export presentation
   ownership into Settings so the share sheet opens immediately. App Store
   Connect reported that the uploaded package is processing.
+- Build 10 was archived and uploaded to App Store Connect on 2026-07-24. It
+  adds independent Task briefing/schedule and Habit notification settings,
+  Task reminders with up to three offsets, foreground/completion banners,
+  notification date routing, and the real-month Large widget calendar.
+  The user confirmed the TestFlight update on a real device on 2026-07-25.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information
@@ -103,9 +108,10 @@ Store Connect review notes.
 - App Review notes are saved with Sign in with Apple as the primary review path,
   the Google demo account as fallback, and explicit confirmation that this iOS
   build has no IAP, purchase flow, external payment link, or purchase CTA.
-- Next: wait for build 9 processing, attach/install it through internal
-  TestFlight, then verify the unified large-sheet visuals and immediate data
-  export. Widget mutation flush and Goal Management regression passed on build 8.
+- Next: run sections 12 and 13 of the smoke checklist on the installed
+  TestFlight build 10 in the next work session. Direct Xcode installation was
+  unavailable because the paired iPhone is on iOS 26.5.2 while the installed
+  Xcode provides the iOS 26.2 developer image.
 
 ## Final Local Checks Before Archive
 

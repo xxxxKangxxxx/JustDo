@@ -13,7 +13,9 @@ import JustDoShared
 struct JustDoAppApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var syncStatus = AppSyncStatusStore()
+    @StateObject private var notificationPermission = NotificationPermissionController()
     private let coreDataStack = CoreDataStack(inMemory: JustDoUITestSupport.isEnabled)
+    private let notificationScheduler = LocalNotificationScheduler()
 
     var body: some Scene {
         WindowGroup {
@@ -24,10 +26,15 @@ struct JustDoAppApp: App {
             )
             ContentView(
                 snapshotStore: snapshotStore,
-                syncStatus: syncStatus
-            ) {
-                await refreshWidgetSnapshot()
-            }
+                syncStatus: syncStatus,
+                notificationPermission: notificationPermission,
+                onSessionChanged: {
+                    await refreshWidgetSnapshot()
+                },
+                onSnapshotChanged: { snapshot in
+                    await rescheduleNotifications(for: snapshot)
+                }
+            )
                 .task {
                     if !JustDoUITestSupport.isEnabled {
                         await refreshWidgetSnapshot()
@@ -66,6 +73,20 @@ struct JustDoAppApp: App {
             syncStatus.markFailed(error, snapshotStore: snapshotStore)
             #if DEBUG
             print("Failed to refresh widget snapshot: \(error)")
+            #endif
+        }
+    }
+
+    @MainActor
+    private func rescheduleNotifications(for snapshot: AppSnapshot) async {
+        guard !JustDoUITestSupport.isEnabled else {
+            return
+        }
+        do {
+            try await notificationScheduler.reschedule(snapshot: snapshot)
+        } catch {
+            #if DEBUG
+            print("Failed to reschedule local notifications: \(error)")
             #endif
         }
     }

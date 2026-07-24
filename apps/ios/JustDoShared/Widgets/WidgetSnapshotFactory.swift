@@ -9,6 +9,7 @@ public enum WidgetSnapshotFactory {
         return WidgetSnapshot(
             generatedAt: generatedAt ?? currentTimestamp(),
             selectedDate: selectedDate,
+            weekStart: appSnapshot.settings.weekStart,
             categories: appSnapshot.categories.sorted { left, right in
                 if left.position == right.position {
                     return left.name < right.name
