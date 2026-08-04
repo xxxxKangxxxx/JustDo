@@ -223,16 +223,36 @@ public enum NotificationPlanner {
 
         let hasBriefing = !bucket.briefingTasks.isEmpty
         let kind: PlannedNotificationKind = hasBriefing ? .taskBriefing : .taskSchedule
-        let title = hasBriefing ? "오늘의 할 일" : "일정 안내"
+        let title = hasBriefing
+            ? "일정 브리핑"
+            : scheduleTitle(
+                tasks: bucket.scheduledTasks,
+                fallback: bucket.fireDate,
+                calendar: calendar
+            )
         var bodyParts: [String] = []
         if hasBriefing {
-            bodyParts.append(briefingBody(tasks: bucket.briefingTasks))
+            let scheduledTaskIDs = Set(bucket.scheduledTasks.map(\.id))
+            let briefingOnlyTasks = bucket.briefingTasks.filter {
+                !scheduledTaskIDs.contains($0.id)
+            }
+            bodyParts.append(
+                briefingBody(
+                    totalCount: bucket.briefingTasks.count,
+                    examples: briefingOnlyTasks
+                )
+            )
         }
         if !bucket.scheduledTasks.isEmpty {
             bodyParts.append(
-                scheduleBody(
+                hasBriefing
+                    ? mergedScheduleBody(
+                        tasks: bucket.scheduledTasks.sorted(by: taskOrder),
+                        fallback: bucket.fireDate,
+                        calendar: calendar
+                    )
+                    : scheduleBody(
                     tasks: bucket.scheduledTasks.sorted(by: taskOrder),
-                    calendar: calendar
                 )
             )
         }
@@ -246,7 +266,7 @@ public enum NotificationPlanner {
             kind: kind,
             fireDate: bucket.fireDate,
             title: title,
-            body: bodyParts.joined(separator: " "),
+            body: bodyParts.joined(separator: " · "),
             targetDate: bucket.targetDate,
             taskIDs: taskIDs
         )
@@ -305,28 +325,52 @@ public enum NotificationPlanner {
         }
     }
 
-    private static func briefingBody(tasks: [Task]) -> String {
-        let count = tasks.count
-        if count == 1 {
-            return "오늘 ‘\(tasks[0].title)’ 할 일이 예정되어 있습니다."
+    private static func briefingBody(totalCount: Int, examples: [Task]) -> String {
+        let prefix = "오늘 할 일 \(totalCount)개"
+        guard let first = examples.first else {
+            return prefix
         }
-        let examples = tasks.prefix(2).map { "‘\($0.title)’" }.joined(separator: ", ")
-        return "\(examples)을 포함해 오늘 할 일 \(count)개가 예정되어 있습니다."
+        if examples.count == 1 {
+            return "\(prefix) · ‘\(first.title)’"
+        }
+        return "\(prefix) · ‘\(first.title)’ 외 \(examples.count - 1)개"
     }
 
-    private static func scheduleBody(tasks: [Task], calendar: Calendar) -> String {
+    private static func scheduleBody(tasks: [Task]) -> String {
+        if tasks.count == 1 {
+            return "‘\(tasks[0].title)’ 일정이 있어요."
+        }
+        return "‘\(tasks[0].title)’ 외 \(tasks.count - 1)개 일정이 있어요."
+    }
+
+    private static func mergedScheduleBody(
+        tasks: [Task],
+        fallback: Date,
+        calendar: Calendar
+    ) -> String {
+        let time = scheduleTitle(tasks: tasks, fallback: fallback, calendar: calendar)
+        guard let first = tasks.first else {
+            return "다음 일정 \(time)"
+        }
+        if tasks.count == 1 {
+            return "다음 일정 \(time) ‘\(first.title)’"
+        }
+        return "다음 일정 \(time) ‘\(first.title)’ 외 \(tasks.count - 1)개"
+    }
+
+    private static func scheduleTitle(
+        tasks: [Task],
+        fallback: Date,
+        calendar: Calendar
+    ) -> String {
         let due = tasks.compactMap { task -> Date? in
             guard let time = task.scheduledTime else {
-                return date(iso: task.startDate, time: "00:00", calendar: calendar)
+                return nil
             }
             return date(iso: task.startDate, time: time, calendar: calendar)
-        }.min()
-        let dateText = due.map { koreanDateTime($0, calendar: calendar) } ?? "예정된 시간에"
-        if tasks.count == 1 {
-            return "\(dateText) ‘\(tasks[0].title)’ 일정이 예정되어 있습니다."
-        }
-        let examples = tasks.prefix(2).map { "‘\($0.title)’" }.joined(separator: ", ")
-        return "\(dateText) \(examples)을 포함해 \(tasks.count)개의 일정이 예정되어 있습니다."
+        }.min() ?? fallback
+        let components = calendar.dateComponents([.hour, .minute], from: due)
+        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
     }
 
     private static func habitBody(habits: [Habit]) -> String {
@@ -398,15 +442,4 @@ public enum NotificationPlanner {
         )
     }
 
-    private static func koreanDateTime(_ date: Date, calendar: Calendar) -> String {
-        let components = calendar.dateComponents([.month, .day, .hour, .minute], from: date)
-        let hour = components.hour ?? 0
-        let period = hour < 12 ? "오전" : "오후"
-        let displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
-        let minute = components.minute ?? 0
-        let time = minute == 0
-            ? "\(period) \(displayHour)시"
-            : "\(period) \(displayHour)시 \(minute)분"
-        return "\(components.month ?? 0)월 \(components.day ?? 0)일 \(time)"
-    }
 }

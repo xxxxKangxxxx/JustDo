@@ -20,7 +20,8 @@ final class NotificationPlannerTests: XCTestCase {
         let plans = plan(snapshot, now: "2026-07-24 08:00")
 
         let briefing = plans.first { $0.kind == .taskBriefing }
-        XCTAssertEqual(briefing?.body, "‘팀 회의’, ‘보고서 제출’을 포함해 오늘 할 일 2개가 예정되어 있습니다.")
+        XCTAssertEqual(briefing?.title, "일정 브리핑")
+        XCTAssertEqual(briefing?.body, "오늘 할 일 2개 · ‘팀 회의’ 외 1개")
     }
 
     func testBriefingAndTaskReminderAtSameMinuteAreMerged() {
@@ -35,8 +36,23 @@ final class NotificationPlannerTests: XCTestCase {
 
         XCTAssertEqual(plans.count, 1)
         XCTAssertEqual(plans[0].kind, .taskBriefing)
-        XCTAssertTrue(plans[0].body.contains("오늘 ‘팀 회의’ 할 일이 예정되어 있습니다."))
-        XCTAssertTrue(plans[0].body.contains("7월 24일 오전 9시 10분 ‘팀 회의’ 일정이 예정되어 있습니다."))
+        XCTAssertEqual(plans[0].title, "일정 브리핑")
+        XCTAssertEqual(plans[0].body, "오늘 할 일 1개 · 다음 일정 09:10 ‘팀 회의’")
+    }
+
+    func testMergedBriefingSummarizesOnlyTasksWithoutSameMinuteScheduleReminder() {
+        var snapshot = makeSnapshot(
+            tasks: [
+                task(title: "팀 회의", time: "09:10"),
+                task(id: 2, title: "보고서 제출", time: nil),
+            ]
+        )
+        snapshot.settings.defaultTaskReminderMinutes = 10
+
+        let plans = plan(snapshot, now: "2026-07-24 08:00")
+
+        XCTAssertEqual(plans.count, 1)
+        XCTAssertEqual(plans[0].body, "오늘 할 일 2개 · ‘보고서 제출’ · 다음 일정 09:10 ‘팀 회의’")
     }
 
     func testPassedLeadTimeFallsBackToExactTaskTime() {
@@ -51,6 +67,8 @@ final class NotificationPlannerTests: XCTestCase {
 
         XCTAssertEqual(plans.count, 1)
         XCTAssertEqual(plans[0].kind, .taskSchedule)
+        XCTAssertEqual(plans[0].title, "09:05")
+        XCTAssertEqual(plans[0].body, "‘업체 미팅’ 일정이 있어요.")
         XCTAssertEqual(plans[0].fireDate, date("2026-07-24 09:05"))
     }
 

@@ -567,11 +567,12 @@ private struct WeekStrip: View {
                         Text("\(day.day)")
                             .font(.system(size: 11, weight: day.isToday ? .bold : .medium))
                             .frame(width: 19, height: 19)
-                            .foregroundStyle(day.isToday ? .white : .primary)
-                            .background(day.isToday ? Color.accentColor : .clear)
+                            .foregroundStyle(widgetDayTextColor(day))
+                            .background(widgetDayBackgroundColor(day))
                             .clipShape(Circle())
                     }
                     .frame(maxWidth: .infinity)
+                    .accessibilityLabel(widgetDayAccessibilityLabel(day))
                 }
             }
             DotBars(days: days)
@@ -599,12 +600,8 @@ private struct MonthGrid: View {
                         Text("\(day.day)")
                             .font(.system(size: 10, weight: day.isToday ? .bold : .medium))
                             .frame(width: 17, height: 17)
-                            .foregroundStyle(
-                                day.isToday
-                                    ? Color.white
-                                    : (day.isCurrentMonth ? Color.primary : Color.primary.opacity(0.28))
-                            )
-                            .background(day.isToday ? Color.accentColor : .clear)
+                            .foregroundStyle(widgetDayTextColor(day))
+                            .background(widgetDayBackgroundColor(day))
                             .clipShape(Circle())
                         if let color = day.dotColors.first {
                             Circle()
@@ -614,6 +611,7 @@ private struct MonthGrid: View {
                             Color.clear.frame(width: 3, height: 3)
                         }
                     }
+                    .accessibilityLabel(widgetDayAccessibilityLabel(day))
                 }
             }
         }
@@ -651,6 +649,34 @@ private func shortDate(_ iso: String) -> String {
 
 private func weekdayLabel(_ weekday: Int) -> String {
     ["일", "월", "화", "수", "목", "금", "토"][max(0, min(6, weekday))]
+}
+
+private func widgetDayTextColor(_ day: JustDoWidgetDay) -> Color {
+    if day.isToday {
+        return .white
+    }
+    if !day.isCurrentMonth {
+        return Color.primary.opacity(0.28)
+    }
+    if day.holidayName != nil || day.weekday == 0 {
+        return .red
+    }
+    if day.weekday == 6 {
+        return .blue
+    }
+    return .primary
+}
+
+private func widgetDayBackgroundColor(_ day: JustDoWidgetDay) -> Color {
+    guard day.isToday else { return .clear }
+    return day.holidayName == nil ? Color.accentColor : .red
+}
+
+private func widgetDayAccessibilityLabel(_ day: JustDoWidgetDay) -> String {
+    if let holidayName = day.holidayName {
+        return "\(day.day)일, \(holidayName)"
+    }
+    return "\(day.day)일"
 }
 
 private extension Color {

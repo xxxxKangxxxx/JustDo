@@ -57,6 +57,7 @@ public struct JustDoWidgetDay: Identifiable, Equatable, Sendable {
     public var weekday: Int
     public var isToday: Bool
     public var isCurrentMonth: Bool
+    public var holidayName: String?
     public var dotColors: [String]
 
     public init(
@@ -65,6 +66,7 @@ public struct JustDoWidgetDay: Identifiable, Equatable, Sendable {
         weekday: Int,
         isToday: Bool,
         isCurrentMonth: Bool = true,
+        holidayName: String? = nil,
         dotColors: [String]
     ) {
         self.iso = iso
@@ -72,6 +74,7 @@ public struct JustDoWidgetDay: Identifiable, Equatable, Sendable {
         self.weekday = weekday
         self.isToday = isToday
         self.isCurrentMonth = isCurrentMonth
+        self.holidayName = holidayName
         self.dotColors = dotColors
     }
 }
@@ -141,7 +144,7 @@ public enum JustDoWidgetDisplayModelFactory {
         case .small:
             limit = 4
         case .medium:
-            limit = 6
+            limit = 4
         case .large:
             switch monthDays.count / 7 {
             case 4:
@@ -258,16 +261,20 @@ public enum JustDoWidgetDisplayModelFactory {
         let weekday = calendar.component(.weekday, from: date) - 1
         let offset = (weekday - snapshot.weekStart + 7) % 7
         let start = calendar.date(byAdding: .day, value: -offset, to: date) ?? date
+        let dates = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+        let years = Set(dates.map { calendar.component(.year, from: $0) })
+        let holidaysByYear = Dictionary(
+            uniqueKeysWithValues: years.map { ($0, KoreanPublicHolidayCalendar.holidays(in: $0)) }
+        )
 
-        return (0..<7).compactMap { offset in
-            guard let current = calendar.date(byAdding: .day, value: offset, to: start) else {
-                return nil
-            }
+        return dates.map { current in
             let iso = formatDate(current)
+            let year = calendar.component(.year, from: current)
             return day(
                 current,
                 selectedDate: snapshot.selectedDate,
                 isCurrentMonth: true,
+                holidayName: holidaysByYear[year]?[iso]?.name,
                 hasItems: hasItems(on: iso, snapshot: snapshot),
                 dotColor: dotColor
             )
@@ -295,16 +302,19 @@ public enum JustDoWidgetDisplayModelFactory {
         let cellCount = totalCells + trailingCount
         let gridStart = calendar.date(byAdding: .day, value: -leadingCount, to: first) ?? first
         let selectedMonth = components.month
+        let holidays = components.year.map(KoreanPublicHolidayCalendar.holidays(in:)) ?? [:]
 
         return (0..<cellCount).compactMap { offset in
             guard let current = calendar.date(byAdding: .day, value: offset, to: gridStart) else {
                 return nil
             }
             let iso = formatDate(current)
+            let isCurrentMonth = calendar.component(.month, from: current) == selectedMonth
             return day(
                 current,
                 selectedDate: snapshot.selectedDate,
-                isCurrentMonth: calendar.component(.month, from: current) == selectedMonth,
+                isCurrentMonth: isCurrentMonth,
+                holidayName: isCurrentMonth ? holidays[iso]?.name : nil,
                 hasItems: hasItems(on: iso, snapshot: snapshot),
                 dotColor: dotColor
             )
@@ -315,6 +325,7 @@ public enum JustDoWidgetDisplayModelFactory {
         _ date: Date,
         selectedDate: String,
         isCurrentMonth: Bool,
+        holidayName: String?,
         hasItems: Bool,
         dotColor: String
     ) -> JustDoWidgetDay {
@@ -326,6 +337,7 @@ public enum JustDoWidgetDisplayModelFactory {
             weekday: calendar.component(.weekday, from: date) - 1,
             isToday: iso == selectedDate,
             isCurrentMonth: isCurrentMonth,
+            holidayName: holidayName,
             dotColors: isCurrentMonth && hasItems ? [dotColor] : []
         )
     }

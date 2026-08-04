@@ -791,7 +791,7 @@ struct SupabaseHabitRow: Decodable, Equatable {
             startedAt: String(createdAt.prefix(10)),
             recurType: recurrence,
             recurDays: recurrence == .weekly ? recurDays : nil,
-            reminderTime: reminderAt,
+            reminderTime: reminderAt.map(Self.minutePrecisionTime),
             log: Dictionary(uniqueKeysWithValues: logs.map {
                 ($0.logDate, $0.isCompleted ? 1 : 0)
             })
@@ -806,6 +806,14 @@ struct SupabaseHabitRow: Decodable, Equatable {
         case recurType = "recur_type"
         case recurDays = "recur_days"
         case reminderAt = "reminder_at"
+    }
+
+    private static func minutePrecisionTime(_ time: String) -> String {
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else {
+            return time
+        }
+        return String(format: "%02d:%02d", parts[0], parts[1])
     }
 }
 

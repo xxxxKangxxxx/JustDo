@@ -2076,8 +2076,10 @@ private struct MonthCalendarView: View {
 
     private let barLaneHeight: CGFloat = 14
     private let barLaneSpacing: CGFloat = 2
+    private let maximumVisibleTaskLanes = 4
 
     var body: some View {
+        let holidays = KoreanPublicHolidayCalendar.holidays(in: year)
         VStack(spacing: 0) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 0) {
                 ForEach(Array(weekdays.enumerated()), id: \.offset) { index, weekday in
@@ -2090,10 +2092,13 @@ private struct MonthCalendarView: View {
             }
 
             ForEach(weeks, id: \.self) { week in
+                let layout = weekLayout(for: week)
                 CalendarWeekRow(
                     week: week,
                     selectedDate: selectedDate,
-                    bars: weekBars(for: week),
+                    bars: layout.bars.filter { $0.lane < maximumVisibleTaskLanes },
+                    overflowCounts: layout.overflowCounts,
+                    holidays: holidays,
                     onSelectDate: onSelectDate
                 )
             }
@@ -2138,27 +2143,16 @@ private struct MonthCalendarView: View {
                 return $0.startDate < $1.startDate
             }
 
-        var laneEndDates: [String] = []
         return overlapping.map { task in
-            let lane: Int
-            if let openLane = laneEndDates.firstIndex(where: { $0 < task.startDate }) {
-                lane = openLane
-                laneEndDates[openLane] = task.endDate
-            } else {
-                lane = laneEndDates.count
-                laneEndDates.append(task.endDate)
-            }
-
-            return MonthTaskBar(
+            MonthTaskBar(
                 task: task,
-                lane: lane,
                 color: categories.first { $0.id == task.categoryID }?.displayColor ?? JDTheme.me
             )
         }
     }
 
-    private func weekBars(for week: [CalendarDay]) -> [WeekTaskBar] {
-        monthTaskBars.compactMap { bar in
+    private func weekLayout(for week: [CalendarDay]) -> CalendarWeekLayout {
+        let segments = monthTaskBars.compactMap { bar -> WeekTaskSegment? in
             var startIndex: Int?
             var endIndex: Int?
             for index in week.indices where week[index].isCurrentMonth {
@@ -2172,16 +2166,45 @@ private struct MonthCalendarView: View {
                 return nil
             }
 
-            return WeekTaskBar(
+            return WeekTaskSegment(
                 task: bar.task,
                 startIndex: startIndex,
                 endIndex: endIndex,
-                lane: bar.lane,
                 color: bar.color,
                 continuesLeft: bar.task.startDate < week[startIndex].iso,
                 continuesRight: bar.task.endDate > week[endIndex].iso
             )
         }
+
+        var laneEndIndices: [Int] = []
+        let bars = segments.map { segment in
+            let lane: Int
+            if let openLane = laneEndIndices.firstIndex(where: { $0 < segment.startIndex }) {
+                lane = openLane
+                laneEndIndices[openLane] = segment.endIndex
+            } else {
+                lane = laneEndIndices.count
+                laneEndIndices.append(segment.endIndex)
+            }
+
+            return WeekTaskBar(
+                task: segment.task,
+                startIndex: segment.startIndex,
+                endIndex: segment.endIndex,
+                lane: lane,
+                color: segment.color,
+                continuesLeft: segment.continuesLeft,
+                continuesRight: segment.continuesRight
+            )
+        }
+
+        var overflowCounts: [Int: Int] = [:]
+        for bar in bars where bar.lane >= maximumVisibleTaskLanes {
+            for index in bar.startIndex...bar.endIndex {
+                overflowCounts[index, default: 0] += 1
+            }
+        }
+        return CalendarWeekLayout(bars: bars, overflowCounts: overflowCounts)
     }
 
 }
@@ -2190,6 +2213,8 @@ private struct CalendarWeekRow: View {
     let week: [CalendarDay]
     let selectedDate: String
     let bars: [WeekTaskBar]
+    let overflowCounts: [Int: Int]
+    let holidays: [String: KoreanPublicHoliday]
     let onSelectDate: (String) -> Void
 
     private let barLaneHeight: CGFloat = 14
@@ -2205,6 +2230,7 @@ private struct CalendarWeekRow: View {
                             day: day,
                             index: index,
                             isSelected: day.iso == selectedDate,
+                            holidayName: day.isCurrentMonth ? holidays[day.iso]?.name : nil,
                             onSelect: { onSelectDate(day.iso) }
                         )
                         .frame(width: cellWidth, height: rowHeight, alignment: .top)
@@ -2223,6 +2249,23 @@ private struct CalendarWeekRow: View {
                         )
                         .allowsHitTesting(false)
                 }
+
+                ForEach(week.indices.filter { overflowCounts[$0, default: 0] > 0 }, id: \.self) { index in
+                    Text("+\(overflowCounts[index, default: 0])")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(JDTheme.secondaryText)
+                        .padding(.horizontal, 3)
+                        .frame(height: barLaneHeight)
+                        .background(JDTheme.surface.opacity(0.94))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .frame(width: cellWidth - 4, alignment: .trailing)
+                        .offset(
+                            x: cellWidth * CGFloat(index) + 2,
+                            y: 32 + CGFloat(overflowLaneIndex) * (barLaneHeight + barLaneSpacing)
+                        )
+                        .allowsHitTesting(false)
+                        .accessibilityLabel("추가 \(overflowCounts[index, default: 0])개")
+                }
             }
             .overlay(alignment: .top) {
                 Rectangle()
@@ -2234,7 +2277,15 @@ private struct CalendarWeekRow: View {
     }
 
     private var rowHeight: CGFloat {
-        32 + CGFloat(max(2, laneCount)) * (barLaneHeight + barLaneSpacing) + 4
+        32 + CGFloat(max(2, displayedLaneCount)) * (barLaneHeight + barLaneSpacing) + 4
+    }
+
+    private var overflowLaneIndex: Int {
+        4
+    }
+
+    private var displayedLaneCount: Int {
+        overflowCounts.isEmpty ? laneCount : max(laneCount, overflowLaneIndex + 1)
     }
 
     private var laneCount: Int {
@@ -2277,6 +2328,7 @@ private struct CalendarDayCell: View {
     let day: CalendarDay
     let index: Int
     let isSelected: Bool
+    let holidayName: String?
     let onSelect: () -> Void
 
     var body: some View {
@@ -2287,7 +2339,7 @@ private struct CalendarDayCell: View {
                     .monospacedDigit()
                     .frame(width: 24, height: 24)
                     .foregroundStyle(textColor)
-                    .background(day.iso == JDDate.todayISO ? JDTheme.accent : isSelected ? Color.black.opacity(0.06) : .clear)
+                    .background(dayBackgroundColor)
                     .clipShape(Circle())
                     .overlay(
                         Circle()
@@ -2301,6 +2353,21 @@ private struct CalendarDayCell: View {
         }
         .buttonStyle(.plain)
         .disabled(!day.isCurrentMonth)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        if let holidayName {
+            return "\(day.day)일, \(holidayName)"
+        }
+        return "\(day.day)일"
+    }
+
+    private var dayBackgroundColor: Color {
+        if day.iso == JDDate.todayISO {
+            return holidayName == nil ? JDTheme.accent : JDTheme.external
+        }
+        return isSelected ? Color.black.opacity(0.06) : .clear
     }
 
     private var textColor: Color {
@@ -2311,7 +2378,7 @@ private struct CalendarDayCell: View {
         if !day.isCurrentMonth {
             return JDTheme.tertiaryText.opacity(0.55)
         }
-        if weekday == 0 {
+        if holidayName != nil || weekday == 0 {
             return JDTheme.external
         }
         if weekday == 6 {
@@ -2323,8 +2390,21 @@ private struct CalendarDayCell: View {
 
 private struct MonthTaskBar {
     let task: Task
-    let lane: Int
     let color: Color
+}
+
+private struct WeekTaskSegment {
+    let task: Task
+    let startIndex: Int
+    let endIndex: Int
+    let color: Color
+    let continuesLeft: Bool
+    let continuesRight: Bool
+}
+
+private struct CalendarWeekLayout {
+    let bars: [WeekTaskBar]
+    let overflowCounts: [Int: Int]
 }
 
 private struct WeekTaskBar {
@@ -8187,8 +8267,11 @@ private struct HabitDetailEditor: View {
         _startedAt = State(initialValue: habit.startedAt)
         _recurType = State(initialValue: habit.recurType)
         _selectedDays = State(initialValue: Set(habit.recurDays ?? []))
-        _reminderTime = State(initialValue: habit.reminderTime ?? "")
-        _reminderDate = State(initialValue: Self.date(fromTime: habit.reminderTime ?? "09:00"))
+        let normalizedReminderTime = Self.minutePrecisionTime(habit.reminderTime)
+        _reminderTime = State(initialValue: normalizedReminderTime)
+        _reminderDate = State(
+            initialValue: Self.date(fromTime: normalizedReminderTime.isEmpty ? "09:00" : normalizedReminderTime)
+        )
     }
 
     var body: some View {
@@ -8318,6 +8401,17 @@ private struct HabitDetailEditor: View {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
         return String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0)
     }
+
+    private static func minutePrecisionTime(_ time: String?) -> String {
+        guard let time, !time.isEmpty else {
+            return ""
+        }
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else {
+            return time
+        }
+        return String(format: "%02d:%02d", parts[0], parts[1])
+    }
 }
 
 private struct DetailEditorActions: View {
@@ -8326,6 +8420,7 @@ private struct DetailEditorActions: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            Spacer()
             Button("취소", action: onCancel)
                 .buttonStyle(.bordered)
             Button("저장", action: onSave)

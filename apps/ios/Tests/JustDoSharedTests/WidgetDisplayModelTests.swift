@@ -29,6 +29,16 @@ final class WidgetDisplayModelTests: XCTestCase {
         XCTAssertEqual(model.weekDays.first(where: \.isToday)?.day, 30)
     }
 
+    func testMediumModelLimitsItemsToFourAndKeepsTotalCount() {
+        let model = JustDoWidgetDisplayModelFactory.make(
+            from: busySnapshot(selectedDate: "2026-08-10"),
+            size: .medium
+        )
+
+        XCTAssertEqual(model.items.count, 4)
+        XCTAssertEqual(model.totalCount, 10)
+    }
+
     func testLargeModelIncludesMonthDays() {
         let model = JustDoWidgetDisplayModelFactory.make(
             from: snapshot(),
@@ -76,6 +86,23 @@ final class WidgetDisplayModelTests: XCTestCase {
         XCTAssertEqual(sixRows.monthDays.count / 7, 6)
         XCTAssertEqual(sixRows.items.count, 5)
         XCTAssertEqual(sixRows.totalCount, 10)
+    }
+
+    func testWidgetCalendarMarksCurrentMonthPublicHolidays() {
+        let model = JustDoWidgetDisplayModelFactory.make(
+            from: busySnapshot(selectedDate: "2026-08-10"),
+            size: .large
+        )
+
+        XCTAssertEqual(
+            model.monthDays.first(where: { $0.iso == "2026-08-15" })?.holidayName,
+            "광복절"
+        )
+        XCTAssertEqual(
+            model.monthDays.first(where: { $0.iso == "2026-08-17" })?.holidayName,
+            "대체공휴일 (광복절)"
+        )
+        XCTAssertNil(model.monthDays.first(where: { $0.iso == "2026-09-01" })?.holidayName)
     }
 
     func testCompletedOnlyDateStillHasOneUnifiedDot() {

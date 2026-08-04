@@ -95,6 +95,16 @@ Store Connect review notes.
   Task reminders with up to three offsets, foreground/completion banners,
   notification date routing, and the real-month Large widget calendar.
   The user confirmed the TestFlight update on a real device on 2026-07-25.
+- Build 11 was archived and uploaded to App Store Connect on 2026-08-02. It
+  consolidates the notification merge/title fix, Habit editor alignment and
+  minute-precision display, Medium widget four-item cap, and bounded Home
+  calendar overflow display. App Store Connect reported that the package is
+  processing.
+- Build 12 was archived and uploaded to App Store Connect on 2026-08-04. It
+  adds the Home four-lane plus fixed fifth `+N` overflow row, concise briefing
+  and schedule notification copy, time-only schedule titles, and Korean public
+  holiday coloring in Home and widget calendars. App Store Connect accepted
+  the upload and reported that the package is processing.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information
@@ -108,10 +118,9 @@ Store Connect review notes.
 - App Review notes are saved with Sign in with Apple as the primary review path,
   the Google demo account as fallback, and explicit confirmation that this iOS
   build has no IAP, purchase flow, external payment link, or purchase CTA.
-- Next: run sections 12 and 13 of the smoke checklist on the installed
-  TestFlight build 10 in the next work session. Direct Xcode installation was
-  unavailable because the paired iPhone is on iOS 26.5.2 while the installed
-  Xcode provides the iOS 26.2 developer image.
+- Build 11 real-device regression checks passed.
+- Next: install TestFlight build 12 after processing and run section 15 of the
+  smoke checklist.
 
 ## Final Local Checks Before Archive
 

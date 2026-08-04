@@ -19,7 +19,7 @@ final class SupabaseRestSyncTests: XCTestCase {
             [{"id":"11111111-1111-1111-1111-111111111111","category_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","title":"Proposal draft","priority":"high","start_date":"2026-04-30","end_date":"2026-04-30","scheduled_time":"09:30","is_completed":false,"reminder_mode":"custom","reminder_offsets_minutes":[10,1440]}]
             """,
             "habits": """
-            [{"id":"33333333-3333-3333-3333-333333333333","title":"Walk","emoji":"*","created_at":"2026-04-01T00:00:00Z","recur_type":"weekly","recur_days":[2,4],"reminder_at":"08:30"}]
+            [{"id":"33333333-3333-3333-3333-333333333333","title":"Walk","emoji":"*","created_at":"2026-04-01T00:00:00Z","recur_type":"weekly","recur_days":[2,4],"reminder_at":"08:30:00"}]
             """,
             "habit_logs": """
             [{"habit_id":"33333333-3333-3333-3333-333333333333","log_date":"2026-04-30","is_completed":true}]
@@ -48,6 +48,7 @@ final class SupabaseRestSyncTests: XCTestCase {
         XCTAssertEqual(snapshot.tasks.first?.reminderOffsetsMinutes, [10, 1440])
         XCTAssertEqual(snapshot.habits.first?.recurType, .weekly)
         XCTAssertEqual(snapshot.habits.first?.recurDays, [2, 4])
+        XCTAssertEqual(snapshot.habits.first?.reminderTime, "08:30")
         XCTAssertEqual(snapshot.habits.first?.log["2026-04-30"], 1)
         XCTAssertEqual(snapshot.goals.map(\.title), ["Interview"])
         XCTAssertEqual(snapshot.goals.first?.periodType, .monthly)

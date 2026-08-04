@@ -5953,3 +5953,87 @@ as a follow-up.
   through TestFlight.
 - Ended this work session after documentation, commit, and push. Resume with
   real-device sections 12 and 13 of `docs/testflight_smoke_checklist.md`.
+
+## 2026-08-02 Consolidated regression fixes + TestFlight build 11
+
+### Codex
+
+- Consolidated the build 10 smoke findings:
+  - Changed schedule-only notification title from `일정 안내` to `다음 일정`.
+  - Removed same-minute scheduled Tasks from the briefing summary to prevent
+    duplicate copy while retaining other timed and untimed briefing Tasks.
+  - Right-aligned Habit editor actions and normalized reminder display to
+    minute precision.
+  - Limited Medium widget items to four without a separate overflow label.
+  - Capped Home calendar Task lanes at five and added per-date `+N` overflow.
+- Bumped `CURRENT_PROJECT_VERSION` from 10 to 11.
+
+### Verification and upload
+
+- `swift test` passed: 86 tests.
+- Generic iOS Release app/widget build passed.
+- `git diff --check` passed before archive.
+- `build/JustDoApp-b11-regression.xcarchive` succeeded for app version 1.0,
+  build 11, bundle id `kr.justdo.app`.
+- `xcodebuild -exportArchive` uploaded build 11 successfully; App Store Connect
+  reported that the uploaded package is processing.
+
+### Next
+
+- Wait for build 11 processing, install it through TestFlight, and run section
+  14 of `docs/testflight_smoke_checklist.md`.
+
+## 2026-08-04 Build 11 validation + next-build calendar/notification follow-up
+
+### Codex
+
+- Recorded Build 11 real-device passes for:
+  - Changed default Task reminders firing at the selected five-minute offset.
+  - Same-minute briefing/schedule merging without duplicate Task copy while
+    retaining other timed and untimed Tasks.
+  - Unrestricted Home List and selected-day Task visibility.
+  - Large-widget date placement, adjacent-month styling, and activity dots.
+- Kept the revised Home four-lane plus fixed fifth `+N` row and concise
+  notification title/body changes for the next consolidated build.
+- Added a shared offline Korean public-holiday calendar for Home and widget
+  calendars:
+  - Fixed, lunar, and substitute holidays.
+  - Explicit election and announced temporary-holiday overrides.
+  - 2026 Labor Day and Constitution Day changes under the current regulation.
+  - Red holiday/weekend date styling with holiday accessibility labels.
+
+### Verification
+
+- `swift test` passed: 90 tests.
+- Generic iOS Release app/widget build passed.
+- `git diff --check` passed.
+
+### Next
+
+- Use a new build number for the next TestFlight upload; build 11 is already
+  uploaded.
+- Verify Home four bars plus fifth `+N`, concise notification copy/time-only
+  titles, and Korean public-holiday coloring on the next build.
+
+## 2026-08-04 TestFlight build 12 upload
+
+### Codex
+
+- Bumped app, widget, and UI-test `CURRENT_PROJECT_VERSION` from 11 to 12.
+- Consolidated the pending Home calendar overflow, notification-copy, and
+  Korean public-holiday changes into build 12.
+
+### Verification and upload
+
+- `swift test` passed: 90 tests.
+- `git diff --check` passed.
+- `build/JustDoApp-b12-calendar-notifications.xcarchive` succeeded for app and
+  widget version 1.0 (12), bundle IDs `kr.justdo.app` and
+  `kr.justdo.app.widget`.
+- `xcodebuild -exportArchive` uploaded build 12 successfully; App Store Connect
+  reported `Uploaded package is processing`.
+
+### Next
+
+- Wait for build 12 processing, install it through TestFlight, and run section
+  15 of `docs/testflight_smoke_checklist.md`.

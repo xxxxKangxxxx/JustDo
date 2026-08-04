@@ -1,15 +1,15 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-07-25
+Updated: 2026-08-02
 
-Purpose: validate TestFlight internal build 10 follow-ups before deciding whether
+Purpose: validate TestFlight internal build 11 regressions before deciding whether
 to submit the iOS v1 build for public App Review.
 
 ## Test Setup
 
 - Device: real iPhone with the TestFlight build installed.
-- Build: App Store Connect / TestFlight internal build 10, updated on the real
-  device through TestFlight on 2026-07-25.
+- Build: App Store Connect / TestFlight build 11, installed and launched on the
+  real device on 2026-08-02.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -45,9 +45,12 @@ Current progress:
 - [x] 9. Settings and Subscription Copy — passed on build 5, 2026-07-01.
 - [x] 10. Widget — passed on build 5 with H-005 build 6 follow-up.
 - [x] 11. Short Offline Check — passed on build 5, 2026-07-01.
-- [ ] 12. Build 9 Sheet Presentation — carry forward on build 10.
-- [ ] 13. Build 10 Notifications and Large Widget — installed; verification
-  resumes in the next work session.
+- [x] 12. Build 9 Sheet Presentation — passed on build 10, 2026-07-25.
+- [x] 13. Build 10 Notifications and Large Widget — remaining checks passed on
+  build 11.
+- [x] 14. Build 11 Consolidated Regression — passed on 2026-08-04.
+- [ ] 15. Build 12 Calendar, Notification Copy, and Holidays — uploaded;
+  processing in App Store Connect.
 
 ### 1. Install and Launch
 
@@ -238,57 +241,109 @@ Notes: User confirmed Airplane Mode, offline low-risk task/habit change, immedia
 
 ### 12. Build 9 Sheet Presentation
 
-- [ ] Open account detail and confirm nickname editing remains usable.
-- [ ] Open Task start/end date and time pickers from add and edit flows.
-- [ ] Open Task/Habit reminder-time pickers.
-- [ ] Open Settings notification-time, week-start, and widget-color sheets.
-- [ ] Open a selected calendar day with tasks/habits.
-- [ ] Open Settings `습관`, nested `습관 관리`, `목표`, and
+- [x] Open account detail and confirm nickname editing remains usable.
+- [x] Open Task start/end date and time pickers from add and edit flows.
+- [x] Open Task reminder controls and custom reminder pickers.
+- [x] Open Habit reminder-time pickers.
+- [x] Open Settings notification-time, week-start, and widget-color sheets.
+- [x] Open a selected calendar day with tasks/habits.
+- [x] Open Settings `습관`, nested `습관 관리`, `목표`, and
   `카테고리 관리`.
-- [ ] Confirm each surface uses the same large-sheet position as Terms/Privacy.
-- [ ] Confirm no bottom corner or underlying screen is visible below the sheet.
-- [ ] Confirm close, complete, cancel, save, scrolling, and keyboard behavior.
-- [ ] Tap `데이터 내보내기` and confirm its sheet appears immediately above
+- [x] Confirm each surface uses the same large-sheet position as Terms/Privacy.
+- [x] Confirm no bottom corner or underlying screen is visible below the sheet.
+- [x] Confirm close, complete, cancel, save, scrolling, and keyboard behavior.
+- [x] Tap `데이터 내보내기` and confirm its sheet appears immediately above
   Settings without returning to Home.
-- [ ] Share the generated CSV and dismiss the sheet.
+- [x] Share the generated CSV and dismiss the sheet.
 
 Result:
 
 ```text
-Status: PENDING BUILD 9 TESTFLIGHT
-Notes: Build 8 reproduced the detached-bottom presentation in every affected compact sheet and delayed data-export presentation until Settings was dismissed. Build 9 was uploaded on 2026-07-18 and is processing in App Store Connect.
+Status: PASS
+Notes: Build 8 reproduced the detached-bottom presentation in every affected compact sheet and delayed data-export presentation until Settings was dismissed. On 2026-07-25, the user confirmed on TestFlight build 10 that account detail and nickname editing work correctly, the large-sheet presentation is clean, no underlying screen or bottom corner is exposed, and keyboard/save/close behavior is usable. Task add/edit start and end date/time pickers, Task reminder modes, custom reminder selection, saved-value persistence, untimed-Task guidance, and related sheet presentation also passed. Habit reminder time clear/reset/persistence, Settings briefing time, independent notification toggles, week-start selection, and widget-color save/persistence passed as well. The selected-day sheet and Settings Habit, nested Habit Management, Goal, and Category Management surfaces passed large-sheet placement, bottom coverage, controls, scrolling, keyboard, and return-navigation checks. Data export presented immediately above Settings, the CSV was shareable, and dismissal returned cleanly to Settings.
 ```
 
 ### 13. Build 10 Notifications and Large Widget
 
-- [ ] On first authenticated Home entry, confirm the app explanation appears
+- [x] On first authenticated Home entry, confirm the app explanation appears
   before the iOS notification permission prompt.
-- [ ] Deny permission once, then confirm Settings -> `알림 설정` shows the
+- [x] Deny permission once, then confirm Settings -> `알림 설정` shows the
   system Settings shortcut while preserving the selected toggles.
-- [ ] Confirm `아침 브리핑`, `일정 알림`, and `습관 알림` are independent.
-- [ ] Change briefing time and the default Task reminder from 10 minutes.
-- [ ] Create timed and untimed Tasks and confirm the warning text and
+- [x] Confirm `아침 브리핑`, `일정 알림`, and `습관 알림` are independent.
+- [x] Change the briefing time.
+- [x] Change the default Task reminder from 10 minutes.
+- [x] Create timed and untimed Tasks and confirm the warning text and
   `기본값 / 직접 설정 / 없음` options; select up to three custom reminders.
-- [ ] Confirm the morning briefing includes both timed and untimed Tasks.
-- [ ] Complete a Task in the app and confirm the five-second dismissible banner
-  shows the next timed schedule, remaining count, or all-complete/tomorrow copy.
-- [ ] Confirm completing a Task in the widget does not show an in-app banner.
-- [ ] Create two Habits at the same weekday/time and confirm one merged
-  notification without emoji; complete one before the time and confirm it is
-  omitted.
-- [ ] Tap a Task or Habit system notification and confirm Home opens on its
+- [x] Confirm the morning briefing includes both timed and untimed Tasks.
+- [x] Complete a Task in the app and confirm the five-second banner appears.
+- [x] Confirm the completion banner can be dismissed and shows the next timed
+  schedule, remaining count, or all-complete/tomorrow copy as appropriate.
+- [x] Confirm completing a Task in the widget does not show an in-app banner.
+- [x] Confirm a Habit notification arrives at its configured exact time.
+- [x] Create two Habits at the same weekday/time and confirm they appear in one
+  merged notification.
+- [x] Confirm the merged Habit notification does not include emoji.
+- [x] Complete one Habit before the reminder time and confirm it is omitted.
+- [x] Tap a Task or Habit system notification and confirm Home opens on its
   target date; while the app is foregrounded, confirm an in-app banner appears.
-- [ ] Add the Large widget and verify weekday headers, the real month start
+- [x] Add the Large widget and verify weekday headers, the real month start
   position, faint adjacent-month dates without dots, and a single dot for any
   Task/Habit including completed-only dates.
-- [ ] Check representative 4-, 5-, and 6-row months and confirm the lower list
+- [x] Check representative 4-, 5-, and 6-row months and confirm the lower list
   shows at most 7, 6, and 5 items respectively without `외 N개`.
 
 Result:
 
 ```text
-Status: PENDING REAL-DEVICE VERIFICATION
-Notes: Build 10 uploaded successfully on 2026-07-24. The user confirmed the TestFlight update on 2026-07-25; targeted real-device verification is intentionally deferred to the next work session. Local verification passed 84 Swift tests, 146 web tests, app/widget build, and simulator UI checks.
+Status: PASS
+Notes: Build 10 uploaded successfully on 2026-07-24. On 2026-07-25, the user confirmed the TestFlight update and passed the app-explanation/system-permission ordering, denied-permission Settings shortcut, toggle preservation and permission recovery, independent notification toggles, briefing-time change, and timed/untimed Task reminder-mode checks including up to three custom reminders. The five-second completion banner appeared after completing a Task in the app, used situation-appropriate copy, and could be dismissed manually. Completing a Task in the widget updated the app state without incorrectly showing the in-app completion banner. On 2026-07-26, the user confirmed that a Habit notification arrived at the configured exact time; Habit reminders do not use the Task default lead offset. On 2026-07-28, the user confirmed that two Habits at the same time appeared together in one merged notification, the notification did not include Habit emoji, and a Habit completed before the reminder was omitted so only the incomplete Habit arrived. On 2026-08-02, the user confirmed that tapping a Task/Habit system notification opened Home on the target date and that a notification arriving while the app was foregrounded appeared as an in-app banner. Build 11 verification confirmed timed and untimed briefing coverage, changed default reminder delivery, and all Large-widget visuals. The August six-row Large widget capped its list at five items; deterministic tests cover the four- and five-row 7/6-item limits. Latest local verification passed 90 Swift tests, 146 web tests, and the app/widget Release build.
+```
+
+### 14. Build 11 Consolidated Regression
+
+- [x] Install TestFlight build 11 and confirm the app opens with existing data.
+- [x] Confirm a schedule-only notification title is `다음 일정`.
+- [x] Set briefing and a timed Task reminder to the same minute; confirm the
+  merged notification does not repeat that Task.
+- [x] Confirm the same briefing still includes another incomplete timed Task and
+  an incomplete untimed Task.
+- [x] Change the default Task reminder from 10 minutes and confirm a Task using
+  `기본값` fires at the changed offset.
+- [x] Open Habit edit and confirm `취소`/`저장` are right-aligned and reminder
+  time is displayed only to `HH:mm`.
+- [x] Add more than four Tasks for today; confirm the Medium widget shows at
+  most four items and no `+N` overflow label.
+- [x] Confirm the dedicated Home List still exposes all Tasks beyond the
+  calendar limit.
+- [x] Confirm the selected-day sheet still exposes all Tasks beyond the
+  calendar limit.
+- [x] Finish Large widget visual checks and representative four-/five-row month
+  limits; the August six-row/five-item case already passed on build 10.
+Result:
+
+```text
+Status: PASS WITH BUILD 12 FOLLOW-UP
+Notes: Build 11 was archived and uploaded successfully on 2026-08-02, then installed and launched on the real device with existing data intact. The user confirmed Habit edit action buttons are right-aligned, reminder time is shown without seconds, and the display remains correct after save/reopen. Medium correctly shows at most four items without `+N`. A briefing arrived normally, and a schedule-only Task notification used the corrected `다음 일정` title. A same-minute briefing and Task reminder arrived as one notification: the scheduled `test` Task appeared once in the schedule sentence, while the other timed/untimed `test2` and `test3` Tasks remained in the two-item briefing summary. A Task using the changed default reminder correctly arrived five minutes before its scheduled time. The Home `리스트` view and selected-day sheet both continue to show every Task beyond the calendar display limit. Large widget weekday/date placement, adjacent-month styling, activity dots, and completed-only dots all passed; deterministic tests cover its four-/five-row limits and August's six-row/five-item limit passed on-device. Home calendar build 11 showed the bounded layout, but the user requested a clearer revision: four Task lanes plus a dedicated fifth `+N` summary lane; patched locally for the next consolidated build. Korean public-holiday coloring was then added locally for Home and widget calendars. Latest local verification passed 90 Swift tests and the generic iOS Release app/widget build.
+```
+
+### 15. Build 12 Calendar, Notification Copy, and Holidays
+
+- [ ] Install TestFlight build 12 and confirm the app opens with existing data.
+- [ ] Add more than four overlapping Tasks to one Home calendar date; confirm
+  four Task lanes are followed by a fixed fifth `+N` summary lane.
+- [ ] Confirm briefing title/body use `일정 브리핑` and the concise
+  `오늘 할 일 N개 · 다음 일정 HH:mm ‘Task’` format.
+- [ ] Confirm a schedule-only notification title is only `HH:mm` and its body
+  uses the concise `‘Task’ 일정이 있어요.` format.
+- [ ] Confirm Korean public holidays use red dates in Home calendar and
+  Medium/Large widgets, including `광복절` on August 15 and its substitute
+  holiday on August 17; Task/Habit dots must remain visible.
+
+Result:
+
+```text
+Status: UPLOADED — PROCESSING
+Notes: Build 12 was archived and uploaded successfully on 2026-08-04. The archive contains app and widget version 1.0 (12), bundle IDs `kr.justdo.app` and `kr.justdo.app.widget`. Pre-upload verification passed 90 Swift tests, Release archive validation, and `git diff --check`. App Store Connect reported `Uploaded package is processing`.
 ```
 
 ## Issue Log
@@ -391,10 +446,70 @@ Reproducible: Yes, on build 8 real device.
 Notes: Build 9 moves export-file sheet state from HomeRootView to SettingsRootTabView. Pending TestFlight verification.
 ```
 
+```text
+ID: H-008
+Severity: medium
+Area: Notifications / briefing and schedule merge
+Steps: Create one timed Task whose on-time reminder fires at the configured briefing minute, then wait for the notifications on build 10.
+Expected: The briefing and same-minute schedule reminder merge into one notification without repeating the same Task. A schedule-only notification title reads `다음 일정`.
+Actual: The build 10 merged notification described the same timed Task once as today's work and again as a timed schedule. Schedule-only notification titles read `일정 안내`.
+Screenshot or screen recording: User supplied a real-device Notification Center screenshot on 2026-07-25.
+Reproducible: Yes; covered by a deterministic planner test.
+Notes: Included in uploaded build 11 and passed real-device verification on 2026-08-04. A same-minute briefing and schedule reminder arrived as one notification; the scheduled `test` Task appeared only once, while the other timed/untimed `test2` and `test3` Tasks remained in the briefing summary. The schedule-only `다음 일정` title also passed separately.
+```
+
+```text
+ID: H-009
+Severity: low
+Area: Habit editor / action alignment and reminder-time display
+Steps: Open an existing synced Habit whose Supabase `reminder_at` value includes seconds.
+Expected: `취소` and `저장` are right-aligned, and the reminder time is displayed at minute precision (`HH:mm`).
+Actual: The action buttons were left-aligned, and the raw Supabase time could display seconds (`HH:mm:ss`).
+Screenshot or screen recording: Not needed; user reported during build 10 notification smoke.
+Reproducible: Yes, from the current layout and Supabase `time` response shape.
+Notes: Included in uploaded build 11. Habit editor actions are right-aligned; existing editor state and Supabase Habit mapping normalize reminder times to `HH:mm`. Pending build 11 real-device verification.
+```
+
+```text
+ID: H-010
+Severity: medium
+Area: Medium widget / Home month calendar density
+Steps: Add more than five Tasks for the same date, then inspect the Medium widget and the Home month calendar.
+Expected: Medium shows at most four Task rows and relies on its existing completion/total counts without a separate `+N`; Home shows at most four Task bars and uses a fixed fifth row for the additional count as `+N`.
+Actual: The Medium widget allowed six rows, and Home calendar week rows continued growing as overlapping Task lanes were added.
+Screenshot or screen recording: Not needed; user reported during build 10 regression testing on 2026-08-02.
+Reproducible: Yes, from the current item-limit and calendar row-height logic.
+Notes: Medium behavior passed on build 11: visible items are limited to four with no separate overflow label. The Home calendar follow-up is included in uploaded build 12: lanes are compacted per week, four Task bars are shown, and a dedicated fifth lane displays the per-date `+N` count. Dedicated list and selected-day views remain unrestricted. Pending build 12 real-device verification for the revised Home layout.
+```
+
+```text
+ID: H-011
+Severity: low
+Area: Notifications / briefing and schedule copy
+Steps: Receive a briefing merged with a same-minute Task schedule reminder.
+Expected: The notification communicates today's count and next schedule concisely without repeating full `예정되어 있습니다` sentences. Briefing title is `일정 브리핑`; a schedule-only title is the Task time in `HH:mm` only.
+Actual: Build 11 correctly merged delivery and removed duplicate Task content, but concatenated two long sentences and repeated `예정되어 있습니다`; briefing title remained `오늘의 할 일`.
+Screenshot or screen recording: Not needed; user reported during build 11 regression testing on 2026-08-04.
+Reproducible: Yes; message output is covered by deterministic planner tests.
+Notes: Included in uploaded build 12 using the selected compact format. Examples: `오늘 할 일 3개 · 다음 일정 14:00 ‘팀 회의’`; schedule-only title `14:00` with body `‘팀 회의’ 일정이 있어요.` Swift tests passed: 90 tests. Pending build 12 real-device verification.
+```
+
+```text
+ID: H-012
+Severity: low
+Area: Home calendar and widgets / Korean public holidays
+Steps: Inspect a Korean public holiday in Home calendar and Medium/Large widgets.
+Expected: Current-month public holidays use red date styling while Task/Habit activity dots remain independent; holiday names are available to accessibility.
+Actual: Calendars only distinguished weekends and did not identify national public holidays.
+Screenshot or screen recording: Not needed; user requested the calendar enhancement after build 11 Large-widget verification on 2026-08-04.
+Reproducible: Yes; calendar display models previously contained no holiday metadata.
+Notes: Included in uploaded build 12. The shared offline calendar covers fixed, lunar, substitute, election, and announced temporary holidays, including the 2026 Labor Day and Constitution Day law changes. Home, Medium, and Large calendar dates share the result. Swift tests passed: 90 tests; generic iOS Release app/widget archive passed. Pending build 12 real-device verification.
+```
+
 ## Release Decision
 
 - [ ] PASS: submit current build for public App Review.
-- [ ] FIX REQUIRED: patch, upload a new TestFlight build, and rerun affected
+- [x] FIX REQUIRED: patch, upload a new TestFlight build, and rerun affected
   sections.
 - [ ] HOLD: defer App Review for Toss/business/payment-readiness reasons even if
   the build passes.
@@ -402,7 +517,7 @@ Notes: Build 9 moves export-file sheet state from HomeRootView to SettingsRootTa
 Decision:
 
 ```text
-Status: FIX REQUIRED
-Reason: Build 10 contains the notification system, Task reminder UI, completion/foreground banners, and Large widget calendar changes, but still requires real-device TestFlight verification. Build 9 sheet and export checks also carry forward.
-Next action: In the next work session, run sections 12 and 13 on the installed TestFlight build 10.
+Status: AWAITING BUILD 12 VALIDATION
+Reason: Build 11 regression checks passed. Build 12 containing H-010's revised Home overflow presentation, H-011's concise notification copy, and H-012's Korean public-holiday display uploaded successfully and is processing.
+Next action: Install TestFlight build 12 after processing and run section 15.
 ```
