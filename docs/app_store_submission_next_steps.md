@@ -1,6 +1,6 @@
 # App Store Submission Next Steps
 
-Updated: 2026-07-18
+Updated: 2026-08-05
 
 ## Ready Assets
 
@@ -105,6 +105,25 @@ Store Connect review notes.
   and schedule notification copy, time-only schedule titles, and Korean public
   holiday coloring in Home and widget calendars. App Store Connect accepted
   the upload and reported that the package is processing.
+- Build 12 real-device validation passed the Home overflow row, concise
+  briefing copy, public-holiday coloring, and holiday activity-dot checks. The
+  schedule-only time title worked but could be mistaken for the current time;
+  build 13 uses relative titles for pre-alerts and keeps
+  the Task time only for on-time reminders.
+- Build 13 also changes the iOS Home List from a single-day
+  view to the displayed month's Tasks grouped by date. Existing month
+  navigation controls the list, and tapping a date still opens the daily detail
+  panel for Habits and day-specific review.
+- Build 13 was archived and uploaded to App Store Connect on 2026-08-05. The
+  app and widget are version 1.0 (13), and App Store Connect reported that the
+  uploaded package is processing.
+- Build 13 installed with existing data intact. The user confirmed monthly List
+  date grouping, month navigation, Task actions, multi-day/carry-over handling,
+  and date-header entry into daily detail. A next-build local follow-up now
+  scrolls to today's section both when entering List and when tapping `오늘`.
+- Build 13 relative schedule-only titles passed on a real device. A next-build
+  local follow-up now adds the actual Task date/time to the body, such as
+  `오늘 15:00에 ‘Task’ 일정이 있어요.` or `내일 15:00에 …`.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information
@@ -119,8 +138,8 @@ Store Connect review notes.
   the Google demo account as fallback, and explicit confirmation that this iOS
   build has no IAP, purchase flow, external payment link, or purchase CTA.
 - Build 11 real-device regression checks passed.
-- Next: install TestFlight build 12 after processing and run section 15 of the
-  smoke checklist.
+- Next: consolidate any remaining changes, then verify the monthly List
+  today-scroll and schedule-only body follow-ups in the next TestFlight build.
 
 ## Final Local Checks Before Archive
 

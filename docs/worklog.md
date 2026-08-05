@@ -6037,3 +6037,140 @@ as a follow-up.
 
 - Wait for build 12 processing, install it through TestFlight, and run section
   15 of `docs/testflight_smoke_checklist.md`.
+
+## 2026-08-05 Build 12 validation + schedule-title follow-up
+
+### Codex
+
+- Recorded Build 12 real-device passes for:
+  - Home calendar four Task lanes plus the fixed fifth `+N` summary lane.
+  - Red Korean public-holiday dates in Home and Medium/Large widgets.
+  - Unified Task/Habit activity dots remaining visible on public holidays.
+  - Concise `일정 브리핑` notification title/body.
+- Refined schedule-only notification titles after real-device feedback:
+  - Pre-alerts now show their effective offset, such as `1일 전`, `10분 전`,
+    and `5분 전`.
+  - On-time reminders keep the Task time, such as `15:00`.
+  - Passed-lead reminders that fall back to the due time are treated as
+    on-time.
+  - Untimed same-day reminders use `당일`.
+  - Same-minute merges with different reminder offsets use `일정 알림` rather
+    than displaying a misleading single offset.
+  - Briefing-merged schedule copy continues to show the actual next Task time.
+
+### Verification
+
+- `swift test` passed: 93 tests.
+- Generic iOS Release app/widget build passed.
+- `git diff --check` passed.
+
+### Next
+
+- Consolidate any remaining changes before assigning the next TestFlight build
+  number and verify the relative schedule-only titles on a real device.
+
+## 2026-08-05 Monthly Home List follow-up
+
+### Codex
+
+- Changed the iOS Home List from a single selected-day view to the displayed
+  month's Tasks grouped into date sections.
+- Kept the existing year/month header, month arrows, Task completion, and Task
+  edit actions.
+- Made each Task appear once in the monthly list; multi-day Tasks use their
+  start date, while Tasks carried over from the previous month appear under the
+  displayed month's first day.
+- Kept Habits and full day-specific review in the existing daily detail panel,
+  which opens when a date-section header is tapped.
+- Added a shared monthly selector with deterministic coverage for overlap,
+  carry-over, deduplication, ordering, and invalid months.
+
+### Verification
+
+- `swift test` passed: 96 tests.
+- Generic iOS Release app/widget build passed.
+- `git diff --check` passed.
+
+### Next
+
+- Consolidate any remaining changes before assigning the next TestFlight build
+  number.
+- On the next build, verify month navigation, date grouping, Task actions, and
+  date-header entry into the daily detail panel on a real device.
+
+## 2026-08-05 TestFlight build 13 upload
+
+### Codex
+
+- Bumped app, widget, and UI-test `CURRENT_PROJECT_VERSION` from 12 to 13.
+- Consolidated the schedule-only relative-title refinement and monthly Home
+  List into build 13.
+
+### Verification and upload
+
+- `swift test` passed: 96 tests.
+- `git diff --check` passed.
+- `apps/ios/build/JustDoApp-b13-monthly-list-notifications.xcarchive` succeeded
+  for app and widget version 1.0 (13), bundle IDs `kr.justdo.app` and
+  `kr.justdo.app.widget`.
+- The archive contains the app and widget privacy manifests.
+- `xcodebuild -exportArchive` uploaded build 13 successfully; App Store Connect
+  reported `Uploaded package is processing`.
+
+### Next
+
+- Wait for build 13 processing, install it through TestFlight, and run section
+  16 of `docs/testflight_smoke_checklist.md`.
+
+## 2026-08-05 Build 13 monthly List validation + today-scroll follow-up
+
+### Codex
+
+- Recorded the build 13 installation and existing-data pass.
+- Recorded real-device passes for monthly date grouping, month navigation, Task
+  completion/edit, multi-day and carry-over placement, and date-header entry
+  into the daily Task/Habit panel.
+- Added automatic monthly List positioning:
+  - Entering List in the current month scrolls to today's section.
+  - Tapping `오늘` scrolls to today's section even if today was already selected.
+  - If today has no Task section, the target is the nearest upcoming section or
+    the final earlier section.
+  - The scroll also runs after asynchronously loaded date sections appear.
+
+### Verification
+
+- `swift test` passed: 98 tests.
+- Generic iOS Release app/widget build passed.
+- `git diff --check` passed.
+
+### Next
+
+- Complete the build 13 schedule-only notification-title checks.
+- Include the today-scroll follow-up in the next consolidated TestFlight build
+  and verify it on a real device.
+
+## 2026-08-05 Build 13 notification-body follow-up
+
+### Codex
+
+- Recorded the build 13 relative schedule-only notification-title pass.
+- Added actual Task timing to schedule-only notification bodies:
+  - Same-day timed Tasks use `오늘 HH:mm에`.
+  - One-day-before reminders use `내일 HH:mm에`.
+  - Longer-lead reminders use the Task's calendar date and time.
+  - Untimed Tasks show the Task date without treating the notification fire time
+    as a Task time.
+  - Multiple Tasks merged at one fire time retain their respective Task times.
+- Kept the existing `다음 일정 HH:mm` copy when a schedule reminder is merged
+  into a briefing.
+
+### Verification
+
+- `swift test` passed: 98 tests.
+- Generic iOS Release app/widget build passed.
+- `git diff --check` passed.
+
+### Next
+
+- Include the schedule-only body and monthly List today-scroll refinements in
+  the next consolidated TestFlight build and verify both on a real device.

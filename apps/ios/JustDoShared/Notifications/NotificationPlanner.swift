@@ -38,11 +38,16 @@ public struct PlannedNotification: Identifiable, Codable, Equatable, Sendable {
 }
 
 public enum NotificationPlanner {
+    private struct ScheduledTask {
+        var task: Task
+        var reminderOffsetMinutes: Int
+    }
+
     private struct TaskBucket {
         var fireDate: Date
         var targetDate: String
         var briefingTasks: [Task] = []
-        var scheduledTasks: [Task] = []
+        var scheduledTasks: [ScheduledTask] = []
     }
 
     private struct HabitBucket {
@@ -190,26 +195,31 @@ public enum NotificationPlanner {
                 dueDate = date
             }
 
-            var fireDates = Set<Date>()
+            var reminderOffsetsByFireDate: [Date: Int] = [:]
             for offset in offsets {
                 if task.scheduledTime == nil && offset != 0 && offset % 1_440 != 0 {
                     continue
                 }
                 let candidate = calendar.date(byAdding: .minute, value: -offset, to: dueDate) ?? dueDate
                 if candidate > now {
-                    fireDates.insert(candidate)
+                    reminderOffsetsByFireDate[candidate] = offset
                 } else if dueDate > now {
-                    fireDates.insert(dueDate)
+                    reminderOffsetsByFireDate[dueDate] = 0
                 }
             }
 
-            for fireDate in fireDates where fireDate <= endDate {
+            for (fireDate, reminderOffsetMinutes) in reminderOffsetsByFireDate where fireDate <= endDate {
                 var bucket = buckets[fireDate] ?? TaskBucket(
                     fireDate: fireDate,
                     targetDate: task.startDate
                 )
-                if !bucket.scheduledTasks.contains(where: { $0.id == task.id }) {
-                    bucket.scheduledTasks.append(task)
+                if !bucket.scheduledTasks.contains(where: { $0.task.id == task.id }) {
+                    bucket.scheduledTasks.append(
+                        ScheduledTask(
+                            task: task,
+                            reminderOffsetMinutes: reminderOffsetMinutes
+                        )
+                    )
                 }
                 buckets[fireDate] = bucket
             }
@@ -223,16 +233,17 @@ public enum NotificationPlanner {
 
         let hasBriefing = !bucket.briefingTasks.isEmpty
         let kind: PlannedNotificationKind = hasBriefing ? .taskBriefing : .taskSchedule
+        let scheduledTasks = bucket.scheduledTasks.map(\.task)
         let title = hasBriefing
             ? "일정 브리핑"
-            : scheduleTitle(
-                tasks: bucket.scheduledTasks,
+            : scheduleOnlyTitle(
+                scheduledTasks: bucket.scheduledTasks,
                 fallback: bucket.fireDate,
                 calendar: calendar
             )
         var bodyParts: [String] = []
         if hasBriefing {
-            let scheduledTaskIDs = Set(bucket.scheduledTasks.map(\.id))
+            let scheduledTaskIDs = Set(scheduledTasks.map(\.id))
             let briefingOnlyTasks = bucket.briefingTasks.filter {
                 !scheduledTaskIDs.contains($0.id)
             }
@@ -243,22 +254,24 @@ public enum NotificationPlanner {
                 )
             )
         }
-        if !bucket.scheduledTasks.isEmpty {
+        if !scheduledTasks.isEmpty {
             bodyParts.append(
                 hasBriefing
                     ? mergedScheduleBody(
-                        tasks: bucket.scheduledTasks.sorted(by: taskOrder),
+                        tasks: scheduledTasks.sorted(by: taskOrder),
                         fallback: bucket.fireDate,
                         calendar: calendar
                     )
                     : scheduleBody(
-                    tasks: bucket.scheduledTasks.sorted(by: taskOrder),
-                )
+                        tasks: scheduledTasks.sorted(by: taskOrder),
+                        fireDate: bucket.fireDate,
+                        calendar: calendar
+                    )
             )
         }
 
         let taskIDs = Array(
-            Set((bucket.briefingTasks + bucket.scheduledTasks).map(\.id))
+            Set((bucket.briefingTasks + scheduledTasks).map(\.id))
         ).sorted { $0.uuidString < $1.uuidString }
         let minute = minuteKey(bucket.fireDate, calendar: calendar)
         return PlannedNotification(
@@ -336,11 +349,64 @@ public enum NotificationPlanner {
         return "\(prefix) · ‘\(first.title)’ 외 \(examples.count - 1)개"
     }
 
-    private static func scheduleBody(tasks: [Task]) -> String {
-        if tasks.count == 1 {
-            return "‘\(tasks[0].title)’ 일정이 있어요."
+    private static func scheduleBody(
+        tasks: [Task],
+        fireDate: Date,
+        calendar: Calendar
+    ) -> String {
+        guard let first = tasks.first else {
+            return "일정이 있어요."
         }
-        return "‘\(tasks[0].title)’ 외 \(tasks.count - 1)개 일정이 있어요."
+
+        let timingPhrases = tasks.map {
+            scheduleTimingPhrase(task: $0, fireDate: fireDate, calendar: calendar)
+        }
+        if tasks.count == 1 {
+            return "\(timingPhrases[0]) ‘\(first.title)’ 일정이 있어요."
+        }
+        if timingPhrases.allSatisfy({ $0 == timingPhrases[0] }) {
+            return "\(timingPhrases[0]) ‘\(first.title)’ 외 \(tasks.count - 1)개 일정이 있어요."
+        }
+
+        let examples = zip(tasks.prefix(2), timingPhrases.prefix(2)).map { task, timing in
+            "\(timing) ‘\(task.title)’"
+        }.joined(separator: ", ")
+        let remaining = tasks.count - min(tasks.count, 2)
+        return remaining > 0
+            ? "\(examples) 외 \(remaining)개 일정이 있어요."
+            : "\(examples) 일정이 있어요."
+    }
+
+    private static func scheduleTimingPhrase(
+        task: Task,
+        fireDate: Date,
+        calendar: Calendar
+    ) -> String {
+        let day: String
+        let fireDay = calendar.startOfDay(for: fireDate)
+        let targetDay = date(iso: task.startDate, time: "00:00", calendar: calendar)
+        let dayDifference: Int?
+        if let targetDay {
+            dayDifference = calendar.dateComponents([.day], from: fireDay, to: targetDay).day
+        } else {
+            dayDifference = nil
+        }
+
+        switch dayDifference {
+        case 0:
+            day = "오늘"
+        case 1:
+            day = "내일"
+        default:
+            let parts = task.startDate.split(separator: "-").compactMap { Int($0) }
+            day = parts.count == 3 ? "\(parts[1])월 \(parts[2])일" : task.startDate
+        }
+
+        guard task.scheduledTime != nil else {
+            return day
+        }
+        let time = scheduledTimeTitle(tasks: [task], fallback: fireDate, calendar: calendar)
+        return "\(day) \(time)에"
     }
 
     private static func mergedScheduleBody(
@@ -348,7 +414,7 @@ public enum NotificationPlanner {
         fallback: Date,
         calendar: Calendar
     ) -> String {
-        let time = scheduleTitle(tasks: tasks, fallback: fallback, calendar: calendar)
+        let time = scheduledTimeTitle(tasks: tasks, fallback: fallback, calendar: calendar)
         guard let first = tasks.first else {
             return "다음 일정 \(time)"
         }
@@ -358,7 +424,44 @@ public enum NotificationPlanner {
         return "다음 일정 \(time) ‘\(first.title)’ 외 \(tasks.count - 1)개"
     }
 
-    private static func scheduleTitle(
+    private static func scheduleOnlyTitle(
+        scheduledTasks: [ScheduledTask],
+        fallback: Date,
+        calendar: Calendar
+    ) -> String {
+        let offsets = Set(scheduledTasks.map(\.reminderOffsetMinutes))
+        guard offsets.count == 1, let offset = offsets.first else {
+            return "일정 알림"
+        }
+        if offset > 0 {
+            return reminderOffsetTitle(offset)
+        }
+
+        let tasks = scheduledTasks.map(\.task)
+        if tasks.allSatisfy({ $0.scheduledTime == nil }) {
+            return "당일"
+        }
+        if tasks.contains(where: { $0.scheduledTime == nil }) {
+            return "일정 알림"
+        }
+        return scheduledTimeTitle(tasks: tasks, fallback: fallback, calendar: calendar)
+    }
+
+    private static func reminderOffsetTitle(_ minutes: Int) -> String {
+        if minutes % 10_080 == 0 {
+            let weeks = minutes / 10_080
+            return weeks == 1 ? "1주일 전" : "\(weeks)주 전"
+        }
+        if minutes % 1_440 == 0 {
+            return "\(minutes / 1_440)일 전"
+        }
+        if minutes % 60 == 0 {
+            return "\(minutes / 60)시간 전"
+        }
+        return "\(minutes)분 전"
+    }
+
+    private static func scheduledTimeTitle(
         tasks: [Task],
         fallback: Date,
         calendar: Calendar

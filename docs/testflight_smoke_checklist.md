@@ -1,15 +1,16 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-08-02
+Updated: 2026-08-05
 
-Purpose: validate TestFlight internal build 11 regressions before deciding whether
-to submit the iOS v1 build for public App Review.
+Purpose: record TestFlight build 13 validation and verify the next-build Home
+List today-scroll and schedule-notification body follow-ups before deciding
+whether to submit the iOS v1 build for public App Review.
 
 ## Test Setup
 
 - Device: real iPhone with the TestFlight build installed.
-- Build: App Store Connect / TestFlight build 11, installed and launched on the
-  real device on 2026-08-02.
+- Build: App Store Connect / TestFlight build 13, installed and under
+  real-device validation on 2026-08-05.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -49,8 +50,11 @@ Current progress:
 - [x] 13. Build 10 Notifications and Large Widget — remaining checks passed on
   build 11.
 - [x] 14. Build 11 Consolidated Regression — passed on 2026-08-04.
-- [ ] 15. Build 12 Calendar, Notification Copy, and Holidays — uploaded;
-  processing in App Store Connect.
+- [x] 15. Build 12 Calendar, Notification Copy, and Holidays — validation
+  completed; H-013 and H-014 follow-ups moved to build 13.
+- [ ] 16. Build 13 Schedule Titles and Monthly Home List — relative titles and
+  monthly List passed; H-015 today scroll and H-016 schedule body need the next
+  build.
 
 ### 1. Install and Launch
 
@@ -328,22 +332,51 @@ Notes: Build 11 was archived and uploaded successfully on 2026-08-02, then insta
 
 ### 15. Build 12 Calendar, Notification Copy, and Holidays
 
-- [ ] Install TestFlight build 12 and confirm the app opens with existing data.
-- [ ] Add more than four overlapping Tasks to one Home calendar date; confirm
+- [x] Install TestFlight build 12 and confirm the app opens with existing data.
+- [x] Add more than four overlapping Tasks to one Home calendar date; confirm
   four Task lanes are followed by a fixed fifth `+N` summary lane.
-- [ ] Confirm briefing title/body use `일정 브리핑` and the concise
+- [x] Confirm briefing title/body use `일정 브리핑` and the concise
   `오늘 할 일 N개 · 다음 일정 HH:mm ‘Task’` format.
-- [ ] Confirm a schedule-only notification title is only `HH:mm` and its body
-  uses the concise `‘Task’ 일정이 있어요.` format.
-- [ ] Confirm Korean public holidays use red dates in Home calendar and
+- [x] Confirm Korean public holidays use red dates in Home calendar and
   Medium/Large widgets, including `광복절` on August 15 and its substitute
-  holiday on August 17; Task/Habit dots must remain visible.
+  holiday on August 17.
+- [x] Confirm Task/Habit activity dots remain visible on public holidays.
 
 Result:
 
 ```text
-Status: UPLOADED — PROCESSING
-Notes: Build 12 was archived and uploaded successfully on 2026-08-04. The archive contains app and widget version 1.0 (12), bundle IDs `kr.justdo.app` and `kr.justdo.app.widget`. Pre-upload verification passed 90 Swift tests, Release archive validation, and `git diff --check`. App Store Connect reported `Uploaded package is processing`.
+Status: COMPLETE WITH BUILD 13 FOLLOW-UPS
+Notes: Build 12 was archived and uploaded successfully on 2026-08-04. The archive contains app and widget version 1.0 (12), bundle IDs `kr.justdo.app` and `kr.justdo.app.widget`. Pre-upload verification passed 90 Swift tests, Release archive validation, and `git diff --check`. On 2026-08-05, the user confirmed on a real device that more than four overlapping Tasks render as four Task lanes followed by a fixed fifth `+N` summary lane. The user also confirmed red public-holiday date styling in Home and the Medium/Large widgets, the unified Task/Habit activity dot on public holidays, and the concise briefing title/body. The schedule-only `HH:mm` title worked as implemented but looked like the current time, producing H-013. The user then requested the single-day Home List become a monthly Task list, producing H-014. Both follow-ups are included in uploaded build 13.
+```
+
+### 16. Build 13 Schedule Titles and Monthly Home List
+
+- [x] Install TestFlight build 13 and confirm the app opens with existing data.
+- [x] Confirm schedule-only pre-alert titles describe the reminder offset
+  (`1일 전`, `10분 전`, or `5분 전`) and only an on-time reminder uses the
+  Task time (`15:00`).
+- [ ] On the next build, confirm a same-day schedule-only body includes the
+  actual Task time as `오늘 15:00에 ‘Task’ 일정이 있어요.` and a one-day
+  pre-alert uses `내일 15:00에 …`.
+- [x] Switch Home to List and confirm all Tasks for the displayed month are
+  grouped into date sections.
+- [x] Use the month arrows and `오늘` button; confirm the summary and entire
+  list follow the displayed month.
+- [x] Confirm Task completion and Task edit still work directly in the list.
+- [x] Confirm a multi-day Task appears once and a Task carried over from the
+  previous month appears under the displayed month's first day.
+- [x] Tap a date-section header and confirm the existing daily detail panel
+  opens with that day's Tasks and Habits.
+- [ ] On the next build, switch to List in the current month and confirm it
+  automatically scrolls to today's date section.
+- [ ] On the next build, scroll away from today, tap `오늘`, and confirm the
+  list scrolls back to today's date section.
+
+Result:
+
+```text
+Status: PARTIAL PASS WITH NEXT-BUILD FOLLOW-UP
+Notes: Build 13 was archived and uploaded successfully on 2026-08-05. The archive contains app and widget version 1.0 (13), bundle IDs `kr.justdo.app` and `kr.justdo.app.widget`, and both privacy manifests. Pre-upload verification passed 96 Swift tests, Release archive validation, and `git diff --check`. The user confirmed installation with existing data and all monthly List behaviors: date grouping, month navigation, Task actions, multi-day/carry-over handling, and daily-detail entry. The user also confirmed the relative schedule-only titles. H-015 adds automatic scrolling to today's section when entering List or tapping `오늘`. H-016 adds the actual Task date/time to schedule-only bodies. Both are patched locally for the next build.
 ```
 
 ## Issue Log
@@ -479,7 +512,7 @@ Expected: Medium shows at most four Task rows and relies on its existing complet
 Actual: The Medium widget allowed six rows, and Home calendar week rows continued growing as overlapping Task lanes were added.
 Screenshot or screen recording: Not needed; user reported during build 10 regression testing on 2026-08-02.
 Reproducible: Yes, from the current item-limit and calendar row-height logic.
-Notes: Medium behavior passed on build 11: visible items are limited to four with no separate overflow label. The Home calendar follow-up is included in uploaded build 12: lanes are compacted per week, four Task bars are shown, and a dedicated fifth lane displays the per-date `+N` count. Dedicated list and selected-day views remain unrestricted. Pending build 12 real-device verification for the revised Home layout.
+Notes: Medium behavior passed on build 11: visible items are limited to four with no separate overflow label. The Home calendar follow-up is included in uploaded build 12: lanes are compacted per week, four Task bars are shown, and a dedicated fifth lane displays the per-date `+N` count. Dedicated list and selected-day views remain unrestricted. On 2026-08-05, the user confirmed the revised Home layout on a real device: four Task lanes and the fixed fifth `+N` summary lane display correctly.
 ```
 
 ```text
@@ -491,7 +524,92 @@ Expected: The notification communicates today's count and next schedule concisel
 Actual: Build 11 correctly merged delivery and removed duplicate Task content, but concatenated two long sentences and repeated `예정되어 있습니다`; briefing title remained `오늘의 할 일`.
 Screenshot or screen recording: Not needed; user reported during build 11 regression testing on 2026-08-04.
 Reproducible: Yes; message output is covered by deterministic planner tests.
-Notes: Included in uploaded build 12 using the selected compact format. Examples: `오늘 할 일 3개 · 다음 일정 14:00 ‘팀 회의’`; schedule-only title `14:00` with body `‘팀 회의’ 일정이 있어요.` Swift tests passed: 90 tests. Pending build 12 real-device verification.
+Notes: Included in uploaded build 12 using the selected compact format. Examples: `오늘 할 일 3개 · 다음 일정 14:00 ‘팀 회의’`; schedule-only title `14:00` with body `‘팀 회의’ 일정이 있어요.` Swift tests passed: 90 tests. On 2026-08-05, the user confirmed the concise briefing title/body on a real device. The schedule-only time title worked as implemented but prompted the H-013 semantic refinement for the next build.
+```
+
+```text
+ID: H-013
+Severity: low
+Area: Notifications / schedule-only title semantics
+Steps: Set a Task for 15:00 and, across separate checks as needed, configure
+one-day-before, ten-minute-before, five-minute-before, and on-time reminders;
+then receive each schedule-only notification.
+Expected: Pre-alert titles describe their offset (`1일 전`, `10분 전`, or
+`5분 전`); only the on-time reminder title is the Task time (`15:00`).
+Actual: Build 12 used the Task time (`15:00`) for every schedule-only reminder,
+which could be mistaken for the current time.
+Screenshot or screen recording: Not needed; user reported during build 12 smoke
+on 2026-08-05.
+Reproducible: Yes; covered by deterministic planner tests.
+Notes: Included in build 13 and verified on a real device by preserving each reminder's effective
+offset in the planner. Passed-lead reminders that fall back to on-time use the
+Task time, untimed same-day reminders use `당일`, and a same-minute merge with
+different offsets uses the neutral title `일정 알림`. Swift tests passed: 93
+tests.
+```
+
+```text
+ID: H-014
+Severity: low
+Area: Home / List display range
+Steps: Switch Home from Calendar to List, move between months with the existing
+month arrows, and open a date section.
+Expected: List shows the displayed month's Tasks grouped by date, each Task
+appears once, a Task carried over from the previous month appears under the
+first day of the displayed month, and tapping a date opens the existing daily
+detail panel.
+Actual: Build 12 List only showed Tasks and Habits for the single selected day.
+Screenshot or screen recording: Not needed; user requested the monthly List
+behavior after build 12 validation on 2026-08-05.
+Reproducible: Yes; the List previously received only the selected day's data.
+Notes: Included in build 13 and verified on a real device. The existing year/month header and
+month arrows now control the entire List, date sections retain Task completion
+and edit actions, and the daily detail panel remains available for Habits and
+day-specific review. Selector coverage includes carry-over, multi-day
+deduplication, date grouping, ordering, and invalid months. Swift tests passed:
+96 tests; generic iOS Release app/widget build passed.
+```
+
+```text
+ID: H-015
+Severity: low
+Area: Home / monthly List navigation
+Steps: Enter List while viewing the current month, scroll away from today, and
+tap `오늘`.
+Expected: Entering List initially positions today's date section in view, and
+tapping `오늘` scrolls back to it even when the selected date was already today.
+If today has no Task section, use the nearest upcoming section or the last
+earlier section.
+Actual: Build 13 changed the selected date/month but retained the List's current
+scroll position.
+Screenshot or screen recording: Not needed; user reported during build 13 smoke
+on 2026-08-05.
+Reproducible: Yes; the List had no programmatic scroll target or today-button
+scroll request.
+Notes: Patched locally using stable date-section IDs and a dedicated today-scroll
+request. It also retries after asynchronously loaded sections become available.
+Swift tests passed: 98 tests; generic iOS Release app/widget build passed.
+```
+
+```text
+ID: H-016
+Severity: low
+Area: Notifications / schedule-only body semantics
+Steps: Receive same-day, one-day-before, and longer-lead schedule-only Task
+notifications.
+Expected: The body states the actual Task date and time: same-day
+`오늘 15:00에 ‘Task’ 일정이 있어요.`, one-day-before
+`내일 15:00에 ‘Task’ 일정이 있어요.`, and longer leads use the calendar date.
+Untimed Tasks must not present the notification fire time as a Task time.
+Actual: Build 13 used only `‘Task’ 일정이 있어요.`, so the Task time was absent
+after the title changed to a reminder-offset label.
+Screenshot or screen recording: Not needed; user reported during build 13 smoke
+on 2026-08-05.
+Reproducible: Yes; covered by deterministic planner tests.
+Notes: Patched locally for the next build. Multiple same-minute Tasks retain
+their respective actual times, while briefing-merged copy keeps its existing
+`다음 일정 HH:mm` format. Swift tests passed: 98 tests; generic iOS Release
+app/widget build passed.
 ```
 
 ```text
@@ -503,7 +621,7 @@ Expected: Current-month public holidays use red date styling while Task/Habit ac
 Actual: Calendars only distinguished weekends and did not identify national public holidays.
 Screenshot or screen recording: Not needed; user requested the calendar enhancement after build 11 Large-widget verification on 2026-08-04.
 Reproducible: Yes; calendar display models previously contained no holiday metadata.
-Notes: Included in uploaded build 12. The shared offline calendar covers fixed, lunar, substitute, election, and announced temporary holidays, including the 2026 Labor Day and Constitution Day law changes. Home, Medium, and Large calendar dates share the result. Swift tests passed: 90 tests; generic iOS Release app/widget archive passed. Pending build 12 real-device verification.
+Notes: Included in uploaded build 12. The shared offline calendar covers fixed, lunar, substitute, election, and announced temporary holidays, including the 2026 Labor Day and Constitution Day law changes. Home, Medium, and Large calendar dates share the result. Swift tests passed: 90 tests; generic iOS Release app/widget archive passed. On 2026-08-05, the user confirmed red public-holiday date styling in Home and the Medium/Large widgets, including August 15 and its August 17 substitute holiday, and confirmed that the unified Task/Habit activity dot remains visible on public holidays.
 ```
 
 ## Release Decision
@@ -517,7 +635,7 @@ Notes: Included in uploaded build 12. The shared offline calendar covers fixed, 
 Decision:
 
 ```text
-Status: AWAITING BUILD 12 VALIDATION
-Reason: Build 11 regression checks passed. Build 12 containing H-010's revised Home overflow presentation, H-011's concise notification copy, and H-012's Korean public-holiday display uploaded successfully and is processing.
-Next action: Install TestFlight build 12 after processing and run section 15.
+Status: AWAITING NEXT BUILD
+Reason: Build 13 monthly Home List and relative notification titles passed on a real device. H-015 today-scroll and H-016 schedule-only body semantics are patched locally and require the next TestFlight build.
+Next action: Consolidate any remaining changes, then upload and verify H-015 and H-016 on the next TestFlight build.
 ```

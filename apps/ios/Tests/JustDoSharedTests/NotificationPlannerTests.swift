@@ -68,8 +68,88 @@ final class NotificationPlannerTests: XCTestCase {
         XCTAssertEqual(plans.count, 1)
         XCTAssertEqual(plans[0].kind, .taskSchedule)
         XCTAssertEqual(plans[0].title, "09:05")
-        XCTAssertEqual(plans[0].body, "‘업체 미팅’ 일정이 있어요.")
+        XCTAssertEqual(plans[0].body, "오늘 09:05에 ‘업체 미팅’ 일정이 있어요.")
         XCTAssertEqual(plans[0].fireDate, date("2026-07-24 09:05"))
+    }
+
+    func testScheduleOnlyTitlesDescribeCustomReminderOffsetsAndOnTime() {
+        let snapshot = makeSnapshot(
+            tasks: [
+                task(
+                    title: "업체 미팅",
+                    time: "15:00",
+                    mode: .custom,
+                    offsets: [0, 5, 10]
+                ),
+            ],
+            briefing: false
+        )
+
+        let plans = plan(snapshot, now: "2026-07-24 14:00")
+
+        XCTAssertEqual(plans.map(\.fireDate), [
+            date("2026-07-24 14:50"),
+            date("2026-07-24 14:55"),
+            date("2026-07-24 15:00"),
+        ])
+        XCTAssertEqual(plans.map(\.title), ["10분 전", "5분 전", "15:00"])
+        XCTAssertEqual(
+            plans.map(\.body),
+            Array(repeating: "오늘 15:00에 ‘업체 미팅’ 일정이 있어요.", count: 3)
+        )
+    }
+
+    func testScheduleOnlyTitleDescribesDayBeforeReminder() {
+        let snapshot = makeSnapshot(
+            tasks: [
+                task(
+                    title: "업체 미팅",
+                    startDate: "2026-07-25",
+                    time: "15:00",
+                    mode: .custom,
+                    offsets: [1_440]
+                ),
+            ],
+            briefing: false
+        )
+
+        let plans = plan(snapshot, now: "2026-07-24 14:00")
+
+        XCTAssertEqual(plans.count, 1)
+        XCTAssertEqual(plans[0].fireDate, date("2026-07-24 15:00"))
+        XCTAssertEqual(plans[0].title, "1일 전")
+        XCTAssertEqual(plans[0].body, "내일 15:00에 ‘업체 미팅’ 일정이 있어요.")
+    }
+
+    func testScheduleOnlyTitleIsGenericWhenDifferentOffsetsMerge() {
+        let snapshot = makeSnapshot(
+            tasks: [
+                task(
+                    title: "업체 미팅",
+                    time: "15:00",
+                    mode: .custom,
+                    offsets: [10]
+                ),
+                task(
+                    id: 2,
+                    title: "자료 제출",
+                    time: "14:55",
+                    mode: .custom,
+                    offsets: [5]
+                ),
+            ],
+            briefing: false
+        )
+
+        let plans = plan(snapshot, now: "2026-07-24 14:00")
+
+        XCTAssertEqual(plans.count, 1)
+        XCTAssertEqual(plans[0].fireDate, date("2026-07-24 14:50"))
+        XCTAssertEqual(plans[0].title, "일정 알림")
+        XCTAssertEqual(
+            plans[0].body,
+            "오늘 14:55에 ‘자료 제출’, 오늘 15:00에 ‘업체 미팅’ 일정이 있어요."
+        )
     }
 
     func testUntimedDefaultTaskDoesNotCreateScheduleReminder() {
@@ -101,6 +181,7 @@ final class NotificationPlannerTests: XCTestCase {
 
         XCTAssertEqual(plans.count, 1)
         XCTAssertEqual(plans[0].fireDate, date("2026-07-24 09:00"))
+        XCTAssertEqual(plans[0].body, "7월 26일 ‘보고서 제출’ 일정이 있어요.")
     }
 
     func testHabitsAtSameMinuteAreMergedAndCompletedHabitIsExcluded() {

@@ -522,6 +522,7 @@ private struct HomeRootView: View {
     @State private var selectedDate = JDDate.todayISO
     @State private var displayYear = JDDate.todayComponents.year
     @State private var displayMonth = JDDate.todayComponents.month
+    @State private var homeListTodayScrollRequest = 0
     @State private var selectedTab: RootTab = .home
     @AppStorage("justdo.homeDisplayMode") private var homeDisplayModeRaw = HomeDisplayMode.calendar.rawValue
     @State private var isShowingAddTask = false
@@ -853,16 +854,18 @@ private struct HomeRootView: View {
             )
         case .list:
             HomeListView(
+                year: displayYear,
+                month: displayMonth,
                 selectedDate: selectedDate,
-                tasks: tasksForSelectedDate,
-                habits: habitsForSelectedDate,
+                todayScrollRequest: homeListTodayScrollRequest,
+                tasks: snapshot?.tasks ?? [],
                 categories: snapshot?.categories ?? [],
-                onMoveDate: { selectedDate = JDDate.addDays(selectedDate, $0) },
-                onOpenCalendarDay: { isShowingDayPanel = true },
+                onOpenDate: { date in
+                    selectedDate = date
+                    isShowingDayPanel = true
+                },
                 onToggleTask: toggleTask(_:),
-                onOpenTask: { editingTask = $0 },
-                onToggleHabit: toggleHabit(_:on:),
-                onOpenHabit: { editingHabit = $0 }
+                onOpenTask: { editingTask = $0 }
             )
             .padding(.horizontal, 20)
         }
@@ -969,6 +972,7 @@ private struct HomeRootView: View {
         selectedDate = JDDate.todayISO
         displayYear = today.year
         displayMonth = today.month
+        homeListTodayScrollRequest += 1
     }
 
     private func openHome(on iso: String) {
@@ -1942,111 +1946,185 @@ private struct HomeDisplayModePicker: View {
 }
 
 private struct HomeListView: View {
+    let year: Int
+    let month: Int
     let selectedDate: String
+    let todayScrollRequest: Int
     let tasks: [Task]
-    let habits: [Habit]
     let categories: [JDCategory]
-    let onMoveDate: (Int) -> Void
-    let onOpenCalendarDay: () -> Void
+    let onOpenDate: (String) -> Void
     let onToggleTask: (Task) -> Void
     let onOpenTask: (Task) -> Void
-    let onToggleHabit: (Habit, String) -> Void
-    let onOpenHabit: (Habit) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Button { onMoveDate(-1) } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 13, weight: .bold))
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(JDTheme.secondaryText)
-
-                Button(action: onOpenCalendarDay) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(JDDate.displayDate(selectedDate))
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(JDTheme.primaryText)
-                        Text("\(weekdayName)요일\(selectedDate == JDDate.todayISO ? " · 오늘" : "")")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(JDTheme.secondaryText)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-
-                Button { onMoveDate(1) } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .bold))
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(JDTheme.secondaryText)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 56)
-            .background(JDTheme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
+        ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if tasks.isEmpty && habits.isEmpty {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    monthSummary
+                    if sections.isEmpty {
                         EmptyHomeListState()
                     } else {
-                        ForEach(groupedTasks, id: \.category.id) { group in
-                            TaskGroupSection(
-                                category: group.category,
-                                tasks: group.tasks,
-                                onToggleTask: onToggleTask,
-                                onOpenTask: onOpenTask
-                            )
-                        }
-                        let uncategorized = uncategorizedTasks
-                        if !uncategorized.isEmpty {
-                            JustDoTaskSectionView(
-                                title: "Task",
-                                tasks: uncategorized,
+                        ForEach(sections, id: \.date) { section in
+                            MonthTaskListDateSection(
+                                section: section,
                                 categories: categories,
+                                isSelected: section.date == selectedDate,
+                                holidayName: holidays[section.date]?.name,
+                                onOpenDate: { onOpenDate(section.date) },
                                 onToggleTask: onToggleTask,
                                 onOpenTask: onOpenTask
                             )
-                        }
-                        if !habits.isEmpty {
-                            HabitGroupSection(
-                                habits: habits,
-                                selectedDate: selectedDate,
-                                onToggleHabit: onToggleHabit,
-                                onOpenHabit: onOpenHabit
-                            )
+                            .id(section.date)
                         }
                     }
                 }
                 .padding(.bottom, 18)
             }
-        }
-    }
-
-    private var groupedTasks: [(category: JDCategory, tasks: [Task])] {
-        categories.compactMap { category in
-            let items = tasks.filter { $0.categoryID == category.id }
-            return items.isEmpty ? nil : (category, items)
-        }
-    }
-
-    private var uncategorizedTasks: [Task] {
-        let categoryIDs = Set(categories.map(\.id))
-        return tasks.filter { task in
-            guard let categoryID = task.categoryID else {
-                return true
+            .onAppear {
+                scrollToToday(using: proxy, animated: false)
             }
-            return !categoryIDs.contains(categoryID)
+            .onChange(of: todayScrollRequest) { _, _ in
+                scrollToToday(using: proxy, animated: true)
+            }
+            .onChange(of: sectionDates) { oldDates, newDates in
+                guard oldDates != newDates else { return }
+                scrollToToday(using: proxy, animated: true)
+            }
         }
     }
 
-    private var weekdayName: String {
-        ["일", "월", "화", "수", "목", "금", "토"][JDDate.weekday(selectedDate)]
+    private var monthSummary: some View {
+        HStack {
+            Text("\(month)월 할 일")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(JDTheme.secondaryText)
+            Spacer()
+            Text("\(completedCount)/\(taskCount)개 완료")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(JDTheme.tertiaryText)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 38)
+        .background(JDTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var sections: [MonthTaskListSection] {
+        MonthTaskListSelector.sections(tasks: tasks, year: year, month: month)
+    }
+
+    private var sectionDates: [String] {
+        sections.map(\.date)
+    }
+
+    private var taskCount: Int {
+        sections.reduce(0) { $0 + $1.tasks.count }
+    }
+
+    private var completedCount: Int {
+        sections.reduce(0) { count, section in
+            count + section.tasks.filter(\.isCompleted).count
+        }
+    }
+
+    private var holidays: [String: KoreanPublicHoliday] {
+        KoreanPublicHolidayCalendar.holidays(in: year)
+    }
+
+    private func scrollToToday(using proxy: ScrollViewProxy, animated: Bool) {
+        let today = JDDate.todayComponents
+        guard year == today.year, month == today.month else { return }
+        guard let target = MonthTaskListSelector.scrollTargetDate(
+            sectionDates: sectionDates,
+            preferredDate: JDDate.todayISO
+        ) else { return }
+
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo(target, anchor: .top)
+                }
+            } else {
+                proxy.scrollTo(target, anchor: .top)
+            }
+        }
+    }
+}
+
+private struct MonthTaskListDateSection: View {
+    let section: MonthTaskListSection
+    let categories: [JDCategory]
+    let isSelected: Bool
+    let holidayName: String?
+    let onOpenDate: () -> Void
+    let onToggleTask: (Task) -> Void
+    let onOpenTask: (Task) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onOpenDate) {
+                HStack(spacing: 7) {
+                    Text(dateTitle)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(dateColor)
+                    if section.date == JDDate.todayISO {
+                        Text("오늘")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(JDTheme.accent)
+                            .padding(.horizontal, 6)
+                            .frame(height: 20)
+                            .background(JDTheme.accent.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    Spacer()
+                    Text("\(section.tasks.count)개")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(JDTheme.tertiaryText)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(isSelected ? JDTheme.accent.opacity(0.08) : JDTheme.surfaceAlt)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(dateTitle), 할 일 \(section.tasks.count)개 열기")
+
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(section.tasks.enumerated()), id: \.element.id) { index, task in
+                    let category = categories.first { $0.id == task.categoryID }
+                    TaskRow(
+                        task: task,
+                        color: category?.displayColor ?? JDTheme.me,
+                        isLast: index == section.tasks.count - 1,
+                        showsDueDate: false,
+                        onToggle: { onToggleTask(task) },
+                        onOpen: { onOpenTask(task) }
+                    )
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+        .background(JDTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var dateTitle: String {
+        let parts = JDDate.parts(section.date)
+        let weekday = ["일", "월", "화", "수", "목", "금", "토"][JDDate.weekday(section.date)]
+        return "\(parts.month)월 \(parts.day)일 \(weekday)요일"
+    }
+
+    private var dateColor: Color {
+        let weekday = JDDate.weekday(section.date)
+        if holidayName != nil || weekday == 0 {
+            return JDTheme.external
+        }
+        if weekday == 6 {
+            return JDTheme.me
+        }
+        return JDTheme.primaryText
     }
 }
 
@@ -2056,7 +2134,7 @@ private struct EmptyHomeListState: View {
             Image(systemName: "checklist")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(JDTheme.tertiaryText)
-            Text("이 날의 할 일과 습관이 없어요")
+            Text("이 달에 등록된 할 일이 없어요")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(JDTheme.secondaryText)
         }
