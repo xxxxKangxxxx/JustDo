@@ -71,29 +71,41 @@ final class SupabaseRestSyncTests: XCTestCase {
         )
     }
 
-    func testFetchAppSnapshotMapsInactiveSubscriptionToFreePlan() async throws {
-        let userID = uuid("99999999-9999-9999-9999-999999999999")
-        let transport = FakeSupabaseRestTransport(responses: [
-            "categories": "[]",
-            "tags": "[]",
-            "task_tags": "[]",
-            "tasks": "[]",
-            "habits": "[]",
-            "habit_logs": "[]",
-            "goals": "[]",
-            "goal_prompt_dismissals": "[]",
-            "user_subscriptions": """
-            [{"plan_name":"pro","status":"canceled"}]
-            """,
-        ])
-        let client = SupabaseSnapshotClient(userID: userID, transport: transport)
+    func testFetchAppSnapshotMapsEveryLegacySubscriptionStateWithoutLosingCompatibility() async throws {
+        let cases: [(label: String, subscriptionJSON: String, expectedPlan: String)] = [
+            ("no subscription row", "[]", "free"),
+            ("free", #"[{"plan_name":"free","status":"active"}]"#, "free"),
+            ("trial", #"[{"plan_name":"pro","status":"trial"}]"#, "pro"),
+            ("active Pro", #"[{"plan_name":"pro","status":"active"}]"#, "pro"),
+            ("past due", #"[{"plan_name":"pro","status":"past_due"}]"#, "free"),
+            ("expired", #"[{"plan_name":"pro","status":"expired"}]"#, "free"),
+            ("paused", #"[{"plan_name":"pro","status":"paused"}]"#, "free"),
+            ("cancelled", #"[{"plan_name":"pro","status":"cancelled"}]"#, "free"),
+            ("unknown", #"[{"plan_name":"unknown","status":"unknown"}]"#, "free"),
+        ]
 
-        let snapshot = try await client.fetchAppSnapshot(
-            view: AppSnapshotDefaults.viewState(selectedDate: "2026-04-30"),
-            settings: AppSnapshotDefaults.settings()
-        )
+        for fixture in cases {
+            let userID = uuid("99999999-9999-9999-9999-999999999999")
+            let transport = FakeSupabaseRestTransport(responses: [
+                "categories": "[]",
+                "tags": "[]",
+                "task_tags": "[]",
+                "tasks": "[]",
+                "habits": "[]",
+                "habit_logs": "[]",
+                "goals": "[]",
+                "goal_prompt_dismissals": "[]",
+                "user_subscriptions": fixture.subscriptionJSON,
+            ])
+            let client = SupabaseSnapshotClient(userID: userID, transport: transport)
 
-        XCTAssertEqual(snapshot.settings.plan, "free")
+            let snapshot = try await client.fetchAppSnapshot(
+                view: AppSnapshotDefaults.viewState(selectedDate: "2026-04-30"),
+                settings: AppSnapshotDefaults.settings()
+            )
+
+            XCTAssertEqual(snapshot.settings.plan, fixture.expectedPlan, fixture.label)
+        }
     }
 
     func testSyncReplacesCoreDataMirror() async throws {

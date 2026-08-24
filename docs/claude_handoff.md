@@ -1,6 +1,6 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-08-21 (latest status refresh; dated banner entries below preserve history)
+Date: 2026-08-24 (latest status refresh; dated banner entries below preserve history)
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
@@ -8,23 +8,30 @@ This handoff is written so the next session can continue without replaying the
 chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 `docs/next_steps.md`.
 
-> **2026-08-21 ACTIVE HANDOFF — iOS v1 Release Candidate preparation.**
+> **2026-08-24 ACTIVE HANDOFF — iOS v1 Release Candidate preparation.**
 > TestFlight build 13 is the latest uploaded binary and passed real-device
 > validation for monthly Task grouping/navigation/actions and relative
 > schedule-reminder titles. H-015 monthly List today-scroll and H-016 actual
-> Task date/time in schedule-only notification bodies are implemented and
-> pushed to `main`, but `CURRENT_PROJECT_VERSION` remains 13, so they are not in
-> TestFlight. **New release policy:** iOS/Web v1 launches with all current
+> Task date/time in schedule-only notification bodies are included in the
+> scope-frozen candidate, and every Xcode configuration now uses build 14.
+> Archive/upload and real-device TestFlight verification are next. **New release
+> policy:** iOS/Web v1 launches with all current
 > features free. Full-free batches A-E and the Batch F local gate are complete:
 > Web/iOS plan gates and
 > purchase UI are removed, Web billing mutation routes return unconditional
 > `410 billing_disabled`, and Web/iOS Terms match. Verification: Swift 98/98,
 > Web 148/148, Web lint/build, and generic iOS Release app/widget build passed.
-> Next deploy and probe the production Web billing-disabled contract, complete
-> the AWS defense or record the deployed `410` guard, and run representative
-> account-state/real-device smoke. Then freeze scope, bump all
-> targets to build 14, run checks, archive/upload once, verify all batched
-> changes, and complete final App Review smoke. Do not mix unrelated features,
+> Commit `f0e584c` is live on production Web: all four billing mutation routes
+> return `410`, public free-policy pages are live, the loaded home bundle has no
+> Toss SDK/checkout/price UI, and pre/post billing-data aggregates are unchanged
+> at 0 keys, 0 due candidates, and 0 payment events. The user then confirmed
+> `default/justdo-prod-billing-charge-daily` was active in the Seoul AWS console
+> and disabled it at 2026-08-24 23:20:16 KST without deleting the schedule or
+> Lambda target. Build 14 preflight passes Web 149/149, Swift 98/98, Web ESLint,
+> `git diff --check`, and a signed generic iOS Release app/widget build. The
+> user requested real-device TestFlight verification instead of another
+> simulator run. Archive/upload once, verify all batched changes, and complete
+> final App Review smoke. Do not mix unrelated features,
 > destructive schema/auth/sync redesign, live billing, or semantic-matching
 > tuning into this build.
 
@@ -1236,10 +1243,11 @@ Recommended immediate next steps:
 
 ## Recommended Next Work
 
-> **2026-08-21 현재 활성 트랙.** 전면 무료화 코드 변환과 출시 문구/스크린샷
-> 감사까지 완료됐다. 다음 세션은 `docs/full_free_launch_plan.md`의 Batch F만
-> 따른다: 운영 Web 배포 후 결제 변경 API의 `410 billing_disabled` 확인,
-> EventBridge 결제 스케줄 비활성화/기록, 대표 legacy 계정 상태 실기기 smoke,
+> **2026-08-24 현재 활성 트랙.** 전면 무료화 코드 변환, 출시 문구/스크린샷
+> 감사, 운영 Web 배포와 결제 변경 API의 `410 billing_disabled` 확인,
+> EventBridge 결제 스케줄 비활성화까지 완료됐다. 다음 세션은
+> `docs/full_free_launch_plan.md`의 남은 Batch F만 따른다: 대표 legacy 계정
+> 상태 실기기 smoke,
 > 최종 전체 검증, 범위 동결, build 13 → 14, 단일 archive/upload 순서다.
 > Toss 가맹점 심사나 결제 활성화는 v1 출시 작업이 아니다.
 >

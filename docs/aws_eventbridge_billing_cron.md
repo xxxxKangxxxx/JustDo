@@ -2,14 +2,15 @@
 
 Date: 2026-05-19
 
-Status: DEFENSE-IN-DEPTH DISABLEMENT PENDING (decision refined 2026-08-20). The
+Status: DISABLED FOR FULL-FREE V1 (confirmed 2026-08-24). The
 existing schedule was previously enabled for test-path verification, but v1 now
 launches with all current features free. Production has no billing/customer key,
 no next billing timestamp, and no payment event. The charge route requires both
 keys and a due timestamp, so AWS access does not block the UI/code conversion.
-Before production rollout, disable this schedule or first deploy and verify a
-hard billing-disabled guard on the charge endpoint. Do not re-enable payment
-activity without a new monetization decision. See `docs/full_free_launch_plan.md`.
+The production rollout has a verified hard billing-disabled guard on the
+charge endpoint, and the schedule itself is disabled. Do not re-enable payment
+activity without a new monetization decision. See
+`docs/full_free_launch_plan.md`.
 
 ## Full-Free Disablement Audit
 
@@ -24,9 +25,32 @@ activity without a new monetization decision. See `docs/full_free_launch_plan.md
   public Toss client key classifies as `test`.
 - No schedule mutation was attempted because the exact existing target/settings
   could not be read and preserved safely.
-- Defense-in-depth next action: use an approved AWS role with
-  `scheduler:GetSchedule` + `scheduler:UpdateSchedule`, read the schedule,
-  preserve all settings, change only `State` to `DISABLED`, and read it back.
+- 2026-08-24: commit `f0e584c` was deployed to production. `/api/billing/charge`
+  and the other three billing mutation routes return unconditional
+  `410 { "error": "billing_disabled" }` before auth, DB, or provider access.
+  Pre/post deploy Supabase aggregates were identical: 0 billing/customer keys,
+  0 due charge candidates, and 0 payment events.
+- 2026-08-24 follow-up: the only configured CLI profile is IAM user `Field` in
+  account `058264290801`. `GetSchedule`, `ListSchedules`, Lambda get/list,
+  CloudWatch Logs describe, resource-tag listing, and CloudWatch metrics are all
+  denied before resource existence can be determined. No browser-backed AWS
+  Console session is available in the current environment.
+- CloudTrail lookup is allowed. Its visible 90-day Scheduler history contains
+  only the denied 2026-08-20 `GetSchedule` probe and no `UpdateSchedule` or
+  `DeleteSchedule` event. This does not prove the schedule still exists, but it
+  also provides no evidence that the historically confirmed schedule was
+  removed or disabled. At that point the state remained unknown until the
+  following user-console confirmation.
+- 2026-08-24 23:18 KST: the user opened the Seoul-region AWS console and
+  confirmed `default/justdo-prod-billing-charge-daily` existed in `ENABLED`
+  state with target Lambda `justdo-prod-billing-cron` and target type
+  `LAMBDA_Invoke`.
+- 2026-08-24 23:20:16 KST (14:20:16 UTC): the user used the console's
+  `Disable` action. The console displayed a success confirmation and the list
+  state changed to `DISABLED`. The schedule and Lambda target were preserved;
+  neither was deleted.
+- Defense-in-depth disablement is complete. Any future monetization project
+  must make a new explicit decision before changing this state.
 
 This document records the B3 cron decision and setup for Just Do Pro recurring
 billing.

@@ -50,7 +50,23 @@ final class DeepLinkUITests: XCTestCase {
     }
 
     func testFreeAccountSettingsExposeFullAccessWithoutCommercialSurfaces() throws {
-        let app = launchApp()
+        try assertSettingsAndExportAccess(plan: "free")
+    }
+
+    func testLegacyProAccountSettingsExposeIdenticalAccessWithoutCommercialSurfaces() throws {
+        try assertSettingsAndExportAccess(plan: "pro")
+    }
+
+    func testFreeAccountCanOpenStatsAndFullGoalReport() throws {
+        try assertStatsAndReportAccess(plan: "free")
+    }
+
+    func testLegacyProAccountCanOpenStatsAndFullGoalReport() throws {
+        try assertStatsAndReportAccess(plan: "pro")
+    }
+
+    private func assertSettingsAndExportAccess(plan: String) throws {
+        let app = launchApp(plan: plan)
 
         app.buttons["설정"].tap()
 
@@ -70,9 +86,37 @@ final class DeepLinkUITests: XCTestCase {
         )
     }
 
-    private func launchApp(opening url: String? = nil) -> XCUIApplication {
+    private func assertStatsAndReportAccess(plan: String) throws {
+        let app = launchApp(plan: plan)
+
+        app.buttons["설정"].tap()
+        XCTAssertTrue(app.staticTexts["습관"].waitForExistence(timeout: 5))
+        app.staticTexts["습관"].tap()
+        XCTAssertTrue(app.staticTexts["TASK"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["HABIT"].exists)
+        app.buttons["닫기"].tap()
+
+        XCTAssertTrue(app.staticTexts["목표"].waitForExistence(timeout: 3))
+        app.staticTexts["목표"].tap()
+        let reportButton = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS %@", "리포트 준비 완료")
+        ).firstMatch
+        XCTAssertTrue(reportButton.waitForExistence(timeout: 5))
+        reportButton.tap()
+
+        XCTAssertTrue(app.staticTexts["1/4"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["평균 진행"].exists)
+        XCTAssertFalse(app.staticTexts["전체 리포트는 Pro에서 펼쳐져요"].exists)
+        XCTAssertFalse(app.buttons["Pro로 펼치기"].exists)
+    }
+
+    private func launchApp(opening url: String? = nil, plan: String = "free") -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--justdo-ui-testing"]
+        app.launchArguments = [
+            "--justdo-ui-testing",
+            "--justdo-ui-testing-plan",
+            plan,
+        ]
         if let url {
             app.launchArguments += ["--justdo-ui-testing-open-url", url]
         }

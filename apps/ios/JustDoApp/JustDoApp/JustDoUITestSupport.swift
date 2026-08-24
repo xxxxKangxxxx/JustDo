@@ -28,6 +28,22 @@ enum JustDoUITestSupport {
         #endif
     }
 
+    static var fixturePlan: String {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        guard
+            let markerIndex = arguments.firstIndex(of: "--justdo-ui-testing-plan"),
+            arguments.indices.contains(markerIndex + 1),
+            arguments[markerIndex + 1] == "pro"
+        else {
+            return "free"
+        }
+        return "pro"
+        #else
+        "free"
+        #endif
+    }
+
     @MainActor
     static func prepare(snapshotStore: CoreDataAppSnapshotStore) -> CoreDataAppSnapshotStore {
         #if DEBUG
@@ -46,6 +62,8 @@ enum JustDoUITestSupport {
     private static func snapshot() -> AppSnapshot {
         let categoryID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
         let selectedDate = "2026-05-21"
+        var settings = AppSnapshotDefaults.settings()
+        settings.plan = fixturePlan
         return AppSnapshot(
             view: AppSnapshotDefaults.viewState(selectedDate: selectedDate),
             categories: [
@@ -82,7 +100,27 @@ enum JustDoUITestSupport {
                     log: [:]
                 ),
             ],
-            settings: AppSnapshotDefaults.settings()
+            goals: [
+                Goal(
+                    id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+                    periodType: .monthly,
+                    periodKey: previousMonthKey(),
+                    title: "UI Test Report Goal",
+                    note: "Full-free report fixture",
+                    sortOrder: 0,
+                    locked: false,
+                    lockedAt: nil
+                ),
+            ],
+            settings: settings
         )
+    }
+
+    private static func previousMonthKey() -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let date = calendar.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+        let components = calendar.dateComponents([.year, .month], from: date)
+        return String(format: "%04d-%02d", components.year ?? 2026, components.month ?? 1)
     }
 }

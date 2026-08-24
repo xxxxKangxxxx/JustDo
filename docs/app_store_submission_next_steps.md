@@ -1,28 +1,35 @@
 # App Store Submission Next Steps
 
-Updated: 2026-08-21
+Updated: 2026-08-24
 
 ## Current Release Candidate Plan
 
-- TestFlight build 13 remains the latest uploaded build.
-- H-015 monthly List today-scroll and H-016 schedule-only notification body
-  timing are implemented and pushed to `main`, but the project build number is
-  still 13, so neither fix is in an uploaded TestFlight binary.
+- TestFlight build 13 remains the latest uploaded build. The consolidated
+  Release Candidate is scope-frozen and every app/widget/UI-test configuration
+  now uses build 14; archive/upload is the next action.
+- Build 14 includes H-015 monthly List today-scroll, H-016 schedule-only
+  notification body timing, and the full-free iOS policy conversion.
 - Full-free implementation batches A-E and the Batch F local verification gate
   are complete: Web/iOS features no longer depend on legacy subscription state,
   purchase UI is removed, Web billing mutation routes are hard-disabled, and
-  public copy is aligned. Production rollout, operational defense, and
-  representative account/real-device checks remain before build 14. Follow
+  public copy is aligned. Commit `f0e584c` is live on production Web and every
+  billing mutation route returns unconditional `410 billing_disabled` with
+  unchanged billing-data aggregates. The production EventBridge billing
+  schedule was confirmed and disabled on 2026-08-24. Representative
+  account/real-device checks will run on TestFlight build 14. Follow
   `docs/full_free_launch_plan.md`.
-- After the full-free audit, collect any other low-risk, release-critical
-  fixes before assigning build 14. Do not add unrelated product features,
+- The candidate scope is frozen. Do not add unrelated product features,
   destructive schema changes, auth/sync redesign, or live-billing work.
-- After scope freeze: bump app/widget/UI-test build numbers to 14, rerun checks,
-  archive/upload once, verify all batched changes on a real device, then run the
-  final App Review smoke.
+- Archive/upload build 14 once, verify all batched changes on a real device,
+  then run the final App Review smoke.
 - 2026-08-21 post-conversion verification passed: 98 Swift tests, 148 Web tests,
   Web ESLint, Web production build, generic iOS Release app/widget build, and
   5/5 iOS simulator UI tests including Free Settings/export access.
+- 2026-08-24 build 14 preflight passed: 98 Swift tests, 149 Web tests, Web
+  ESLint, `git diff --check`, and a signed generic iOS Release app/widget build.
+  The expanded Free/legacy-plan UI scenarios are reserved for real-device
+  TestFlight verification as requested; no new simulator run was used for this
+  candidate.
 
 ## Ready Assets
 
@@ -166,8 +173,7 @@ Store Connect review notes.
   all current features are free and there is no IAP, subscription, purchase
   flow, external payment link, paid entitlement, or purchase CTA.
 - Build 11 real-device regression checks passed.
-- Next: deploy/probe the production billing-disabled policy, complete the AWS
-  defense and representative account/real-device checks, close the low-risk
+- Next: complete representative account/real-device checks, close the low-risk
   Release Candidate fix list, create one consolidated next
   build (expected build 14), and verify full-free behavior plus every batched
   change.

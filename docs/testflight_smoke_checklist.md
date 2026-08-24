@@ -1,6 +1,6 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-08-21
+Updated: 2026-08-24
 
 Purpose: preserve TestFlight build 13 validation, collect a bounded set of
 remaining Release Candidate fixes, verify the required full-free policy, and
@@ -12,8 +12,8 @@ for public App Review.
 - Device: real iPhone with the TestFlight build installed.
 - Baseline build: App Store Connect / TestFlight build 13, installed and
   validated on 2026-08-05.
-- Next build: not assigned yet. Expected build 14 after the Release Candidate
-  fix list is closed and scope is frozen.
+- Next build: 14. The Release Candidate scope is frozen and preflight has
+  passed; archive/upload is next.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -40,19 +40,20 @@ for public App Review.
 
 ### Release Candidate Intake (before the next upload)
 
-- [ ] Complete `docs/full_free_launch_plan.md`, including the production billing
-  safety audit and either AWS schedule disablement or the documented deployed
-  charge-route `410` defense.
-- [ ] Review and record every remaining release-critical issue.
-- [ ] Review the shipped app icon at device sizes and replace it only if the
-  existing slightly soft light variant is accepted into this release batch;
+- [x] Complete the production billing-safety and operations portions of
+  `docs/full_free_launch_plan.md`, including the safety audit, deployed
+  charge-route `410` defense, and AWS schedule disablement. Both operational
+  protections are complete; account/device verification remains below.
+- [x] Review and record every remaining release-critical issue.
+- [x] Review the shipped app icon at device sizes and retain the existing light
+  variant for this release batch;
   dark/tinted variants remain deferred artwork.
-- [ ] Treat full-free as the required policy exception; limit everything else
+- [x] Treat full-free as the required policy exception; limit everything else
   to low-risk existing-behavior fixes and exclude unrelated features,
   destructive schema changes, auth/sync redesign, and Toss live billing.
-- [ ] Freeze scope before changing the build number.
-- [ ] Bump app, widget, and UI-test build numbers together (expected 14).
-- [ ] Run Swift tests, Web tests/lint/build, generic iOS Release build, and
+- [x] Freeze scope before changing the build number.
+- [x] Bump app, widget, and UI-test build numbers together to 14.
+- [x] Run Swift tests, Web tests/lint/build, generic iOS Release build, and
   `git diff --check`.
 - [ ] Archive/upload one consolidated build and record processing/install state.
 - [ ] Verify H-015, H-016, and every additional batched fix on a real device.
@@ -75,7 +76,7 @@ checks and are intentionally not marked complete from local evidence alone.
   button, billing redirect, or Trial-expiry message remains user-visible.
 - [ ] Confirm Settings has no subscription sales surface or paid-plan status.
 - [ ] Confirm Web and in-app Terms use the same all-current-features-free policy.
-- [ ] Confirm production Web cannot initiate a charge and the EventBridge
+- [x] Confirm production Web cannot initiate a charge and the EventBridge
   billing schedule is disabled.
 - [ ] Confirm App Review notes state that all current features are free and no
   IAP, subscription, purchase flow, external link, or paid entitlement exists.
@@ -687,6 +688,6 @@ Decision:
 
 ```text
 Status: AWAITING NEXT BUILD
-Reason: Build 13 monthly Home List and relative notification titles passed on a real device. H-015/H-016 and full-free Web/iOS code are implemented locally but are not in an uploaded binary. The static/public-copy audit and Batch F local gate pass; production billing safety and representative real-device checks remain.
-Next action: Deploy/probe the production Web guard, complete the AWS defense condition and representative account smoke, close the bounded fix list, freeze scope, then upload one consolidated next build and verify full-free plus H-015/H-016 before the final App Review smoke.
+Reason: Build 13 monthly Home List and relative notification titles passed on a real device. H-015/H-016 and full-free Web/iOS code are implemented locally but are not in an uploaded binary. The static/public-copy audit, Batch F local gate, production Web billing guard, and AWS schedule disablement pass; representative real-device checks remain.
+Next action: Complete representative account smoke, close the bounded fix list, freeze scope, then upload one consolidated next build and verify full-free plus H-015/H-016 before the final App Review smoke.
 ```

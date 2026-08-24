@@ -187,6 +187,7 @@ const legacySubscriptionCases: ReadonlyArray<readonly [string, LegacySubscriptio
   ["free", { plan_name: "free", status: "active" }],
   ["trial", { status: "trial" }],
   ["active Pro", { status: "active", billing_provider: "toss_payments" }],
+  ["past due", { status: "past_due" }],
   ["expired", { status: "expired" }],
   ["paused", { status: "paused" }],
   ["cancelled", { status: "cancelled" }],

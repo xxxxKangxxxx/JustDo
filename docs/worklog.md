@@ -6566,3 +6566,109 @@ checkpoint.
   verified deployed charge-route 410 as the release safety condition.
 - Run representative production-account and real-device/TestFlight smoke,
   freeze scope, and only then bump all targets to build 14 and archive/upload.
+
+## 2026-08-24 Full-free Batch F production Web rollout
+
+### Release and deployment
+
+- Re-ran the deployment-facing gate: Web Vitest 148/148, ESLint, production
+  build, and `git diff --check` passed. The initial sandbox build failure was
+  solely a denied Turbopack local port bind; the approved rerun passed.
+- Narrowed `amplify.yml` SSR persistence to `SUPABASE_SERVICE_ROLE_KEY` only.
+  Toss secret, billing-cron secret, and webhook secret are no longer copied
+  into `.env.production` for the full-free server bundle.
+- Created commit `f0e584c` (`feat: launch all current features for free`) and
+  pushed `main`, triggering the production Amplify deployment.
+- The configured IAM identity still lacks `amplify:ListJobs`, so deployment
+  completion was established from the externally observable production
+  contract rather than an Amplify job API response.
+
+### Production verification
+
+- Before rollout, empty/unauthenticated probes returned the prior behavior:
+  issue-key 400 and charge/cancel/webhook 401.
+- After rollout, issue-key, charge, cancel, and Toss webhook all returned HTTP
+  410 with `{ "error": "billing_disabled" }`.
+- `/billing/success` and `/terms` returned HTTP 200 with full-free/billing-
+  unavailable copy.
+- The nine JavaScript files loaded by the production home page contain no Toss
+  SDK URL, billing-auth caller, Toss client-key variable, Pro upgrade/manage
+  copy, or former monthly/yearly price strings.
+
+### Data and scope audit
+
+- Read aggregate-only hosted Supabase counts immediately before and after the
+  rollout. Both snapshots were identical: 6 legacy subscription metadata rows
+  (4 trial, 2 active), 0 billing providers/keys/customer keys/last payments,
+  0 next-billing timestamps/due candidates/cancellation markers/payment
+  failures, and 0 payment events.
+- No database, AWS resource, billing record, build number, archive, TestFlight
+  build, or App Review state was mutated by this rollout.
+- Remaining release work is the authorized-AWS schedule-state check,
+  representative legacy-account/real-device smoke, scope freeze, and the
+  consolidated build 14 archive/upload.
+
+## 2026-08-24 EventBridge billing schedule existence re-audit
+
+- Reconciled the user's recollection that no schedule was created with the
+  repository's historical evidence. The 2026-05-19/21 records state that
+  `justdo-prod-billing-charge-daily` targeted Lambda
+  `justdo-prod-billing-cron`, and CloudWatch showed two automatic 05:30 KST
+  invocations. The historical evidence therefore supports actual creation, not
+  merely a proposed setup.
+- The only configured AWS CLI profile is account `058264290801` IAM user
+  `Field`. Scheduler get/list, Lambda get/list, CloudWatch Logs describe,
+  resource-tag listing, and CloudWatch metric reads are denied. These
+  `AccessDenied` results occur before resource existence can be determined and
+  cannot be interpreted as `ResourceNotFound`.
+- CloudTrail lookup is permitted. The available 90-day Scheduler history shows
+  only the denied 2026-08-20 `GetSchedule` probe and no schedule update/delete
+  event. The original May creation is outside the 90-day event-history window.
+- No connected in-app browser exists for an AWS Console fallback. No AWS
+  resource was changed.
+- Decision: keep the schedule state as unknown rather than assuming absence.
+  Request read-only `scheduler:GetSchedule` first; only if it exists and is
+  enabled should exact-resource update/pass-role permission be used to set
+  `State=DISABLED`. Production payment safety remains intact because the live
+  charge route returns unconditional 410 before auth, DB, or Toss access.
+
+## 2026-08-24 EventBridge billing schedule disabled
+
+- The user opened the AWS EventBridge Scheduler console in Seoul
+  (`ap-northeast-2`) and provided before/after screenshots.
+- The before state confirmed schedule
+  `default/justdo-prod-billing-charge-daily` existed and was `ENABLED`, targeting
+  Lambda `justdo-prod-billing-cron` with target type `LAMBDA_Invoke`.
+- The user selected the schedule and used the console `Disable` action. The
+  after screenshot showed the success banner and list state `DISABLED`, with
+  last-modified timestamp 2026-08-24 14:20:16 UTC (23:20:16 KST).
+- The schedule and Lambda target were not deleted. This preserves historical
+  configuration while stopping all automatic billing-cron invocations.
+- Full-free production billing now has both defenses: the EventBridge schedule
+  is disabled and all Web billing mutation routes return unconditional 410
+  before authentication, database access, or Toss access.
+- Remaining Batch F work is representative legacy-account/real-device smoke,
+  scope freeze, and the consolidated build 14 archive/upload.
+
+## 2026-08-24 TestFlight build 14 scope freeze and preflight
+
+- Froze the consolidated Release Candidate around the already implemented
+  full-free policy, H-015 monthly List today-scroll, H-016 schedule-only Task
+  date/time body, and regression coverage. No unrelated feature, migration,
+  auth/sync redesign, dependency, or billing implementation was added.
+- Bumped all six app, widget, and UI-test Debug/Release
+  `CURRENT_PROJECT_VERSION` values from 13 to 14. Marketing version remains
+  1.0.
+- Expanded the Web legacy-account matrix to include `past_due`; expanded iOS
+  subscription-sync compatibility coverage across missing, free, trial,
+  active, past-due, expired, paused, cancelled, and unknown states; and added
+  Free/legacy-Pro Settings/export and Stats/report equality UI scenarios.
+- Preflight passed: Web Vitest 149/149, Swift Package tests 98/98, Web ESLint,
+  `git diff --check`, and a signed generic iOS Release app/widget build. Xcode's
+  embedded-widget and App Store bundle validation also passed.
+- Per the user's direction, no additional simulator run is used for this
+  candidate. The expanded UI scenarios and the full-free/H-015/H-016 smoke will
+  be verified on a real device through TestFlight build 14.
+- Next: commit and push the frozen source, archive build 14 once, validate the
+  archive metadata/signatures/privacy manifests, and upload to App Store
+  Connect.

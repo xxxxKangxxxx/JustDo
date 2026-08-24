@@ -1,7 +1,7 @@
 # Just Do Full-Free Launch Plan
 
 Decision date: 2026-08-19
-Status: BATCH F LOCAL GATE GREEN — PRODUCTION ROLLOUT / DEVICE SMOKE PENDING
+Status: BUILD 14 PREFLIGHT PASSED — ARCHIVE/UPLOAD NEXT
 
 ## Launch Policy
 
@@ -22,9 +22,10 @@ Status: BATCH F LOCAL GATE GREEN — PRODUCTION ROLLOUT / DEVICE SMOKE PENDING
 
 ## Release Gate
 
-Full-free behavior is a required exception to the otherwise low-risk build 14
-scope. The next TestFlight Release Candidate must not be created until this
-track is implemented and its automated checks pass.
+Full-free behavior is the required exception to the otherwise low-risk build 14
+scope. The implementation and automated gates pass, production Web is live,
+the billing schedule is disabled, and the candidate scope is frozen. Build 14
+archive/upload and real-device TestFlight verification are next.
 
 ## Locked Implementation Decisions
 
@@ -52,9 +53,10 @@ These decisions remove ambiguity before product-code edits begin.
 7. **Migration rule:** do not add a production DB migration for the first
    full-free release. Removing the signup subscription row is deferred because
    clients already tolerate and store the legacy value, and the row is inert.
-8. **Release rule:** do not bump build 13, upload TestFlight, deploy production,
-   or change the AWS schedule during implementation batches. Those actions
-   occur only after the local verification gate is green.
+8. **Release rule:** the implementation gate is green, production Web is live,
+   the AWS schedule is disabled, scope is frozen, and all Xcode configurations
+   are now build 14. Archive/upload once, then use TestFlight for the remaining
+   real-device checks.
 
 ## Detailed Execution Plan
 
@@ -352,10 +354,10 @@ account-state matrix, and real-device smoke are all recorded as PASS.
   sync, task, habit, goal, widget, or stored-data rewrite. Remaining plan data
   and Toss helpers are isolated compatibility/history only; all six Xcode build
   settings remain at 13.
-- Production deployment, deployed endpoint probes, AWS schedule mutation,
-  representative production-account/real-device smoke, build 14 bump,
-  archive/upload, and App Review submission remain pending and were not implied
-  by this local checkpoint.
+- This checkpoint itself did not deploy or mutate operations. Production Web
+  rollout/probes and AWS schedule disablement were subsequently completed on
+  2026-08-24. Representative production-account/real-device smoke, build 14
+  bump, archive/upload, and App Review submission remain pending.
 
 ## Implementation Stop Conditions
 
@@ -542,12 +544,15 @@ Primary audit locations:
 - [x] Stop new-account Trial creation from implying or controlling access.
   A later cleanup migration may change the default record policy after clients
   no longer depend on it.
-- [ ] Disable the EventBridge billing schedule and record the date/state in
+- [x] Disable the EventBridge billing schedule and record the date/state in
   `docs/aws_eventbridge_billing_cron.md`.
 - [x] Keep the Toss webhook unregistered/inactive and billing endpoints guarded.
 - [x] Mark `docs/toss_merchant_review_plan.md` PAUSED rather than deleting its
   historical implementation notes.
-- [ ] Deploy Web/backend changes and verify that no payment request is emitted.
+- [x] Deploy Web/backend changes and verify that no payment request is emitted.
+  Commit `f0e584c` was deployed from `main` on 2026-08-24. All four billing
+  mutation routes return `410 billing_disabled`; pre/post Supabase aggregate
+  counts are identical with 0 payment events and 0 due charge candidates.
 
 ## Phase 5 — Store, Legal, and Public Copy
 
@@ -572,9 +577,13 @@ Primary audit locations:
   sync are available in every state.
 - [ ] Confirm no Pro badge, lock, blur, upgrade action, price, Toss button,
   billing redirect, or Trial-expiry message remains user-visible.
-- [ ] Confirm the production Web cannot initiate a charge and the AWS schedule
-  is disabled.
-- [ ] Deploy the full-free Web policy before or together with the next iOS
+- [x] Confirm the production Web cannot initiate a charge. The issue-key,
+  charge, cancel, and Toss webhook routes all return `410 billing_disabled`.
+- [x] Confirm the AWS schedule is disabled. The user verified the production
+  console in `ap-northeast-2` and disabled
+  `default/justdo-prod-billing-charge-daily` at 2026-08-24 23:20:16 KST while
+  preserving its Lambda target and schedule resource.
+- [x] Deploy the full-free Web policy before or together with the next iOS
   TestFlight build.
 - [ ] Then freeze the remaining Release Candidate scope, bump all iOS targets
   from build 13 to 14, archive/upload, and verify full-free behavior plus

@@ -14,13 +14,14 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 
 ## Active Release Track (2026-08-19)
 
-> **Current state:** iOS v1 is preparing a consolidated Release Candidate after
+> **Current state:** the full-free Web policy is live in production from commit
+> `f0e584c`; iOS v1 has frozen the consolidated Release Candidate after
 > TestFlight build 13. Build 13 passed real-device checks for the monthly Home
 > Task List and relative schedule-reminder titles. H-015 (scroll the monthly
 > List to today on entry / `오늘`) and H-016 (show the actual Task date/time in
-> schedule-only notification bodies) are implemented and pushed to `main`, but
-> the Xcode project still uses build number 13 and no newer TestFlight binary
-> contains them.
+> schedule-only notification bodies) and the full-free policy are included in
+> the candidate. Every app/widget/UI-test configuration now uses build 14;
+> archive/upload and real-device TestFlight verification are next.
 >
 > **Full-free launch decision:** iOS and Web v1 must expose all currently shipped
 > features for free, regardless of legacy Free/Trial/Pro/subscription state.
@@ -47,15 +48,23 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 >
 > **Immediate order:**
 > 1. Run the billing safety audit and implement `docs/full_free_launch_plan.md`.
-> 2. Deploy/verify the Web and operations-side full-free policy.
-> 3. Review and close the remaining low-risk Release Candidate fix list.
-> 4. Update affected tests and rerun Swift/Web checks.
-> 5. Bump all app/widget/UI-test build numbers to 14 and archive/upload.
+> 2. ✅ Deploy/verify the Web full-free policy and disable the production AWS
+>    billing schedule. The live charge route is also unconditionally inert.
+> 3. ✅ Review and close the remaining low-risk Release Candidate fix list.
+> 4. ✅ Update affected tests and rerun Swift/Web checks.
+> 5. ✅ Bump all app/widget/UI-test build numbers to 14; archive/upload next.
 > 6. Verify full-free behavior, H-015/H-016, and every added fix on TestFlight.
 > 7. Run Apple/Google login, calendar/Task, goal/report, sync, and widget sanity
 >    smoke; mark the release decision PASS and submit to public App Review.
 > 8. Keep Toss merchant review/live billing paused until a new monetization
 >    decision is made after launch.
+>
+> **Build 14 preflight (2026-08-24):** Web Vitest 149/149, Swift 98/98, Web
+> ESLint, `git diff --check`, and the signed generic iOS Release app/widget build
+> pass. The candidate adds explicit legacy-state compatibility coverage and
+> Free/legacy-Pro UI equality scenarios. Per the user's direction, the new UI
+> scenarios will be validated through TestFlight on a real device rather than
+> by another simulator run.
 >
 > **Phase 0 complete (2026-08-20):** production DB and deployed-Web audits found
 > no billing/customer keys, no next charge, no payment event, and only test Toss
@@ -1511,7 +1520,7 @@ Historical Goal & Pro Report implementation order (completed unless noted):
 - [x] App Store 6.9" 4장과 6.5" 4장을 직접 확인: Pro·Trial·가격·구독·구매
   CTA 없음. 이미지 재생성 불필요.
 - [x] 검증: Web 테스트 148/148, ESLint, `git diff --check` 통과.
-- [ ] 다음: Batch F에서 전체 검증 재실행, 운영 Web 배포/결제 API 410 probe,
+- [x] 다음: Batch F에서 전체 검증 재실행, 운영 Web 배포/결제 API 410 probe,
   AWS 결제 스케줄 방어선, 계정 상태별 smoke, 범위 동결과 build 14 준비 진행.
 
 ## 2026-08-21 전면 무료화 Batch F 로컬 게이트 통과
@@ -1527,6 +1536,12 @@ Historical Goal & Pro Report implementation order (completed unless noted):
 - [x] diff/비밀값/빌드 번호 감사: 스키마·패키지·데이터·auth/sync 변경 없음,
   live key 패턴 없음, app/widget/UI-test build는 모두 13 유지.
 - [x] 추가한 Free Settings/export iOS UI 회귀 케이스를 포함한 최종 재실행.
-- [ ] 운영 Web 배포 후 동일 4개 API의 `410`과 데이터/event 무변경 probe.
-- [ ] AWS schedule을 비활성화하거나 배포된 charge `410` 방어선을 기록.
+- [x] 운영 Web 배포 후 동일 4개 API의 `410`과 데이터/event 무변경 probe.
+  `f0e584c`가 2026-08-24 `main`에 배포됐고, 배포 전후 집계는 구독 메타데이터
+  6건, billing/customer key·due 후보·payment event 모두 0건으로 동일.
+- [x] AWS schedule을 비활성화하거나 배포된 charge `410` 방어선을 기록.
+  운영 charge route의 unconditional `410` 확인에 더해, 사용자가 AWS 서울
+  리전 콘솔에서 `default/justdo-prod-billing-charge-daily`의 활성 상태와
+  Lambda 대상 `justdo-prod-billing-cron`을 확인한 후 2026-08-24 23:20:16 KST에
+  스케줄을 비활성화함. 리소스와 대상 설정은 삭제하지 않고 보존.
 - [ ] 대표 계정 상태 및 실제 기기 smoke 후 범위를 동결하고 build 14 준비.
