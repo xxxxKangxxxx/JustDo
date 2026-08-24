@@ -6669,6 +6669,23 @@ checkpoint.
 - Per the user's direction, no additional simulator run is used for this
   candidate. The expanded UI scenarios and the full-free/H-015/H-016 smoke will
   be verified on a real device through TestFlight build 14.
-- Next: commit and push the frozen source, archive build 14 once, validate the
-  archive metadata/signatures/privacy manifests, and upload to App Store
-  Connect.
+- Committed and pushed the frozen source as `fc7e5ff`, then created the single
+  build 14 archive from that commit.
+
+## 2026-08-24 TestFlight build 14 upload
+
+- `xcodebuild archive` succeeded for the scope-frozen `fc7e5ff` source.
+- Archive inspection confirmed app `kr.justdo.app` and widget
+  `kr.justdo.app.widget` are both version 1.0 (14), with both Privacy Manifests
+  and app/widget dSYMs present. Xcode's App Store bundle and embedded-widget
+  validation passed.
+- The development-signed archive returned `CSSMERR_TP_NOT_TRUSTED` only under a
+  separate local `codesign --verify --deep --strict` keychain trust evaluation.
+  The definitive App Store export re-signed/prepared the archive successfully.
+- `xcodebuild -exportArchive` uploaded build 14 to App Store Connect at
+  2026-08-24 23:44:01 KST. The archive distribution record reports preparation
+  success, upload success, uploaded build number 14, and empty warning/error
+  arrays. Apple reported that the package is processing.
+- Next: wait for processing, attach build 14 to the internal TestFlight group,
+  install it on a real iPhone, and run the full-free plus H-015/H-016 smoke in
+  `docs/testflight_smoke_checklist.md`.

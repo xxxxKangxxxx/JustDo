@@ -1,7 +1,7 @@
 # Just Do Full-Free Launch Plan
 
 Decision date: 2026-08-19
-Status: BUILD 14 PREFLIGHT PASSED — ARCHIVE/UPLOAD NEXT
+Status: BUILD 14 UPLOADED — TESTFLIGHT DEVICE SMOKE NEXT
 
 ## Launch Policy
 
@@ -25,7 +25,7 @@ Status: BUILD 14 PREFLIGHT PASSED — ARCHIVE/UPLOAD NEXT
 Full-free behavior is the required exception to the otherwise low-risk build 14
 scope. The implementation and automated gates pass, production Web is live,
 the billing schedule is disabled, and the candidate scope is frozen. Build 14
-archive/upload and real-device TestFlight verification are next.
+was uploaded successfully and real-device TestFlight verification is next.
 
 ## Locked Implementation Decisions
 
@@ -55,8 +55,8 @@ These decisions remove ambiguity before product-code edits begin.
    clients already tolerate and store the legacy value, and the row is inert.
 8. **Release rule:** the implementation gate is green, production Web is live,
    the AWS schedule is disabled, scope is frozen, and all Xcode configurations
-   are now build 14. Archive/upload once, then use TestFlight for the remaining
-   real-device checks.
+   are now build 14. The single archive/upload succeeded; use TestFlight for
+   the remaining real-device checks.
 
 ## Detailed Execution Plan
 

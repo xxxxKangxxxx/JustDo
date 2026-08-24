@@ -4,9 +4,9 @@ Updated: 2026-08-24
 
 ## Current Release Candidate Plan
 
-- TestFlight build 13 remains the latest uploaded build. The consolidated
-  Release Candidate is scope-frozen and every app/widget/UI-test configuration
-  now uses build 14; archive/upload is the next action.
+- TestFlight build 14 was uploaded successfully at 2026-08-24 23:44 KST and is
+  processing in App Store Connect. Its upload record contains no warnings or
+  errors.
 - Build 14 includes H-015 monthly List today-scroll, H-016 schedule-only
   notification body timing, and the full-free iOS policy conversion.
 - Full-free implementation batches A-E and the Batch F local verification gate
@@ -20,8 +20,8 @@ Updated: 2026-08-24
   `docs/full_free_launch_plan.md`.
 - The candidate scope is frozen. Do not add unrelated product features,
   destructive schema changes, auth/sync redesign, or live-billing work.
-- Archive/upload build 14 once, verify all batched changes on a real device,
-  then run the final App Review smoke.
+- Wait for build 14 processing, attach/install it in internal TestFlight, verify
+  all batched changes on a real device, then run the final App Review smoke.
 - 2026-08-21 post-conversion verification passed: 98 Swift tests, 148 Web tests,
   Web ESLint, Web production build, generic iOS Release app/widget build, and
   5/5 iOS simulator UI tests including Free Settings/export access.

@@ -20,8 +20,9 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > Task List and relative schedule-reminder titles. H-015 (scroll the monthly
 > List to today on entry / `오늘`) and H-016 (show the actual Task date/time in
 > schedule-only notification bodies) and the full-free policy are included in
-> the candidate. Every app/widget/UI-test configuration now uses build 14;
-> archive/upload and real-device TestFlight verification are next.
+> the candidate. Build 14 was archived and uploaded successfully at 2026-08-24
+> 23:44 KST with no upload warnings/errors; App Store Connect processing and
+> real-device TestFlight verification are next.
 >
 > **Full-free launch decision:** iOS and Web v1 must expose all currently shipped
 > features for free, regardless of legacy Free/Trial/Pro/subscription state.
@@ -52,7 +53,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 >    billing schedule. The live charge route is also unconditionally inert.
 > 3. ✅ Review and close the remaining low-risk Release Candidate fix list.
 > 4. ✅ Update affected tests and rerun Swift/Web checks.
-> 5. ✅ Bump all app/widget/UI-test build numbers to 14; archive/upload next.
+> 5. ✅ Bump all app/widget/UI-test build numbers to 14 and archive/upload once.
 > 6. Verify full-free behavior, H-015/H-016, and every added fix on TestFlight.
 > 7. Run Apple/Google login, calendar/Task, goal/report, sync, and widget sanity
 >    smoke; mark the release decision PASS and submit to public App Review.

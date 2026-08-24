@@ -12,8 +12,8 @@ for public App Review.
 - Device: real iPhone with the TestFlight build installed.
 - Baseline build: App Store Connect / TestFlight build 13, installed and
   validated on 2026-08-05.
-- Next build: 14. The Release Candidate scope is frozen and preflight has
-  passed; archive/upload is next.
+- Next build: 14. The Release Candidate scope is frozen; archive/upload
+  succeeded at 2026-08-24 23:44 KST and App Store Connect processing is pending.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -55,7 +55,8 @@ for public App Review.
 - [x] Bump app, widget, and UI-test build numbers together to 14.
 - [x] Run Swift tests, Web tests/lint/build, generic iOS Release build, and
   `git diff --check`.
-- [ ] Archive/upload one consolidated build and record processing/install state.
+- [x] Archive/upload one consolidated build and record processing state. Build
+  14 uploaded without warnings/errors; installation remains pending.
 - [ ] Verify H-015, H-016, and every additional batched fix on a real device.
 - [ ] Run the final App Review-visible sanity smoke before changing the release
   decision to PASS.

@@ -14,7 +14,9 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > schedule-reminder titles. H-015 monthly List today-scroll and H-016 actual
 > Task date/time in schedule-only notification bodies are included in the
 > scope-frozen candidate, and every Xcode configuration now uses build 14.
-> Archive/upload and real-device TestFlight verification are next. **New release
+> Build 14 was uploaded successfully at 2026-08-24 23:44 KST with no upload
+> warnings/errors and is processing in App Store Connect. Internal TestFlight
+> attachment/install and real-device verification are next. **New release
 > policy:** iOS/Web v1 launches with all current
 > features free. Full-free batches A-E and the Batch F local gate are complete:
 > Web/iOS plan gates and
@@ -30,8 +32,8 @@ chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 > Lambda target. Build 14 preflight passes Web 149/149, Swift 98/98, Web ESLint,
 > `git diff --check`, and a signed generic iOS Release app/widget build. The
 > user requested real-device TestFlight verification instead of another
-> simulator run. Archive/upload once, verify all batched changes, and complete
-> final App Review smoke. Do not mix unrelated features,
+> simulator run. Wait for processing, install build 14, verify all batched
+> changes, and complete final App Review smoke. Do not mix unrelated features,
 > destructive schema/auth/sync redesign, live billing, or semantic-matching
 > tuning into this build.
 
