@@ -2,6 +2,32 @@
 
 Date: 2026-05-19
 
+Status: DEFENSE-IN-DEPTH DISABLEMENT PENDING (decision refined 2026-08-20). The
+existing schedule was previously enabled for test-path verification, but v1 now
+launches with all current features free. Production has no billing/customer key,
+no next billing timestamp, and no payment event. The charge route requires both
+keys and a due timestamp, so AWS access does not block the UI/code conversion.
+Before production rollout, disable this schedule or first deploy and verify a
+hard billing-disabled guard on the charge endpoint. Do not re-enable payment
+activity without a new monetization decision. See `docs/full_free_launch_plan.md`.
+
+## Full-Free Disablement Audit
+
+- 2026-08-20: AWS authentication succeeded for the configured IAM identity.
+- `scheduler:GetSchedule` for `justdo-prod-billing-charge-daily` returned
+  `AccessDeniedException`, so current state could not be independently read.
+- `lambda:GetFunctionConfiguration` for `justdo-prod-billing-cron` and
+  `amplify:GetApp` for the production app also returned access denied.
+- The in-app AWS Console fallback was unavailable in the current environment.
+- Hosted Supabase has 0 stored billing keys, 0 customer keys, 0 next-billing
+  timestamps, 0 due charge candidates, and 0 payment events. The deployed Web
+  public Toss client key classifies as `test`.
+- No schedule mutation was attempted because the exact existing target/settings
+  could not be read and preserved safely.
+- Defense-in-depth next action: use an approved AWS role with
+  `scheduler:GetSchedule` + `scheduler:UpdateSchedule`, read the schedule,
+  preserve all settings, change only `State` to `DISABLED`, and read it back.
+
 This document records the B3 cron decision and setup for Just Do Pro recurring
 billing.
 

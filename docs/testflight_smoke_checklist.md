@@ -1,16 +1,19 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-08-05
+Updated: 2026-08-21
 
-Purpose: record TestFlight build 13 validation and verify the next-build Home
-List today-scroll and schedule-notification body follow-ups before deciding
-whether to submit the iOS v1 build for public App Review.
+Purpose: preserve TestFlight build 13 validation, collect a bounded set of
+remaining Release Candidate fixes, verify the required full-free policy, and
+validate the consolidated next build before deciding whether to submit iOS v1
+for public App Review.
 
 ## Test Setup
 
 - Device: real iPhone with the TestFlight build installed.
-- Build: App Store Connect / TestFlight build 13, installed and under
-  real-device validation on 2026-08-05.
+- Baseline build: App Store Connect / TestFlight build 13, installed and
+  validated on 2026-08-05.
+- Next build: not assigned yet. Expected build 14 after the Release Candidate
+  fix list is closed and scope is frozen.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -30,8 +33,52 @@ whether to submit the iOS v1 build for public App Review.
   - goal/report surfaces open from the current iOS IA.
 - App Review-visible surfaces have no in-app purchase CTA or external payment
   link.
+- Every current feature works without a plan badge, lock, blur, or subscription
+  state dependency.
 
 ## Smoke Path
+
+### Release Candidate Intake (before the next upload)
+
+- [ ] Complete `docs/full_free_launch_plan.md`, including the production billing
+  safety audit and either AWS schedule disablement or the documented deployed
+  charge-route `410` defense.
+- [ ] Review and record every remaining release-critical issue.
+- [ ] Review the shipped app icon at device sizes and replace it only if the
+  existing slightly soft light variant is accepted into this release batch;
+  dark/tinted variants remain deferred artwork.
+- [ ] Treat full-free as the required policy exception; limit everything else
+  to low-risk existing-behavior fixes and exclude unrelated features,
+  destructive schema changes, auth/sync redesign, and Toss live billing.
+- [ ] Freeze scope before changing the build number.
+- [ ] Bump app, widget, and UI-test build numbers together (expected 14).
+- [ ] Run Swift tests, Web tests/lint/build, generic iOS Release build, and
+  `git diff --check`.
+- [ ] Archive/upload one consolidated build and record processing/install state.
+- [ ] Verify H-015, H-016, and every additional batched fix on a real device.
+- [ ] Run the final App Review-visible sanity smoke before changing the release
+  decision to PASS.
+
+### Full-Free Release Verification
+
+Local checkpoint (2026-08-21): Web 148/148, Swift 98/98, lint, Web production
+build, generic iOS Release app/widget build, `git diff --check`, and iOS
+simulator UI tests 5/5 pass. The Free UI fixture confirms Settings/export access
+and no subscription/plan/PRO surface. Items below remain production/TestFlight
+checks and are intentionally not marked complete from local evidence alone.
+
+- [ ] A user with no subscription row can open Stats/activity, full reports,
+  Just Do Mode, data export, goals, and every other current feature.
+- [ ] Repeat entitlement-sensitive checks with legacy free, trial, active Pro,
+  expired, paused, and cancelled account states; access is identical.
+- [ ] Confirm no Free/Pro/Trial badge, lock, blur, price, upgrade action, Toss
+  button, billing redirect, or Trial-expiry message remains user-visible.
+- [ ] Confirm Settings has no subscription sales surface or paid-plan status.
+- [ ] Confirm Web and in-app Terms use the same all-current-features-free policy.
+- [ ] Confirm production Web cannot initiate a charge and the EventBridge
+  billing schedule is disabled.
+- [ ] Confirm App Review notes state that all current features are free and no
+  IAP, subscription, purchase flow, external link, or paid entitlement exists.
 
 Current progress:
 
@@ -43,7 +90,7 @@ Current progress:
 - [x] 6. Habit Add and Edit — passed on build 5; H-002 and H-003 verified.
 - [x] 7. Goal Management — passed on build 5 except H-004 known issue for build 6 verification.
 - [x] 8. Report Entry — passed on build 5, 2026-07-01.
-- [x] 9. Settings and Subscription Copy — passed on build 5, 2026-07-01.
+- [x] 9. Settings and Free Access — historical build 5 baseline passed on 2026-07-01; full-free UI needs next-build verification.
 - [x] 10. Widget — passed on build 5 with H-005 build 6 follow-up.
 - [x] 11. Short Offline Check — passed on build 5, 2026-07-01.
 - [x] 12. Build 9 Sheet Presentation — passed on build 10, 2026-07-25.
@@ -183,17 +230,17 @@ Notes: User confirmed Goal Management entry/close, add, target save/denominator 
 - [ ] Open the report from the Home banner.
 - [ ] Confirm report sections scroll and text is readable.
 - [ ] Open Settings -> 목표 and confirm the smaller report entry works there too.
-- [ ] Confirm Free/Pro gating copy is informational only and does not show a
-  purchase CTA or external payment link.
+- [ ] Confirm all four report pages are readable with no blur, lock overlay,
+  plan badge, purchase CTA, or external payment link.
 
 Result:
 
 ```text
 Status: PASS
-Notes: User confirmed Home report banner appears, report opens from Home, report sections scroll with readable text, Settings -> 목표 supporting report entry works, and no purchase CTA or external payment link was visible in Free/Pro gating copy.
+Notes: Historical build 5 entry/report navigation passed. The next build must additionally verify the full-free report has no preview lock or commercial copy.
 ```
 
-### 9. Settings and Subscription Copy
+### 9. Settings and Free Access
 
 - [ ] Open Settings.
 - [ ] Confirm account state and sign-out are clear.
@@ -201,15 +248,16 @@ Notes: User confirmed Home report banner appears, report opens from Home, report
 - [ ] Change Task/Habit colors with swatches or `#RRGGBB` hex input and confirm
   the sheet saves/returns cleanly.
 - [ ] Confirm Terms and Privacy screens mention Apple or Google login.
-- [ ] Confirm the subscription section has no `Pro로 업그레이드` row, no purchase
-  button, and no external payment link.
-- [ ] Confirm Just Do Mode gating copy does not route to purchase.
+- [ ] Confirm Settings has no subscription group, current-plan row, plan badge,
+  purchase button, or external payment link.
+- [ ] Confirm Just Do Mode is available in Display settings for every account.
+- [ ] Confirm data export opens immediately for every account.
 
 Result:
 
 ```text
 Status: PASS
-Notes: User confirmed account state/sign-out clarity, Settings -> Display -> 위젯 토글 색상 entry, Task/Habit color changes, clean return, Terms/Privacy login mention, no Pro upgrade row, no purchase button, no external payment link, and Just Do Mode gating does not route to purchase.
+Notes: Historical build 5 account/widget-color/legal checks passed. The next build must verify the new subscription-free Settings layout, unrestricted Just Do Mode, and unrestricted export.
 ```
 
 ### 10. Widget
@@ -376,7 +424,7 @@ Result:
 
 ```text
 Status: PARTIAL PASS WITH NEXT-BUILD FOLLOW-UP
-Notes: Build 13 was archived and uploaded successfully on 2026-08-05. The archive contains app and widget version 1.0 (13), bundle IDs `kr.justdo.app` and `kr.justdo.app.widget`, and both privacy manifests. Pre-upload verification passed 96 Swift tests, Release archive validation, and `git diff --check`. The user confirmed installation with existing data and all monthly List behaviors: date grouping, month navigation, Task actions, multi-day/carry-over handling, and daily-detail entry. The user also confirmed the relative schedule-only titles. H-015 adds automatic scrolling to today's section when entering List or tapping `오늘`. H-016 adds the actual Task date/time to schedule-only bodies. Both are patched locally for the next build.
+Notes: Build 13 was archived and uploaded successfully on 2026-08-05. The archive contains app and widget version 1.0 (13), bundle IDs `kr.justdo.app` and `kr.justdo.app.widget`, and both privacy manifests. Pre-upload verification passed 96 Swift tests, Release archive validation, and `git diff --check`. The user confirmed installation with existing data and all monthly List behaviors: date grouping, month navigation, Task actions, multi-day/carry-over handling, and daily-detail entry. The user also confirmed the relative schedule-only titles. H-015 adds automatic scrolling to today's section when entering List or tapping `오늘`. H-016 adds the actual Task date/time to schedule-only bodies. Both are implemented and pushed to `main`, while the project remains build 13; they must be included in the consolidated next TestFlight build.
 ```
 
 ## Issue Log
@@ -471,7 +519,7 @@ Notes: Build 9 replaces the affected fixed-height detents with large sheets and 
 ID: H-007
 Severity: medium
 Area: Settings / data export presentation
-Steps: Open Settings and tap 데이터 내보내기 with a Pro tester account.
+Steps: Open Settings and tap 데이터 내보내기 with any signed-in test account.
 Expected: The CSV share sheet appears immediately above Settings.
 Actual: No sheet appeared until Settings was closed and Home became visible.
 Screenshot or screen recording: Not needed; user reported during build 8 smoke.
@@ -586,9 +634,11 @@ Screenshot or screen recording: Not needed; user reported during build 13 smoke
 on 2026-08-05.
 Reproducible: Yes; the List had no programmatic scroll target or today-button
 scroll request.
-Notes: Patched locally using stable date-section IDs and a dedicated today-scroll
-request. It also retries after asynchronously loaded sections become available.
-Swift tests passed: 98 tests; generic iOS Release app/widget build passed.
+Notes: Implemented and pushed to `main` using stable date-section IDs and a
+dedicated today-scroll request. It also retries after asynchronously loaded
+sections become available. The project remains build 13, so this change is not
+in an uploaded TestFlight binary. Swift tests passed: 98 tests; generic iOS
+Release app/widget build passed.
 ```
 
 ```text
@@ -606,10 +656,11 @@ after the title changed to a reminder-offset label.
 Screenshot or screen recording: Not needed; user reported during build 13 smoke
 on 2026-08-05.
 Reproducible: Yes; covered by deterministic planner tests.
-Notes: Patched locally for the next build. Multiple same-minute Tasks retain
-their respective actual times, while briefing-merged copy keeps its existing
-`다음 일정 HH:mm` format. Swift tests passed: 98 tests; generic iOS Release
-app/widget build passed.
+Notes: Implemented and pushed to `main` for the consolidated next build.
+Multiple same-minute Tasks retain their respective actual times, while
+briefing-merged copy keeps its existing `다음 일정 HH:mm` format. The project
+remains build 13, so this change is not in an uploaded TestFlight binary. Swift
+tests passed: 98 tests; generic iOS Release app/widget build passed.
 ```
 
 ```text
@@ -629,13 +680,13 @@ Notes: Included in uploaded build 12. The shared offline calendar covers fixed, 
 - [ ] PASS: submit current build for public App Review.
 - [x] FIX REQUIRED: patch, upload a new TestFlight build, and rerun affected
   sections.
-- [ ] HOLD: defer App Review for Toss/business/payment-readiness reasons even if
-  the build passes.
+- [ ] HOLD: defer App Review for unresolved production billing-safety or other
+  release-critical reasons even if the build passes.
 
 Decision:
 
 ```text
 Status: AWAITING NEXT BUILD
-Reason: Build 13 monthly Home List and relative notification titles passed on a real device. H-015 today-scroll and H-016 schedule-only body semantics are patched locally and require the next TestFlight build.
-Next action: Consolidate any remaining changes, then upload and verify H-015 and H-016 on the next TestFlight build.
+Reason: Build 13 monthly Home List and relative notification titles passed on a real device. H-015/H-016 and full-free Web/iOS code are implemented locally but are not in an uploaded binary. The static/public-copy audit and Batch F local gate pass; production billing safety and representative real-device checks remain.
+Next action: Deploy/probe the production Web guard, complete the AWS defense condition and representative account smoke, close the bounded fix list, freeze scope, then upload one consolidated next build and verify full-free plus H-015/H-016 before the final App Review smoke.
 ```

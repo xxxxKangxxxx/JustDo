@@ -3,6 +3,12 @@
 
 > **Source of truth:** `supabase/migrations/*.sql` — 실제 DB는 마이그레이션이 결정한다. 이 문서는 v0.1 설계 초안이며, 마이그레이션과 어긋나면 마이그레이션이 옳다.
 >
+> **2026-08-19 product-policy override:** v1은 전면 무료로 출시한다.
+> subscription/payment 테이블은 호환성·운영 기록을 위해 보존하지만 기능 접근
+> 제어에는 사용하지 않는다. 아래 플랜/Trial 표는 legacy schema가 만들어진 배경을
+> 기록한 것이며 현재 entitlement 정책이 아니다. 상세:
+> `full_free_launch_plan.md`.
+>
 > Phase 4-1에서 이 초안 대비 다음 항목이 보강되었다 (`supabase/migrations/20260429014750_init_schema.sql` 참고):
 > - `set_updated_at()` 트리거 함수 → `users` / `tasks` / `subtasks` / `habits` / `habit_logs` / `user_subscriptions` 에 부착.
 > - `tasks` 에 start/end_date 무결성 CHECK 추가.
@@ -278,7 +284,7 @@ CREATE INDEX idx_habit_logs_habit_id ON public.habit_logs(habit_id);
 
 ---
 
-## 6. 구독 플랜 테이블
+## 6. Legacy 구독 플랜 테이블 (v1 접근 제어에는 미사용)
 
 ### plans
 > 플랜 종류 정의 (Free / Pro)
@@ -383,7 +389,7 @@ CREATE TABLE public.payment_events (
 
 ---
 
-### Trial 만료 처리 흐름
+### Trial 만료 처리 흐름 (legacy design, v1 무료 출시에서는 비활성)
 
 ```
 가입 → Trial 시작 (30일)
@@ -394,10 +400,10 @@ CREATE TABLE public.payment_events (
 
 ---
 
-## 7. Goal & Pro Report schema (implemented 2026-05-29/30)
+## 7. Goal & Report schema (implemented 2026-05-29/30)
 
-> Goal 입력은 Free / Trial / Pro 모두 가능하다. 목표 기반 월간/연간 리포트 상세는
-> Trial / Pro 전용으로 gate한다. 실제 마이그레이션은
+> Goal 입력과 목표 기반 월간/연간 리포트 상세는 모든 사용자에게 무료다.
+> `plan`/subscription 상태로 gate하지 않는다. 실제 마이그레이션은
 > `supabase/migrations/20260529120000_goal_report.sql`이다. 2026-05-30 기준
 > Local과 Remote hosted Supabase 모두에 적용되어 있다.
 >

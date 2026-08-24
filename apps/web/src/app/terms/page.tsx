@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Just Do 이용약관",
 };
 
-const EFFECTIVE_DATE = "2026-06-14";
+const EFFECTIVE_DATE = "2026-08-21";
 
 export default function TermsPage() {
   return (
@@ -44,9 +44,11 @@ export default function TermsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold">유료 기능</h2>
+          <h2 className="text-lg font-semibold">무료 이용</h2>
           <p className="mt-2 text-neutral-700">
-            일부 고급 기능(Pro)은 별도의 결제 정책에 따라 제공됩니다.
+            Just Do의 현재 앱 및 웹 기능은 로그인한 사용자에게 무료로
+            제공됩니다. 서비스는 결제 수단 등록, 유료 구독, 자동 갱신을 제공하지
+            않으므로 이용 요금의 청구·구독 해지·환불 절차가 발생하지 않습니다.
           </p>
         </div>
 

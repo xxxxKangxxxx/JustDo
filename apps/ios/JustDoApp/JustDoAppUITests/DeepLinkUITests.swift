@@ -49,6 +49,27 @@ final class DeepLinkUITests: XCTestCase {
         XCTAssertTrue(app.buttons["없음"].exists)
     }
 
+    func testFreeAccountSettingsExposeFullAccessWithoutCommercialSurfaces() throws {
+        let app = launchApp()
+
+        app.buttons["설정"].tap()
+
+        XCTAssertTrue(app.staticTexts["Just Do Mode"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["습관"].exists)
+        XCTAssertTrue(app.staticTexts["목표"].exists)
+        XCTAssertTrue(app.staticTexts["데이터 내보내기"].exists)
+        XCTAssertFalse(app.staticTexts["구독"].exists)
+        XCTAssertFalse(app.staticTexts["현재 플랜"].exists)
+        XCTAssertFalse(app.staticTexts["PRO"].exists)
+
+        app.staticTexts["데이터 내보내기"].tap()
+        XCTAssertTrue(
+            app.staticTexts[
+                "CSV 파일이 준비되었습니다. Excel 또는 Numbers에서 열 수 있습니다."
+            ].waitForExistence(timeout: 3)
+        )
+    }
+
     private func launchApp(opening url: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--justdo-ui-testing"]

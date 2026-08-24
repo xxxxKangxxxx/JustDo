@@ -16,11 +16,6 @@ import {
 } from "@/lib/date";
 import { authProviders } from "@/lib/auth/providers";
 import { AuthProvider, useAuth } from "@/lib/auth/useAuth";
-import {
-  createTossPayment,
-  tossBillingPlans,
-  type TossBillingPlanInterval,
-} from "@/lib/billing/toss-client";
 import type { Goal, GoalPeriodType, Habit, HabitRecurType, Priority, Task } from "@/types/domain";
 import {
   availableReports,
@@ -55,133 +50,10 @@ type SettingsSection =
   | "goals"
   | "categories"
   | "habits"
-  | "subscription"
   | "sync"
   | "data";
 type NewTaskDraft = { date: string; range?: [string, string]; time?: string } | null;
-type UpgradePlan = TossBillingPlanInterval;
-type PaymentMethodKey = "toss" | "card" | "bank" | "naverpay" | "kakaopay" | "other";
 type GoalPromptTarget = { kind: "onboarding" | "monthly" | "yearly"; periodKey: string };
-type BillingSubscription = {
-  id: string;
-  plan_name: string;
-  status: string;
-  trial_start_at: string | null;
-  trial_end_at: string | null;
-  subscribed_at: string | null;
-  expires_at: string | null;
-  billing_provider: string | null;
-  plan_interval: string;
-  amount_krw: number;
-  currency: string;
-  next_billing_at: string | null;
-  cancel_at: string | null;
-  cancelled_at: string | null;
-  last_payment_at: string | null;
-  payment_failures: number;
-  payment_method_label: string | null;
-  payment_method_last4: string | null;
-};
-type BillingSubscriptionResponse = {
-  subscription: BillingSubscription | null;
-};
-type BillingState = {
-  subscription: BillingSubscription | null;
-  loading: boolean;
-  error: string | null;
-  refresh: () => void;
-};
-
-const paymentMethods: Array<{
-  key: PaymentMethodKey;
-  label: string;
-  enabled: boolean;
-  accent: string;
-  soft: string;
-}> = [
-  { key: "toss", label: "토스", enabled: true, accent: "#0064FF", soft: "#EAF2FF" },
-  { key: "card", label: "신용카드", enabled: false, accent: "#4F6FD8", soft: "#EEF2FF" },
-  { key: "bank", label: "계좌이체", enabled: false, accent: "#2F9B72", soft: "#EAF8F2" },
-  { key: "naverpay", label: "네이버페이", enabled: false, accent: "#03C75A", soft: "#E7FBEF" },
-  { key: "kakaopay", label: "카카오페이", enabled: false, accent: "#FEE500", soft: "#FFF9C7" },
-  { key: "other", label: "기타결제수단", enabled: false, accent: "#6D7694", soft: "#F1F3F7" },
-];
-const subscriptionStatusLabels: Record<string, string> = {
-  trial: "Trial",
-  active: "활성",
-  past_due: "결제 확인 필요",
-  paused: "일시중지",
-  expired: "만료",
-  cancelled: "해지됨",
-};
-
-const proEntitlementStatuses = new Set(["trial", "active"]);
-
-const hasProEntitlement = (subscription: BillingSubscription | null) =>
-  Boolean(
-    subscription &&
-      subscription.plan_name === "pro" &&
-      proEntitlementStatuses.has(subscription.status),
-  );
-
-const hasBillingMethod = (subscription: BillingSubscription | null) =>
-  Boolean(subscription?.billing_provider);
-
-const proAccessReason = (subscription: BillingSubscription | null) => {
-  if (hasProEntitlement(subscription)) {
-    return subscription?.status === "trial" ? "Trial 기간" : "Pro 활성";
-  }
-  if (!subscription) return "구독 정보 없음";
-  return subscriptionStatusLabels[subscription.status] ?? subscription.status;
-};
-
-function useBillingSubscription(): BillingState {
-  const auth = useAuth();
-  const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
-  const [loading, setLoading] = useState(Boolean(auth.user));
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(() => {
-    if (!auth.user) {
-      setSubscription(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    fetch("/api/billing/subscription")
-      .then(async (response) => {
-        const body = (await response.json().catch(() => ({}))) as
-          | BillingSubscriptionResponse
-          | { error?: string };
-        if (!response.ok) {
-          throw new Error("error" in body && body.error ? body.error : "subscription_fetch_failed");
-        }
-        setSubscription((body as BillingSubscriptionResponse).subscription);
-        setError(null);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "subscription_fetch_failed"))
-      .finally(() => setLoading(false));
-  }, [auth.user]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(refresh, 0);
-    return () => window.clearTimeout(timer);
-  }, [refresh]);
-
-  return { subscription, loading, error, refresh };
-}
-
-const formatDateLabel = (value: string | null | undefined) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(date);
-};
 
 const fontStack =
   '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "SF Pro Display", Pretendard, "Noto Sans KR", system-ui, sans-serif';
@@ -252,18 +124,12 @@ function JustDoViewport() {
   const [toast, setToast] = useState<string | null>(null);
   const [goalPrompt, setGoalPrompt] = useState<GoalPromptTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget>(null);
-  const [reportUpgradePlan, setReportUpgradePlan] = useState<UpgradePlan | null>(null);
-  const billing = useBillingSubscription();
   const searchRef = useRef<HTMLInputElement | null>(null);
   // Prompts skipped this session: once closed without "다시 보지 않기", don't
   // re-open the same one until reload (mirrors the iOS session suppression).
   const suppressedPrompts = useRef<Set<string>>(new Set());
 
   const homeBanner = homeBannerReport(today, s.state.goals, s.state.goalPromptDismissals);
-  const canSeeReportDetail = (() => {
-    const plan = planKeyOf(billing.subscription);
-    return plan === "trial" || plan === "pro";
-  })();
 
   const flash = (message: string) => {
     setToast(message);
@@ -518,16 +384,8 @@ function JustDoViewport() {
           <GoalReportModal
             mode={mode}
             target={reportTarget}
-            locked={!canSeeReportDetail}
             onClose={() => setReportTarget(null)}
-            onUpgrade={() => {
-              setReportTarget(null);
-              setReportUpgradePlan("monthly");
-            }}
           />
-        ) : null}
-        {reportUpgradePlan ? (
-          <UpgradeModal mode={mode} plan={reportUpgradePlan} onClose={() => setReportUpgradePlan(null)} />
         ) : null}
         {toast ? <Toast mode={mode}>{toast}</Toast> : null}
       </div>
@@ -1311,15 +1169,11 @@ function TodayPanel({
 }) {
   const s = useJustDo();
   const t = webTokens(mode);
-  const billing = useBillingSubscription();
-  const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
   const [panelMode, setPanelModeState] = useState({ date: "", justDo: false });
   const date = s.state.view.selectedDate;
   const isShowingJustDoMode = panelMode.date === date ? panelMode.justDo : false;
   const parsed = parseISO(date);
-  const canUseJustDoMode = hasProEntitlement(billing.subscription);
-  const isJustDoModeEnabled = canUseJustDoMode && s.state.settings.justDoMode;
-  const isCheckingEntitlement = billing.loading && !billing.subscription;
+  const isJustDoModeEnabled = s.state.settings.justDoMode;
   const tasks = isShowingJustDoMode && isJustDoModeEnabled
     ? justDoTasksUntil(s.state.tasks, date)
     : tasksOnDate(s.state.tasks, date);
@@ -1329,13 +1183,6 @@ function TodayPanel({
   const setPanelMode = (value: boolean) => {
     if (!value) {
       setPanelModeState({ date, justDo: false });
-      return;
-    }
-    if (isCheckingEntitlement) {
-      return;
-    }
-    if (!canUseJustDoMode) {
-      setUpgradePlan("monthly");
       return;
     }
     if (!s.state.settings.justDoMode) {
@@ -1370,9 +1217,8 @@ function TodayPanel({
               { label: "이 날까지", value: true },
             ].map((item) => {
               const isActive = isShowingJustDoMode === item.value;
-              const isLocked = item.value && canUseJustDoMode && !s.state.settings.justDoMode;
-              const isUpgrade = item.value && !canUseJustDoMode && !isCheckingEntitlement;
-              const isDisabled = item.value && (isLocked || isCheckingEntitlement);
+              const isLocked = item.value && !s.state.settings.justDoMode;
+              const isDisabled = isLocked;
               return (
                 <button
                   key={item.label}
@@ -1383,13 +1229,12 @@ function TodayPanel({
                   className="rounded-md px-2 py-1.5 text-[11px] font-bold disabled:cursor-not-allowed"
                   style={{
                     background: isActive ? t.surface : "transparent",
-                    color: isLocked || isCheckingEntitlement ? t.textTertiary : isActive ? t.text : t.textSecondary,
+                    color: isLocked ? t.textTertiary : isActive ? t.text : t.textSecondary,
                   }}
                 >
                   <span className="inline-flex items-center justify-center gap-1">
                     {item.label}
                     {isLocked ? <IconLock /> : null}
-                    {isUpgrade ? <span className="text-[9px]" style={{ color: t.accent }}>Pro</span> : null}
                   </span>
                 </button>
               );
@@ -1428,7 +1273,6 @@ function TodayPanel({
           </div>
         </div>
       </aside>
-      {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
     </>
   );
 }
@@ -1931,9 +1775,6 @@ function CommandPalette({
 function StatsDashboard({ mode }: { mode: ThemeMode }) {
   const s = useJustDo();
   const t = webTokens(mode);
-  const billing = useBillingSubscription();
-  const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
-  const canUseStats = hasProEntitlement(billing.subscription);
   const tasks = s.state.tasks;
   const done = tasks.filter((task) => task.isCompleted).length;
   const open = tasks.length - done;
@@ -1944,37 +1785,6 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
     return { day, total: dayTasks.length, done: dayTasks.filter((task) => task.isCompleted).length };
   });
   const max = Math.max(1, ...dayCounts.map((item) => item.total));
-  if (billing.loading) {
-    return (
-      <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하고 있습니다.">
-        <div className="h-20 rounded-lg" style={{ background: t.surfaceAlt }} />
-      </Panel>
-    );
-  }
-  if (billing.error) {
-    return (
-      <Panel mode={mode} title="통계" subtitle="구독 상태를 확인하지 못했습니다.">
-        <div className="text-[13px]" style={{ color: t.danger }}>{billing.error}</div>
-        <button type="button" onClick={billing.refresh} className="mt-3 rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.text }}>
-          다시 확인
-        </button>
-      </Panel>
-    );
-  }
-  if (!canUseStats) {
-    return (
-      <>
-        <ProFeatureGate
-          mode={mode}
-          title="통계는 Pro 기능입니다"
-          description="주간/월간 통계와 리포트는 Trial 또는 Pro 상태에서 사용할 수 있습니다."
-          reason={proAccessReason(billing.subscription)}
-          onUpgrade={setUpgradePlan}
-        />
-        {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
-      </>
-    );
-  }
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3.5">
@@ -2016,45 +1826,11 @@ function StatsDashboard({ mode }: { mode: ThemeMode }) {
   );
 }
 
-function ProFeatureGate({
-  mode,
-  title,
-  description,
-  reason,
-  onUpgrade,
-}: {
-  mode: ThemeMode;
-  title: string;
-  description: string;
-  reason: string;
-  onUpgrade: (plan: UpgradePlan) => void;
-}) {
-  const t = webTokens(mode);
-  return (
-    <div className="mx-auto max-w-[760px]">
-      <Panel mode={mode} title={title} subtitle={description}>
-        <div className="mb-4 rounded-lg border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>현재 상태</div>
-          <div className="text-[18px] font-bold">{reason}</div>
-          <p className="mt-2 text-[12px] leading-5" style={{ color: t.textSecondary }}>
-            로그인한 사용자는 기본 기능을 계속 사용할 수 있습니다. Pro 기능은 Trial 또는 활성 구독 상태에서 열립니다.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <PlanCard mode={mode} plan="monthly" title="월간 Pro" price="₩1,900 / 월" onUpgrade={onUpgrade} disabled={false} />
-          <PlanCard mode={mode} plan="yearly" title="연간 Pro" price="₩9,900 / 년" badge="추천" onUpgrade={onUpgrade} disabled={false} />
-        </div>
-      </Panel>
-    </div>
-  );
-}
-
 function SettingsPage({ mode }: { mode: ThemeMode }) {
   const s = useJustDo();
   const auth = useAuth();
   const t = webTokens(mode);
   const [section, setSection] = useState<SettingsSection>("account");
-  const [upgradePlan, setUpgradePlan] = useState<UpgradePlan | null>(null);
   const [editHabitId, setEditHabitId] = useState<string | null>(null);
   const syncDetail = s.syncError ? "확인 필요" : !s.syncStatus.isOnline ? "오프라인" : s.syncStatus.isSyncing ? "동기화 중" : s.syncStatus.pendingCount > 0 ? "대기 중" : "정상";
   const sections: Array<[SettingsSection, string]> = [
@@ -2064,7 +1840,6 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
     ["goals", "목표"],
     ["categories", "카테고리"],
     ["habits", "습관"],
-    ["subscription", "구독"],
     ["sync", "동기화"],
     ["data", "데이터"],
   ];
@@ -2105,9 +1880,10 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
           <Panel mode={mode} title="화면">
             <SettingRow mode={mode} label="다크 모드" right={<Switch mode={mode} on={s.state.view.dark} onChange={s.setDark} />} />
             <SettingRow mode={mode} label="주 시작" right={<select value={s.state.settings.weekStart} onChange={(event) => s.updateSetting("weekStart", Number(event.target.value) as 0 | 1)} style={dateInputStyle(t)}><option value={0}>일요일</option><option value={1}>월요일</option></select>} />
+            <SettingRow mode={mode} label="Just Do Mode" right={<Switch mode={mode} on={s.state.settings.justDoMode} onChange={(value) => s.updateSetting("justDoMode", value)} />} />
           </Panel>
           ) : null}
-          {section === "goals" ? <GoalSettingsPanel mode={mode} onUpgrade={setUpgradePlan} /> : null}
+          {section === "goals" ? <GoalSettingsPanel mode={mode} /> : null}
           {section === "categories" ? <CategoryManagementPanel mode={mode} /> : null}
           {section === "habits" ? (
           <div className="flex flex-col gap-4">
@@ -2136,7 +1912,6 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
           <StatsDashboard mode={mode} />
           </div>
           ) : null}
-          {section === "subscription" ? <SubscriptionPanel mode={mode} onUpgrade={setUpgradePlan} /> : null}
           {section === "sync" ? (
           <Panel mode={mode} title="동기화">
             <SettingRow mode={mode} label="연결 상태" value={s.syncStatus.isOnline ? "온라인" : "오프라인"} />
@@ -2153,7 +1928,6 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
           ) : null}
         </div>
       </div>
-      {upgradePlan ? <UpgradeModal mode={mode} plan={upgradePlan} onClose={() => setUpgradePlan(null)} /> : null}
       <HabitEditModal mode={mode} habitId={editHabitId} onClose={() => setEditHabitId(null)} />
     </div>
   );
@@ -2178,12 +1952,6 @@ const monthLabel = (periodKey: string) => {
 
 const periodLabel = (type: GoalPeriodType, periodKey: string) =>
   type === "yearly" ? `${periodKey}년` : monthLabel(periodKey);
-
-const planKeyOf = (subscription: BillingSubscription | null): "free" | "trial" | "pro" => {
-  if (!subscription || subscription.plan_name !== "pro") return "free";
-  if (subscription.status === "trial") return "trial";
-  return hasProEntitlement(subscription) ? "pro" : "free";
-};
 
 function ReportHomeBanner({
   mode,
@@ -2240,15 +2008,12 @@ function ReportSupportingBanner({
   );
 }
 
-function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (plan: UpgradePlan) => void }) {
+function GoalSettingsPanel({ mode }: { mode: ThemeMode }) {
   const s = useJustDo();
   const t = webTokens(mode);
-  const billing = useBillingSubscription();
   const selectedDate = s.state.view.selectedDate;
   const monthlyKey = periodKeyOf("monthly", selectedDate);
   const yearlyKey = periodKeyOf("yearly", selectedDate);
-  const plan = planKeyOf(billing.subscription);
-  const canSeeReportDetail = plan === "trial" || plan === "pro";
   const reports = availableReports(todayISO(), s.state.goals);
   const yearlyReport = reports.find((report) => report.periodType === "yearly") ?? null;
   const monthlyReport = reports.find((report) => report.periodType === "monthly") ?? null;
@@ -2310,9 +2075,8 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
       >
         <div className="mb-4 flex items-center gap-3">
           <div className="flex-1 text-[12.5px] leading-5" style={{ color: t.textSecondary }}>
-            목표 입력은 모든 플랜에서 사용할 수 있습니다. 리포트 상세는 Trial 또는 Pro에서 열립니다.
+            연간·월간 목표를 기록하고 지난 기간의 전체 리포트를 확인할 수 있습니다.
           </div>
-          <PlanBadge mode={mode} plan={plan} />
         </div>
         <div className="flex flex-col gap-4">
           <div>
@@ -2401,26 +2165,10 @@ function GoalSettingsPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (p
         <GoalReportModal
           mode={mode}
           target={report}
-          locked={!canSeeReportDetail}
           onClose={() => setReport(null)}
-          onUpgrade={() => onUpgrade("monthly")}
         />
       ) : null}
     </>
-  );
-}
-
-function PlanBadge({ mode, plan }: { mode: ThemeMode; plan: "free" | "trial" | "pro" }) {
-  const t = webTokens(mode);
-  const cfg = {
-    free: { label: "Free", bg: t.surfaceAlt, fg: t.textSecondary },
-    trial: { label: "Trial", bg: t.me.soft, fg: t.me.ink },
-    pro: { label: "Pro", bg: t.text, fg: t.bg },
-  }[plan];
-  return (
-    <span className="rounded px-2 py-1 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ background: cfg.bg, color: cfg.fg }}>
-      {cfg.label}
-    </span>
   );
 }
 
@@ -2855,7 +2603,7 @@ function LockedGoalModal({ mode, goal, onClose, onUnlock }: { mode: ThemeMode; g
   );
 }
 
-function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: ThemeMode; target: NonNullable<ReportTarget>; locked: boolean; onClose: () => void; onUpgrade: () => void }) {
+function GoalReportModal({ mode, target, onClose }: { mode: ThemeMode; target: NonNullable<ReportTarget>; onClose: () => void }) {
   const s = useJustDo();
   const auth = useAuth();
   const t = webTokens(mode);
@@ -2896,7 +2644,7 @@ function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: T
           ))}
         </div>
         <div className="relative min-h-0 flex-1">
-          <div className={`flex h-full flex-col px-6 pt-5 ${locked ? "pointer-events-none select-none blur-[6px]" : ""}`} aria-hidden={locked}>
+          <div className="flex h-full flex-col px-6 pt-5">
           <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.4px]" style={{ color: t.textTertiary }}>{periodLabel(target.periodType, target.periodKey)} · {labels[step]}</div>
           {step === 0 ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
@@ -3018,35 +2766,14 @@ function GoalReportModal({ mode, target, locked, onClose, onUpgrade }: { mode: T
             </div>
           )}
           </div>
-          {locked ? (
-            <div className="absolute inset-0 flex items-center justify-center p-6">
-              <div className="max-w-[420px] rounded-2xl border p-6 text-center shadow-xl" style={{ borderColor: t.divider, background: t.surface }}>
-                <div className="text-[22px]" style={{ color: t.textSecondary }}>◇</div>
-                <div className="mt-2 text-[17px] font-bold tracking-[-0.4px]">전체 리포트는 Pro에서 펼쳐져요</div>
-                <div className="mt-2 text-[12.5px] leading-5" style={{ color: t.textSecondary }}>목표별 진행, 활동 흐름, 이번 기간의 이야기까지 Trial 또는 Pro에서 볼 수 있어요.</div>
-                <button type="button" onClick={onUpgrade} className="mt-4 rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: t.text, color: t.bg }}>Pro로 펼치기</button>
-                <div className="mt-2 text-[11px]" style={{ color: t.textTertiary }}>7일 무료 체험 · 언제든 취소</div>
-              </div>
-            </div>
-          ) : null}
         </div>
         <div className="flex items-center border-t px-6 py-4" style={{ borderColor: t.divider }}>
-          {locked ? (
-            <>
-              <span className="text-[12px]" style={{ color: t.textTertiary }}>Pro에서 전체 리포트를 볼 수 있어요</span>
-              <div className="flex-1" />
-              <button type="button" onClick={onClose} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: t.surfaceAlt, color: t.text }}>닫기</button>
-            </>
-          ) : (
-            <>
-              <span className="text-[12px]" style={{ color: t.textTertiary }}>{step + 1} / 4</span>
-              <div className="flex-1" />
-              {step > 0 ? <button type="button" onClick={() => setStep(step - 1)} className="mr-4 text-[12.5px]" style={{ color: t.textSecondary }}>이전</button> : null}
-              <button type="button" onClick={step === 3 ? onClose : () => setStep(step + 1)} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: step === 3 ? t.text : t.accent, color: step === 3 ? t.bg : "#fff" }}>
-                {step === 3 ? "완료" : "다음"}
-              </button>
-            </>
-          )}
+          <span className="text-[12px]" style={{ color: t.textTertiary }}>{step + 1} / 4</span>
+          <div className="flex-1" />
+          {step > 0 ? <button type="button" onClick={() => setStep(step - 1)} className="mr-4 text-[12.5px]" style={{ color: t.textSecondary }}>이전</button> : null}
+          <button type="button" onClick={step === 3 ? onClose : () => setStep(step + 1)} className="rounded-lg px-5 py-2 text-[13px] font-semibold" style={{ background: step === 3 ? t.text : t.accent, color: step === 3 ? t.bg : "#fff" }}>
+            {step === 3 ? "완료" : "다음"}
+          </button>
         </div>
       </div>
     </div>
@@ -3221,262 +2948,6 @@ function HabitEditModalBody({ mode, habit, onClose }: { mode: ThemeMode; habit: 
         <button type="button" onClick={save} className="rounded-lg px-5 py-2 text-[13px] font-semibold text-white" style={{ background: t.habit.solid }}>
           저장
         </button>
-      </div>
-    </div>
-  );
-}
-
-function SubscriptionPanel({ mode, onUpgrade }: { mode: ThemeMode; onUpgrade: (plan: UpgradePlan) => void }) {
-  const s = useJustDo();
-  const auth = useAuth();
-  const t = webTokens(mode);
-  const billing = useBillingSubscription();
-  const [cancelling, setCancelling] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const { subscription, loading, error, refresh } = billing;
-  const isPro = hasProEntitlement(subscription);
-  const billingReady = hasBillingMethod(subscription);
-  const needsBillingMethod = isPro && !billingReady;
-  const statusLabel = subscription
-    ? subscriptionStatusLabels[subscription.status] ?? subscription.status
-    : auth.user
-      ? "Free"
-      : "로그인 필요";
-  const billingAmount = subscription
-    ? `₩${subscription.amount_krw.toLocaleString("ko-KR")} / ${subscription.plan_interval === "yearly" ? "년" : "월"}`
-    : null;
-  const paymentMethod = subscription?.payment_method_last4
-    ? `${subscription.payment_method_label ?? "Toss"} •••• ${subscription.payment_method_last4}`
-    : subscription?.billing_provider === "toss_payments"
-      ? "Toss Payments"
-      : "등록 전";
-
-  const cancelSubscription = () => {
-    if (!subscription || cancelling) return;
-    setCancelling(true);
-    fetch("/api/billing/cancel", { method: "POST" })
-      .then(async (response) => {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        if (!response.ok) {
-          throw new Error(body.error ?? "subscription_cancel_failed");
-        }
-        setActionError(null);
-        refresh();
-      })
-      .catch((err) => setActionError(err instanceof Error ? err.message : "subscription_cancel_failed"))
-      .finally(() => setCancelling(false));
-  };
-
-  return (
-    <Panel mode={mode} title="구독" subtitle="Pro 플랜 상태와 업그레이드 진입점입니다.">
-      <div className="mb-3 rounded-lg border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>현재 플랜</div>
-        <div className="mb-3 flex items-center gap-3">
-          <div className="text-[26px] font-bold tracking-[-0.6px]">{isPro ? "Pro" : "Free"}</div>
-          <span className="rounded-md px-2 py-1 text-[11px] font-semibold" style={{ background: isPro ? t.habit.softer : t.surfaceAlt, color: isPro ? t.habit.ink : t.textSecondary }}>
-            {loading ? "확인 중" : statusLabel}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-[12px]">
-          <SettingRow mode={mode} label="결제 주기" value={billingAmount ?? "-"} />
-          <SettingRow mode={mode} label="다음 결제일" value={formatDateLabel(subscription?.next_billing_at)} />
-          <SettingRow mode={mode} label="결제수단" value={paymentMethod} />
-          <SettingRow mode={mode} label="Trial 종료" value={formatDateLabel(subscription?.trial_end_at)} />
-          <SettingRow
-            mode={mode}
-            label="Just Do Mode"
-            value={isPro ? undefined : "Pro"}
-            right={
-              <Switch
-                mode={mode}
-                on={isPro && s.state.settings.justDoMode}
-                onChange={(value) => {
-                  if (value && !isPro) {
-                    onUpgrade("monthly");
-                    return;
-                  }
-                  s.updateSetting("justDoMode", value);
-                }}
-              />
-            }
-          />
-        </div>
-        {needsBillingMethod ? (
-          <div className="mt-3 rounded-lg border p-3 text-[12px] leading-5" style={{ borderColor: t.divider, background: t.surface, color: t.textSecondary }}>
-            Trial 동안 Pro 기능을 사용할 수 있습니다. Trial 이후에도 Pro 기능을 계속 쓰려면 Toss 결제를 연결하세요.
-          </div>
-        ) : null}
-        {error || actionError ? <div className="mt-3 text-[12px]" style={{ color: t.danger }}>{error ?? actionError}</div> : null}
-        <div className="mt-3 flex gap-2">
-          {auth.user ? (
-            <button type="button" onClick={refresh} className="rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.textSecondary }}>
-              새로고침
-            </button>
-          ) : null}
-          {subscription?.billing_provider === "toss_payments" && !["cancelled", "expired"].includes(subscription.status) ? (
-            <button
-              type="button"
-              onClick={cancelSubscription}
-              disabled={cancelling}
-              className="rounded-md border px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
-              style={{ borderColor: t.divider, color: t.danger }}
-            >
-              {cancelling ? "해지 중" : "구독 해지"}
-            </button>
-          ) : null}
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <PlanCard mode={mode} plan="monthly" title="월간 Pro" price="₩1,900 / 월" onUpgrade={onUpgrade} disabled={isPro && billingReady} cta={needsBillingMethod ? "Toss 결제 연결" : undefined} />
-        <PlanCard mode={mode} plan="yearly" title="연간 Pro" price="₩9,900 / 년" badge="추천" onUpgrade={onUpgrade} disabled={isPro && billingReady} cta={needsBillingMethod ? "Toss 결제 연결" : undefined} />
-      </div>
-    </Panel>
-  );
-}
-
-function PlanCard({
-  mode,
-  plan,
-  title,
-  price,
-  badge,
-  disabled,
-  cta,
-  onUpgrade,
-}: {
-  mode: ThemeMode;
-  plan: UpgradePlan;
-  title: string;
-  price: string;
-  badge?: string;
-  disabled: boolean;
-  cta?: string;
-  onUpgrade: (plan: UpgradePlan) => void;
-}) {
-  const t = webTokens(mode);
-  return (
-    <div className="rounded-lg border p-4" style={{ borderColor: t.divider, background: t.bg2 }}>
-      <div className="mb-2 flex items-center gap-2">
-        <div className="text-[14px] font-bold">{title}</div>
-        {badge ? <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ background: t.accent }}>{badge}</span> : null}
-      </div>
-      <div className="mb-3 text-[20px] font-bold tracking-[-0.4px]">{price}</div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onUpgrade(plan)}
-        className="w-full rounded-lg px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-45"
-        style={{ background: disabled ? t.dividerStrong : t.accent }}
-      >
-        {disabled ? "사용 중" : cta ?? "Pro로 업그레이드"}
-      </button>
-    </div>
-  );
-}
-
-function UpgradeModal({ mode, plan, onClose }: { mode: ThemeMode; plan: UpgradePlan; onClose: () => void }) {
-  const auth = useAuth();
-  const t = webTokens(mode);
-  const selected = tossBillingPlans[plan];
-  const clientKey = process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY;
-  const [method, setMethod] = useState<PaymentMethodKey>("toss");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const canStart = Boolean(auth.user && clientKey && method === "toss");
-
-  const startBillingAuth = async () => {
-    if (!canStart) return;
-    const tossClientKey = clientKey;
-    if (!auth.user || !tossClientKey) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const origin = window.location.origin;
-      const successUrl = new URL("/billing/success", origin);
-      successUrl.searchParams.set("planInterval", plan);
-      const failUrl = new URL("/billing/fail", origin);
-      failUrl.searchParams.set("planInterval", plan);
-      const payment = await createTossPayment({
-        clientKey: tossClientKey,
-        customerKey: auth.user.id,
-      });
-      await payment.requestBillingAuth({
-        method: "CARD",
-        successUrl: successUrl.toString(),
-        failUrl: failUrl.toString(),
-        customerName: auth.user.displayName ?? undefined,
-        customerEmail: auth.user.email ?? undefined,
-        windowTarget: "iframe",
-      });
-    } catch (err) {
-      setBusy(false);
-      setError(err instanceof Error ? err.message : "결제창을 열지 못했습니다.");
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-6 backdrop-blur" onClick={onClose}>
-      <div
-        className="w-[460px] max-w-[92vw] rounded-2xl border p-5 shadow-2xl"
-        style={{ background: t.surface, borderColor: t.divider }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-2 flex items-center justify-between">
-          <div className="text-[18px] font-bold tracking-[-0.4px]">Pro 업그레이드</div>
-          <IconShellButton mode={mode} title="닫기" onClick={onClose}><IconClose /></IconShellButton>
-        </div>
-        <p className="mb-4 text-[13px] leading-5" style={{ color: t.textSecondary }}>
-          Toss 결제로 30일 Trial을 시작합니다. Trial 종료 후 선택한 주기로 자동 결제가 진행됩니다.
-        </p>
-        <div className="mb-3 rounded-lg border p-3" style={{ borderColor: t.divider, background: t.bg2 }}>
-          <div className="mb-1 text-[12px] font-semibold" style={{ color: t.textSecondary }}>{selected.label}</div>
-          <div className="text-[24px] font-bold tracking-[-0.4px]">{selected.price}</div>
-          <div className="mt-1 text-[11px]" style={{ color: t.textTertiary }}>오늘 결제 없음 · 30일 후 첫 결제</div>
-        </div>
-        <div className="mb-3">
-          <div className="mb-2 text-[12px] font-bold" style={{ color: t.text }}>결제수단</div>
-          <div className="grid grid-cols-3 gap-2">
-            {paymentMethods.map((item) => {
-              const selectedMethod = method === item.key;
-              const ink = item.key === "kakaopay" ? "#191600" : item.accent;
-              const isToss = item.key === "toss";
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  disabled={!item.enabled || (isToss && busy)}
-                  onClick={() => {
-                    setMethod(item.key);
-                    if (isToss) void startBillingAuth();
-                  }}
-                  className="relative min-h-[58px] rounded-lg border px-2 text-[13px] font-bold transition disabled:cursor-not-allowed disabled:opacity-45"
-                  style={{
-                    borderColor: selectedMethod ? item.accent : t.dividerStrong,
-                    background: selectedMethod ? item.soft : t.surface,
-                    color: selectedMethod ? ink : t.textSecondary,
-                    boxShadow: selectedMethod ? `0 0 0 1px ${item.accent} inset` : "none",
-                  }}
-                >
-                  {item.key === "kakaopay" ? (
-                    <span
-                      className="absolute -right-1 -top-2 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold text-white"
-                      style={{ background: "#EF3340" }}
-                    >
-                      예정
-                    </span>
-                  ) : null}
-                  {isToss && busy ? "Toss 연결 중" : item.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-2 text-[11px]" style={{ color: t.textTertiary }}>
-            현재는 Toss 자동결제만 사용할 수 있습니다. 네이버페이와 카카오페이는 추후 추가됩니다.
-          </div>
-        </div>
-        {!auth.user ? <div className="rounded-lg border p-3 text-[12px]" style={{ borderColor: t.divider, color: t.danger }}>Pro 업그레이드는 로그인 후 사용할 수 있습니다.</div> : null}
-        {auth.user && !clientKey ? <div className="rounded-lg border p-3 text-[12px]" style={{ borderColor: t.divider, color: t.danger }}>Toss Payments client key가 설정되지 않았습니다.</div> : null}
-        {error ? <div className="rounded-lg border p-3 text-[12px]" style={{ borderColor: t.divider, color: t.danger }}>{error}</div> : null}
       </div>
     </div>
   );

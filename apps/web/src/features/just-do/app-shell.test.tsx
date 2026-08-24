@@ -20,12 +20,6 @@ const authMock = vi.hoisted(() => ({
   },
 }));
 
-const tossMock = vi.hoisted(() => ({
-  requestBillingAuth: vi.fn(),
-  destroy: vi.fn(),
-  createTossPayment: vi.fn(),
-}));
-
 const signedInAuth = () => ({
   user: { id: "user-1", email: "user@example.com", displayName: "Tester" },
   status: "signedIn" as const,
@@ -50,24 +44,6 @@ vi.mock("@/lib/auth/useAuth", async () => {
     useAuth: () => authMock.value,
   };
 });
-
-vi.mock("@/lib/billing/toss-client", () => ({
-  tossBillingPlans: {
-    monthly: {
-      label: "월간 Pro",
-      price: "₩1,900 / 월",
-      amount: 1900,
-      orderName: "Just Do Pro 월간",
-    },
-    yearly: {
-      label: "연간 Pro",
-      price: "₩9,900 / 년",
-      amount: 9900,
-      orderName: "Just Do Pro 연간",
-    },
-  },
-  createTossPayment: tossMock.createTossPayment,
-}));
 
 const mountedRoots: Root[] = [];
 
@@ -120,6 +96,8 @@ const persistedState = (overrides: Partial<Persisted> = {}): Persisted => ({
       log: {},
     },
   ],
+  goals: [],
+  goalPromptDismissals: [],
   settings: {
     notify: true,
     notifyTime: "09:00",
@@ -148,14 +126,6 @@ const submitOpenModal = () => {
 
 beforeEach(() => {
   authMock.value = signedInAuth();
-  process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY = "test-client-key";
-  tossMock.requestBillingAuth.mockReset();
-  tossMock.destroy.mockReset();
-  tossMock.createTossPayment.mockReset();
-  tossMock.createTossPayment.mockResolvedValue({
-    requestBillingAuth: tossMock.requestBillingAuth,
-    destroy: tossMock.destroy,
-  });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
@@ -169,13 +139,15 @@ afterEach(() => {
   });
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
-  delete process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY;
 });
 
-const mockSubscriptionFetch = (subscription: {
+type LegacySubscriptionFixture = {
+  plan_name?: string;
   status: string;
   billing_provider?: string | null;
-} | null) => {
+} | null;
+
+const mockSubscriptionFetch = (subscription: LegacySubscriptionFixture) => {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
@@ -183,7 +155,7 @@ const mockSubscriptionFetch = (subscription: {
       json: async () => ({
         subscription: subscription ? {
           id: "sub-1",
-          plan_name: "pro",
+          plan_name: subscription.plan_name ?? "pro",
           status: subscription.status,
           trial_start_at: null,
           trial_end_at: "2026-06-18T00:00:00.000Z",
@@ -205,6 +177,21 @@ const mockSubscriptionFetch = (subscription: {
     }),
   );
 };
+
+const mockSubscriptionFetchError = () => {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("subscription_fetch_failed")));
+};
+
+const legacySubscriptionCases: ReadonlyArray<readonly [string, LegacySubscriptionFixture]> = [
+  ["no subscription row", null],
+  ["free", { plan_name: "free", status: "active" }],
+  ["trial", { status: "trial" }],
+  ["active Pro", { status: "active", billing_provider: "toss_payments" }],
+  ["expired", { status: "expired" }],
+  ["paused", { status: "paused" }],
+  ["cancelled", { status: "cancelled" }],
+  ["malformed", { plan_name: "unknown", status: "unknown" }],
+];
 
 const click = (element: Element) => {
   act(() => {
@@ -408,8 +395,24 @@ describe("desktop app shell interactions", () => {
     expect(screen.queryByText("프로필")).not.toBeInTheDocument();
   });
 
-  it("allows Trial users to open the Pro stats dashboard", async () => {
-    mockSubscriptionFetch({ status: "trial" });
+  it.each(legacySubscriptionCases)(
+    "renders the full Stats dashboard for the %s legacy state",
+    async (_label, subscription) => {
+      mockSubscriptionFetch(subscription);
+      renderApp();
+
+      click(await screen.findByRole("button", { name: "설정" }));
+      click(await screen.findByRole("button", { name: "습관" }));
+
+      expect(await screen.findByText("이번 주 활동")).toBeInTheDocument();
+      expect(screen.queryByText("통계는 Pro 기능입니다")).not.toBeInTheDocument();
+      expect(screen.queryByText("구독 상태를 확인하고 있습니다.")).not.toBeInTheDocument();
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it("renders Stats even when the legacy subscription request fails", async () => {
+    mockSubscriptionFetchError();
     renderApp();
 
     click(await screen.findByRole("button", { name: "설정" }));
@@ -417,21 +420,12 @@ describe("desktop app shell interactions", () => {
 
     expect(await screen.findByText("이번 주 활동")).toBeInTheDocument();
     expect(screen.queryByText("통계는 Pro 기능입니다")).not.toBeInTheDocument();
+    expect(screen.queryByText("구독 상태를 확인하지 못했습니다.")).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("gates Pro stats when the subscription is cancelled", async () => {
-    mockSubscriptionFetch({ status: "cancelled" });
-    renderApp();
-
-    click(await screen.findByRole("button", { name: "설정" }));
-    click(await screen.findByRole("button", { name: "습관" }));
-
-    expect(await screen.findByText("통계는 Pro 기능입니다")).toBeInTheDocument();
-    expect(screen.getByText("해지됨")).toBeInTheDocument();
-  });
-
-  it("keeps desktop Just Do Mode as a local panel mode for eligible users", async () => {
-    mockSubscriptionFetch({ status: "active", billing_provider: "toss_payments" });
+  it("keeps desktop Just Do Mode available without a subscription row", async () => {
+    mockSubscriptionFetch(null);
     const overdueDate = addDays(selectedDate, -1);
     renderApp(
       persistedState({
@@ -465,12 +459,78 @@ describe("desktop app shell interactions", () => {
     click(dueByButton);
 
     expect(await screen.findByText(/지난일/)).toBeInTheDocument();
+    expect(screen.queryByText("Pro 업그레이드")).not.toBeInTheDocument();
 
     keyDownWindow("j");
 
     await waitFor(() => {
       expect(screen.queryByText(/지난일/)).not.toBeInTheDocument();
     });
+  });
+
+  it("moves the Just Do Mode preference to non-commercial Settings", async () => {
+    mockSubscriptionFetch(null);
+    const storage = renderApp();
+
+    click(await screen.findByRole("button", { name: "설정" }));
+    click(await screen.findByRole("button", { name: "화면" }));
+
+    const label = await screen.findByText("Just Do Mode");
+    const toggle = label.parentElement?.querySelector("button");
+    expect(toggle).not.toBeNull();
+    click(toggle as HTMLButtonElement);
+
+    await waitFor(async () => {
+      expect((await storage.load())?.settings.justDoMode).toBe(true);
+    });
+    expect(screen.queryByRole("button", { name: "구독" })).not.toBeInTheDocument();
+  });
+
+  it("renders a full goal report for a legacy Free account", async () => {
+    mockSubscriptionFetch({ plan_name: "free", status: "active" });
+    const previousMonthDate = addDays(selectedDate, -selected.day);
+    const previousMonth = parseISO(previousMonthDate);
+    const previousMonthKey = `${previousMonth.year}-${String(previousMonth.month).padStart(2, "0")}`;
+    renderApp(
+      persistedState({
+        goals: [
+          {
+            id: "goal-report",
+            periodType: "monthly",
+            periodKey: previousMonthKey,
+            title: "지난달 목표",
+            note: null,
+            sortOrder: 0,
+            locked: false,
+            lockedAt: null,
+            target: null,
+          },
+        ],
+      }),
+    );
+
+    click(await screen.findByRole("button", { name: "설정" }));
+    click(await screen.findByRole("button", { name: "목표" }));
+    click(await screen.findByRole("button", { name: /리포트 준비 완료/ }));
+
+    expect(await screen.findByRole("button", { name: "다음" })).toBeInTheDocument();
+    expect(screen.queryByText("전체 리포트는 Pro에서 펼쳐져요")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pro로 펼치기" })).not.toBeInTheDocument();
+  });
+
+  it("removes subscription, pricing, and checkout surfaces from Settings", async () => {
+    mockSubscriptionFetch({ status: "trial" });
+    renderApp();
+
+    click(await screen.findByRole("button", { name: "설정" }));
+    expect(await screen.findByText("프로필")).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: "구독" })).not.toBeInTheDocument();
+    expect(screen.queryByText("월간 Pro")).not.toBeInTheDocument();
+    expect(screen.queryByText("연간 Pro")).not.toBeInTheDocument();
+    expect(screen.queryByText("₩1,900 / 월")).not.toBeInTheDocument();
+    expect(screen.queryByText("₩9,900 / 년")).not.toBeInTheDocument();
+    expect(screen.queryByText("Toss 결제 연결")).not.toBeInTheDocument();
   });
 
   it("moves the desktop calendar back to the current month from the Today button", async () => {
@@ -492,71 +552,6 @@ describe("desktop app shell interactions", () => {
     click(screen.getByRole("button", { name: "오늘" }));
 
     expect(await screen.findByText(`${selected.year}년 ${selected.month}월`)).toBeInTheDocument();
-  });
-
-  it("locks desktop due-by mode for Pro users when the setting is off", async () => {
-    mockSubscriptionFetch({ status: "active", billing_provider: "toss_payments" });
-    renderApp();
-
-    const dueByButton = await screen.findByRole("button", { name: "이 날까지" });
-    await waitFor(() => expect(dueByButton).toBeDisabled());
-
-    expect(screen.queryByText("Pro 업그레이드")).not.toBeInTheDocument();
-  });
-
-  it("opens the Pro upgrade modal when a Free user selects desktop due-by mode", async () => {
-    mockSubscriptionFetch(null);
-    renderApp();
-
-    const dueByButton = await screen.findByRole("button", { name: /이 날까지/ });
-    await waitFor(() => expect(dueByButton).not.toBeDisabled());
-    click(dueByButton);
-
-    expect(await screen.findByText("Pro 업그레이드")).toBeInTheDocument();
-  });
-
-  it("keeps Trial Pro access while prompting for a payment method", async () => {
-    mockSubscriptionFetch({ status: "trial" });
-    renderApp();
-
-    click(await screen.findByRole("button", { name: "설정" }));
-    click(screen.getByRole("button", { name: "구독" }));
-
-    expect(await screen.findByText("Trial")).toBeInTheDocument();
-    expect(screen.getByText(/Trial 동안 Pro 기능을 사용할 수 있습니다/)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Toss 결제 연결" }).length).toBeGreaterThan(0);
-  });
-
-  it("starts Toss billing auth from the Trial payment-method CTA", async () => {
-    mockSubscriptionFetch({ status: "trial" });
-    renderApp();
-
-    click(await screen.findByRole("button", { name: "설정" }));
-    click(screen.getByRole("button", { name: "구독" }));
-    click((await screen.findAllByRole("button", { name: "Toss 결제 연결" }))[0]);
-
-    expect(await screen.findByText("Pro 업그레이드")).toBeInTheDocument();
-    click(screen.getByRole("button", { name: "토스" }));
-
-    await waitFor(() => {
-      expect(tossMock.createTossPayment).toHaveBeenCalledWith({
-        clientKey: "test-client-key",
-        customerKey: "user-1",
-      });
-    });
-    expect(tossMock.requestBillingAuth).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: "CARD",
-        customerName: "Tester",
-        customerEmail: "user@example.com",
-        windowTarget: "iframe",
-      }),
-    );
-    const billingAuthInput = tossMock.requestBillingAuth.mock.calls[0][0];
-    expect(billingAuthInput.successUrl).toContain("/billing/success");
-    expect(billingAuthInput.successUrl).toContain("planInterval=monthly");
-    expect(billingAuthInput.failUrl).toContain("/billing/fail");
-    expect(billingAuthInput.failUrl).toContain("planInterval=monthly");
   });
 
   it("reorders categories from desktop settings", async () => {
@@ -596,8 +591,8 @@ describe("desktop app shell interactions", () => {
     change(reminderInput, "08:30");
     click(screen.getByRole("button", { name: "저장" }));
 
-    expect(await screen.findByText("수정된 습관")).toBeInTheDocument();
-    expect(screen.getByText(/요일/)).toBeInTheDocument();
+    expect((await screen.findAllByText("수정된 습관")).length).toBeGreaterThan(1);
+    expect(screen.getAllByText(/요일/).length).toBeGreaterThan(0);
     expect(screen.getByText(/8:30/)).toBeInTheDocument();
   });
 });

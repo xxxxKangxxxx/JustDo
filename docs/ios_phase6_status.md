@@ -3,6 +3,10 @@
 This document summarizes the current native iOS Phase 6 state, remaining
 implementation gaps, and checks to run before testing or shipping.
 
+> Current policy as of 2026-08-21: all shipped features are free. Historical
+> Pro/Trial entries under Resolved Issues document old builds only and must not
+> be used as current product or test instructions.
+
 ## Current Implementation
 
 - `JustDoShared` mirrors the web domain model and local mutation queue schema.
@@ -46,7 +50,8 @@ implementation gaps, and checks to run before testing or shipping.
   tags/task_tags, habits, habit logs, goals, goal prompt dismissals, and
   `user_subscriptions`. Subscription rows map `plan_name='pro'` plus
   `status in ('trial', 'active')` to the local settings plan `pro`;
-  inactive/cancelled/free states map to `free`.
+  inactive/cancelled/free states map to `free`. This mapping is retained only
+  for legacy snapshot compatibility; active UI never reads it for access.
 - Native Supabase PKCE OAuth is implemented with Keychain-backed session
   storage and refresh-token handling.
 - `AuthViewModel.reload()` (UI status binding) is `async` and, when it finds
@@ -98,10 +103,8 @@ implementation gaps, and checks to run before testing or shipping.
   control mutates the selected date's habit log because full habit settings live
   in the dedicated Habit management surface.
 - Just Do Mode in the selected-day sheet has local `오늘만` / `이 날까지` state
-  separate from Settings. `settings.justDoMode` and subscription entitlement
-  only decide whether `이 날까지` is available. Pro users with the setting enabled
-  can still switch back to `오늘만`; when the setting is off, `이 날까지` is locked
-  and disabled.
+  separate from Settings. The saved `settings.justDoMode` preference alone
+  decides whether `이 날까지` is available; legacy plan data has no effect.
 - Horizontal swipes inside the sheet move `selectedDate` by ±1 day
   (`JDDate.addDays`). Horizontal swipes on the calendar move the displayed
   month by ±1 (`moveMonth`). Both use `simultaneousGesture` so cell taps
@@ -115,7 +118,7 @@ implementation gaps, and checks to run before testing or shipping.
 - Settings owns dark-mode control. The home header no longer has a separate
   dark/light button.
 - Settings is a full-screen surface. It exposes account, notification,
-  display, subscription, data, and app-info groups. Small sub-flows such as
+  display, data, and app-info groups. Small sub-flows such as
   account detail, notification time picker, week-start picker, legal documents,
   and reset confirmation remain sheet/dialog style.
 - Settings exposes Habit, Goal, and Category management entry points without
@@ -130,7 +133,7 @@ implementation gaps, and checks to run before testing or shipping.
   - `HabitManagementSheet` has its own right-side `닫기` toolbar action.
   - `설정 → 카테고리 관리` opens Category management as a full-screen cover inside
     Settings.
-- Settings exposes the Goal & Pro Report management entry point:
+- Settings exposes the Goal & Report management entry point:
   - `설정 → 목표` opens full-screen `GoalManagementSheet` inside Settings with
     annual and current-month sections.
   - Goal management has a `닫기` toolbar action for full-screen use.
@@ -148,9 +151,9 @@ implementation gaps, and checks to run before testing or shipping.
   with account detail actions for profile review, account switch, sign-out, and
   withdrawal entry points.
 - Settings notification/display rows persist notification enabled, notification
-  time, dark mode, and week-start preferences. Data export is Pro-gated CSV,
-  reset-all-data is wired to local delete mutations, and basic Terms / Privacy
-  sheets are available.
+  time, dark mode, week-start, and Just Do Mode preferences. Data export is
+  available to every signed-in user, reset-all-data is wired to local delete
+  mutations, and basic Terms / Privacy sheets are available.
 - Core Data mirror operations are serialized on the context queue, and
   snapshot/upsert paths update existing rows in place where possible.
 
@@ -411,6 +414,16 @@ swift test
 > 2026-06-17 refresh: 2026-06-01 제품 IA, 기간 종료 리포트 배너, Web 태그 UX는
 > 모두 구현/검증 완료로 문서화됨. 현재 다음 차례는 TestFlight/App Store 제출
 > 자산과 Toss 외부 심사 트랙.
+> 2026-08-21 refresh: TestFlight build 13까지 업로드·실기기 검증됨. 월간 List
+> today-scroll(H-015)과 일정 알림 본문 실제 날짜/시간(H-016)은 `main`에 구현돼
+> 있으나 새 바이너리에는 아직 미포함. 다른 저위험 출시 필수 수정과 묶어 다음
+> Release Candidate(예상 build 14)를 한 번 업로드한 뒤 최종 App Review smoke를
+> 진행한다. 전면 무료화 코드 변환 후 자동 검증은 Swift 98 tests, Web 148
+> tests/lint/build, generic iOS Release app/widget build와 simulator UI 5/5
+> 통과. Free fixture의 Settings/export 접근과 구독/플랜/PRO 미노출도 확인했다. iOS 리포트, Just
+> Do Mode, 데이터 export의 plan gate와 구독 UI는 제거됐으며, build 14 실기기에서
+> legacy plan 상태별 동일 접근을 최종 확인한다. 상세:
+> `docs/full_free_launch_plan.md`.
 
 - [x] **iOS 최종 실기기 smoke (2026-05-29 통과)**.
   - 환경: `강영모의 iPhone` / iOS 26.5, bundle id `kr.justdo.app`.

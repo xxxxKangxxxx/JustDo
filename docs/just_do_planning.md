@@ -2,6 +2,11 @@
 
 > 기간을 가진 체크 가능한 항목들을 캘린더 뷰로 보여주는 통합 Task 관리 앱
 
+> **2026-08-19 v1 출시 정책:** iOS/Web의 현재 구현 기능을 모두 무료로
+> 제공한다. 기존 Free/Trial/Pro 구분은 접근 제어에 사용하지 않고, 결제·업그레이드
+> UI와 active billing 경로는 출시 전에 비활성화한다. 상세:
+> `full_free_launch_plan.md`.
+
 ---
 
 ## 1. 프로젝트 개요
@@ -148,7 +153,7 @@ Task와 별도 카테고리로 분리 관리.
 
 | 단계 | 플랫폼 | 형태 | 주요 목표 |
 |------|--------|------|-----------|
-| v1 | iOS + 웹앱 | iOS=모바일 네이티브, Web=데스크탑 productivity hub | 핵심 기능 구현 (Task, Habit, 캘린더, 위젯[iOS], 소셜 로그인, 동기화). Web Desktop Redesign (Phase 7)이 v1 출시 차단 항목 |
+| v1 | iOS + 웹앱 | iOS=모바일 네이티브, Web=데스크탑 productivity hub | 핵심 기능 구현 완료. 현재 출시 차단은 전면 무료 gate/billing 비활성화, 통합 TestFlight RC 검증, App Review 제출 |
 | v2 | iOS + 웹앱 | (동일) | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, 이메일 회원가입 |
 | v3 | Android | 모바일 네이티브 | Android 앱 출시 — v3 전까지 Android 사용자는 데스크탑 web으로 우회 |
 
@@ -248,7 +253,7 @@ Task와 별도 카테고리로 분리 관리.
 | **데이터** | 습관, 목표, 카테고리 관리, 데이터 내보내기, 모든 데이터 초기화 |
 | **카테고리/태그** | 카테고리 색상 설정, 태그 관리 |
 | **디스플레이** | 다크모드 전환, 캘린더 시작 요일 설정 |
-| **구독** | 현재 플랜 확인, 업그레이드 |
+| **서비스 상태** | 필요 시 `현재 모든 기능 무료` 안내만 표시. 결제/업그레이드 없음 |
 | **앱 정보** | 버전, 이용약관, 개인정보처리방침 |
 
 ---
@@ -325,19 +330,16 @@ Just Do
 
 ---
 
-## 13. 유료화 모델
+## 13. 출시 과금 정책
 
-**부분 무료 + 구독 (Freemium + Subscription)**
+**v1 전면 무료**
 
-| 구분 | 기능 |
-|------|------|
-| **무료** | Task/Habit 기록·관리, 캘린더 뷰, 카테고리, 태그, 기본 동기화, 데이터 export, 기본 위젯 3종, 목표 입력 |
-| **Trial/Pro** | 통계·목표 리포트 상세, Just Do Mode 등 고급 기능. 고급 위젯 커스터마이징과 Task Dependency 시각화는 v2 이후 범위 확정 |
-
-> 2026-05-19 결정: Free는 Task/Habit 기록·관리, 캘린더, 카테고리, 태그,
-> 기본 동기화, 데이터 export, 기본 위젯 3종을 제공한다. Trial/Pro는
-> 통계·리포트·고급 기능 중심으로 구분한다. 위젯은 제품 핵심이므로 기본
-> 3종은 Free 유지.
+- iOS/Web의 현재 구현 기능을 모두 무료로 제공한다.
+- Trial 만료, Pro entitlement, 리포트 blur, upgrade/paywall, Toss 결제 진입을
+  사용하지 않는다.
+- 기존 subscription/payment 데이터와 코드는 초기 rollout에서 삭제하지 않고
+  비활성 상태로 보존한다.
+- 향후 과금 모델은 v1 출시 후 별도 제품 결정으로 다시 설계한다.
 
 ---
 
@@ -347,7 +349,7 @@ Just Do
 
 | 단계 | 플랫폼 | 주요 내용 |
 |------|--------|-----------|
-| **v1** | iOS (모바일) + 웹 (데스크탑 productivity hub) | Task/Habit 핵심 기능, 캘린더 뷰, 위젯 3종 (iOS), Google/Apple 로그인, 실시간 동기화, 오프라인 지원, 목표/리포트, Trial/Pro entitlement. Web Desktop Redesign (Phase 7)은 구현 완료 |
+| **v1** | iOS (모바일) + 웹 (데스크탑 productivity hub) | Task/Habit 핵심 기능, 캘린더 뷰, 위젯 3종 (iOS), Google/Apple 로그인, 실시간 동기화, 오프라인 지원, 목표/리포트를 전면 무료 제공. Web Desktop Redesign은 구현 완료 |
 | **v2** | iOS + 웹 | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, `함께` 공유/협업 기능, 리포트 고도화, 이메일 회원가입, push notification |
 | **v3** | Android | Android 앱 출시 — v3 전까지 Android 사용자는 데스크탑 web으로 우회 |
 
@@ -356,5 +358,5 @@ Just Do
 ## 15. 미결 사항
 
 - [x] DB 스키마 설계
-- [x] 구독 가격 정책 (월/연 금액)
+- [x] v1 과금 정책 — 2026-08-19 전면 무료 출시 결정
 - [ ] 앱스토어 출시 일정 — 현재 App Store 제출 자산 준비/Archive/TestFlight 단계

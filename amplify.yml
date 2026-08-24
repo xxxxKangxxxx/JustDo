@@ -11,11 +11,12 @@ applications:
         build:
           commands:
             # Amplify Hosting injects env vars into the build shell, but not
-            # into the SSR Lambda runtime. Persist the server-only secrets to
-            # .env.production so Next.js inlines them into the server bundle
-            # at build time. NEXT_PUBLIC_* values are already inlined client/
-            # server by Next.js's normal env handling.
-            - printenv | grep -E "^(SUPABASE_SERVICE_ROLE_KEY|TOSS_PAYMENTS_SECRET_KEY|BILLING_CRON_SECRET|TOSS_WEBHOOK_SECRET)=" > .env.production
+            # into the SSR Lambda runtime. Persist only the Supabase server
+            # credential still used by the app. Billing is disabled for the
+            # full-free launch, so payment secrets must not enter the bundle.
+            # NEXT_PUBLIC_* values are already inlined client/server by
+            # Next.js's normal env handling.
+            - printenv | grep -E "^SUPABASE_SERVICE_ROLE_KEY=" > .env.production
             - npm run build
       artifacts:
         baseDirectory: .next

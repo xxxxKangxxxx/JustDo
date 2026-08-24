@@ -6174,3 +6174,395 @@ as a follow-up.
 
 - Include the schedule-only body and monthly List today-scroll refinements in
   the next consolidated TestFlight build and verify both on a real device.
+
+## 2026-08-19 Release Candidate documentation refresh
+
+### Codex
+
+- Reconciled README, next-step, TestFlight, App Store, iOS status, and handoff
+  documents with the repository and build-13 validation history.
+- Recorded the release decision to batch H-015/H-016 with any other bounded,
+  low-risk release-critical fixes before creating the next TestFlight build,
+  instead of uploading a dedicated two-fix build.
+- Clarified that H-015/H-016 are implemented and pushed to `main` but are not
+  in TestFlight because all Xcode targets still use build number 13.
+- Corrected the App Store listing audit note: local Task/Habit notifications are
+  implemented and do not add server-side data collection.
+
+### Verification
+
+- Before this documentation refresh, the implementation baseline was clean and
+  `main` matched `origin/main` at `a0ed238`.
+- Swift tests passed: 98 tests.
+- Web Vitest passed: 146 tests.
+- Web ESLint and production build passed.
+- Generic iOS Release app/widget build passed with code signing disabled.
+
+### Next
+
+- Review and close the remaining Release Candidate fix list.
+- Freeze scope, bump app/widget/UI-test build numbers from 13 to 14, run checks,
+  archive/upload once, and verify every batched fix on a real device.
+- If the final App Review-visible smoke passes, mark the release decision PASS
+  and submit iOS v1 for public App Review.
+
+## 2026-08-19 Full-free v1 launch decision
+
+### Product decision
+
+- iOS and Web v1 will launch with all currently implemented product features
+  free, regardless of legacy Free/Trial/Pro/subscription state.
+- The full-free conversion is a required release track before build 14, not a
+  later optional cleanup and not part of the low-risk-only exception set.
+- Toss live billing and merchant onboarding are paused and removed from the v1
+  release-blocker list.
+- Existing billing schema, integration history, and payment records are kept
+  until rollout verification; the free launch must not destructively delete or
+  rewrite them.
+
+### Plan added
+
+- Added `docs/full_free_launch_plan.md` with billing safety audit, Web/iOS gate
+  removal, operations disablement, legal/store copy, account-state regression,
+  rollout order, and deferred cleanup.
+- Updated active release, PRD/planning, TestFlight, App Store, Toss/AWS, iOS
+  status, README, and handoff documents to make full-free the first task.
+
+### Next
+
+- Confirm no real paid customer or pending live charge exists.
+- Disable the EventBridge billing schedule and all new-charge paths for rollout.
+- Implement Web/iOS full access and remove user-facing Pro/Trial/payment UI.
+- Verify every legacy subscription state receives identical access before
+  freezing and uploading the consolidated build 14 Release Candidate.
+
+## 2026-08-20 Full-free Phase 0 billing safety audit
+
+### Production data audit
+
+- Queried hosted Supabase with service-role access and emitted aggregate counts
+  only; no user identifier, key value, or customer identifier was printed.
+- Found 6 legacy subscription rows: 4 trial and 2 active. All 6 have no billing
+  provider, billing key, customer key, last payment, next billing date,
+  cancellation marker, or payment failure.
+- Found 0 `payment_events` and 0 due charge candidates.
+- Confirmed local operational Toss client/secret keys classify as test keys.
+- Confirmed the deployed Web bundle contains a test-class public Toss client
+  key and no live-class public key reference.
+
+### Charge-path audit
+
+- Repository search found one automatic caller:
+  `infra/aws/billing-cron-lambda.mjs` → `/api/billing/charge`.
+- Production no-auth probes returned 401 for `/api/billing/charge` and
+  `/api/webhook/toss`; empty `/api/billing/issue-key` returned 400. No data was
+  created.
+- No subscription/payment data, schema, key, or AWS resource was modified.
+
+### AWS blocker
+
+- AWS authentication succeeded, but the configured IAM identity lacks
+  `scheduler:GetSchedule`, `lambda:GetFunctionConfiguration`, and
+  `amplify:GetApp`.
+- Schedule disablement was not attempted because its current target/settings
+  could not be read and preserved safely. Browser/console fallback was also
+  unavailable.
+- Required access: `scheduler:GetSchedule`, `scheduler:UpdateSchedule`, plus
+  read-only `lambda:GetFunctionConfiguration` and `amplify:GetApp`.
+- This audit initially treated schedule disablement as a Phase 1 gate. The
+  immediately following scope correction supersedes that conclusion after the
+  signup defaults and charge-route selection conditions were verified.
+
+## 2026-08-20 Full-free Phase 0 scope correction
+
+### Finding
+
+- Confirmed from the migrations that the existing Trial/Pro subscription rows
+  are created automatically during signup; they are not evidence of a checkout
+  or payment.
+- Confirmed that `/api/billing/charge` selects only subscriptions with both a
+  Toss billing key and customer key whose `next_billing_at` is due. Production
+  has zero matching rows.
+- Audited active product code and found the actual release impact in UI and
+  entitlement logic: Web gates Stats, Just Do Mode, and full reports and still
+  exposes subscription/checkout UI; iOS gates Just Do Mode, data export, and
+  full reports using the synced plan value.
+
+### Decision
+
+- Phase 0's customer/payment safety gate is complete. Missing AWS read/update
+  permission no longer blocks Phase 1 UI/code work.
+- AWS schedule disablement remains a defense-in-depth operations follow-up.
+  Before production rollout, either disable it or verify that the deployed
+  charge endpoint is hard-disabled for the full-free release.
+- Build 14 remains blocked until the Web/iOS gates and purchase surfaces are
+  removed, billing mutation endpoints are disabled, and regression checks pass.
+
+## 2026-08-20 Full-free detailed implementation plan lock
+
+### Decisions locked before code changes
+
+- All authenticated users receive every shipped v1 feature; subscription and
+  local plan values remain compatibility data only.
+- User-facing subscription/plan UI will be removed rather than replaced with a
+  neutral status row.
+- Billing issue-key, charge, cancel, and webhook handlers will return an
+  unconditional `410 billing_disabled` response with no auth, DB, or Toss side
+  effects. The read-only subscription route may remain unused for compatibility.
+- Billing schema/migrations and legacy iOS decoding remain intact; no production
+  migration is part of this release.
+- Build number, deployment, AWS mutation, and TestFlight upload wait until all
+  local implementation and verification batches pass.
+
+### Execution order
+
+1. Lock new regression contracts and account-state coverage.
+2. Remove Web entitlement gates and purchase UI.
+3. Disable Web billing mutation routes and update stale/legal routes.
+4. Remove iOS plan gates and commercial UI/copy.
+5. Complete active-source/copy audit.
+6. Run full verification, deploy/probe Web, complete operational safety, then
+   freeze and create build 14.
+
+The complete file-level tasks, completion criteria, and stop conditions are in
+`docs/full_free_launch_plan.md`. No product code was changed at this planning
+checkpoint.
+
+## 2026-08-21 Full-free Batch A contract checkpoint
+
+### Test changes
+
+- Replaced Web Trial/Pro eligibility assertions with an account-state matrix:
+  no subscription row, Free, Trial, active Pro, expired, paused, cancelled, and
+  malformed legacy data must all render the full Stats dashboard.
+- Added contracts for subscription-fetch failure, no-row Just Do Mode access,
+  moving the Just Do toggle into non-commercial Settings, full report access
+  for a Free account, and complete removal of subscription/pricing/Toss UI.
+- Replaced billing success/charge/cancel/webhook behavior tests with the
+  full-free disabled contract: every mutation handler returns
+  `410 { error: "billing_disabled" }` before auth, parsing, Supabase, or Toss
+  side effects, including malformed/unauthorized requests.
+
+### Verification
+
+- Focused baseline before editing tests: 31/31 passed.
+- New red checkpoint: 33 total, 14 passed, 19 failed.
+- Expected route failures: 8/8 disabled-contract cases.
+- Expected UI failures: 11 access/commercial-surface cases. Trial and active
+  Pro Stats fixtures already pass, confirming the matrix/setup is valid.
+- Web ESLint passed.
+- `git diff --check` passed.
+- No product implementation file changed in this batch.
+
+### Next
+
+- Batch B: remove Web subscription-dependent access and all purchase UI until
+  the 11 UI contract failures pass.
+- Batch C: hard-disable the four billing mutation handlers until the 8 route
+  contract failures pass.
+
+## 2026-08-21 Full-free Batch B Web access/UI conversion
+
+### Implementation
+
+- Removed Web app-shell subscription fetching and all Trial/Pro entitlement
+  helpers. Legacy subscription API/schema code remains outside the active UI.
+- Made Stats render directly for every signed-in account without loading,
+  error, or plan gates.
+- Made Just Do Mode depend only on the saved user preference and moved its
+  toggle from the deleted subscription panel into `설정 → 화면`.
+- Removed full-report blur/locked overlays and upgrade actions from Home and
+  goal-management report entry points.
+- Removed subscription settings/navigation, plan badges/cards, prices,
+  cancellation UI, upgrade modal, payment-method UI, Toss client import, and
+  every app-shell path capable of starting billing authorization.
+- Updated the existing habit-edit regression to allow the edited habit to
+  appear in both management and the now-always-visible Stats panel.
+
+### Verification
+
+- Web app-shell tests: 25/25 passed.
+- All Web tests excluding the intentionally red billing-route contract:
+  140/140 passed across 8 files.
+- Web ESLint passed.
+- Web production build passed after rerunning outside the sandbox; the initial
+  sandboxed Turbopack attempt was blocked from binding a local port and was not
+  a source/build error.
+- Combined focused checkpoint: 33 total, 25 passed, 8 failed. Every remaining
+  failure is a Batch C billing-disabled route contract.
+- Active `app-shell.tsx` contains no billing subscription fetch, Toss client
+  import, Trial/Pro/price/upgrade copy, or commercial component.
+- `git diff --check` passed.
+
+### Next
+
+- Batch C: make issue-key, charge, cancel, and Toss webhook handlers return
+  unconditional `410 { error: "billing_disabled" }` with no side effects;
+  update stale billing routes and Web Terms, then run the complete Web suite.
+
+## 2026-08-21 Full-free Batch C Web billing guard/legal routes
+
+### Implementation
+
+- Reduced billing-key issue, recurring charge, cancellation, and Toss webhook
+  handlers to one unconditional `410 { error: "billing_disabled" }` response.
+  Removed every auth, service-role, Toss, plan, and billing calculation import
+  from these mutation paths, so direct requests cannot change external state.
+- Retained `/api/billing/subscription` only as a documented read-only legacy
+  compatibility endpoint; the active Web app has no subscription API caller.
+- Replaced both stale billing result pages with static all-free guidance and a
+  root-app link. Removed Toss query parsing, billing-key registration, price,
+  Trial/Pro and retry/subscription CTAs, then deleted `BillingSuccessClient`.
+- Updated Web Terms to state that all current functionality is free and no
+  purchase, paid subscription, automatic renewal, cancellation, or refund flow
+  is provided. Effective date is 2026-08-21.
+
+### Verification
+
+- Billing disabled-contract tests: 8/8 passed, including malformed and
+  valid-looking authenticated requests plus zero auth/DB/Toss side effects.
+- Complete Web suite: 148/148 passed across 9 test files.
+- Web ESLint passed with no warnings.
+- Web production build compiled, type-checked, and generated 14/14 pages. The
+  sandboxed run first hit the known Turbopack port-binding restriction; the
+  approved unrestricted rerun passed.
+- Active-source audit found no billing API caller or Toss client import in the
+  Web app shell; the remaining Toss client helper is isolated legacy code.
+- `git diff --check` passed. No production deploy, AWS schedule mutation,
+  database migration, build-number bump, or TestFlight upload was performed.
+
+### Next
+
+- Batch D: remove iOS plan-based feature gates and subscription/Trial/Pro UI,
+  update in-app Terms, then run Swift tests and the generic Release app/widget
+  build without changing build 13.
+
+## 2026-08-21 Full-free Batch D iOS access/UI conversion
+
+### Implementation
+
+- Removed both active `isProPlan` computations from `ContentView.swift` and
+  made Just Do Mode depend only on the saved `justDoMode` preference.
+- Removed the Settings-originated Pro guard/error and moved the Just Do Mode
+  toggle from the deleted subscription group into the Display group.
+- Removed `GoalReportPresentation.isPreview`, every preview constructor flag,
+  report blur/disabled/accessibility blocking, and `GoalReportLockedOverlay`.
+  Home and goal-management report entry points now open the complete four-page
+  report for every authenticated account.
+- Removed the Settings subscription group, current-plan label, commercial
+  `SettingsRow` badge support, data-export plan guard, and account-detail plan
+  argument/row. Existing export, sync, reset, goal, category, and notification
+  mechanics were otherwise left unchanged.
+- Updated the in-app Terms to match the current Web all-free/no-purchase policy.
+- Intentionally preserved `Settings.plan`, Supabase subscription decoding,
+  Core Data plan persistence, and their existing tests for legacy snapshots.
+  A source audit confirms those values have no active `ContentView` reader.
+
+### Verification
+
+- `swift test`: 98/98 passed, including inactive-subscription-to-Free decoding
+  and plan persistence compatibility coverage.
+- Generic iOS Release build: app, widget extension, and shared package built
+  successfully. Sandbox attempts first failed on Xcode/SwiftPM user cache and
+  CoreSimulator permissions; approved reruns passed, including a quiet
+  incremental confirmation with exit code 0.
+- `git diff --check` passed. Active iOS app source contains no `isProPlan`,
+  preview lock, subscription group/current-plan UI, PRO badge, or Trial/Pro
+  feature copy.
+- `CURRENT_PROJECT_VERSION` remains 13 for every app/widget configuration. No
+  archive, TestFlight upload, production deployment, AWS mutation, or database
+  migration was performed.
+
+### Next
+
+- Batch E: audit and classify remaining cross-platform commercial terms and
+  update active/public launch copy and checklists without deleting compatibility
+  history.
+
+## 2026-08-21 Full-free Batch E static/public-copy audit
+
+### Classification
+
+- Active Web product UI has no subscription fetch, plan gate, price, upgrade
+  action, checkout link, or Toss client import. Remaining Web matches are:
+  isolated unreferenced billing helpers; legacy domain/database compatibility;
+  disabled/read-only route names; and negative billing-unavailable guidance.
+- Active iOS UI has no plan reader, Pro/Trial feature copy, report preview lock,
+  subscription group, or export gate. Remaining iOS matches are legacy
+  Supabase/Core Data plan decoding and persistence only.
+- Billing route-test Toss/Supabase mocks are allowed because they prove zero
+  external calls under the unconditional disabled contract. App-shell's old
+  Toss SDK/price mock was obsolete and removed.
+- Historical billing migrations/docs remain preserved. Handoff and merchant
+  plan sections now explicitly say those instructions are superseded and must
+  not be executed for full-free v1.
+
+### Public copy and assets
+
+- Updated README, App Store listing and review-note draft, submission next
+  steps, TestFlight checklist, iOS phase status, handoff, paused Toss plan, and
+  `.env.local.example` to the same all-current-features-free policy.
+- App Privacy classification remains unchanged; the free policy introduces no
+  purchase data category or additional collection.
+- Visually inspected 8 App Store screenshots: four 6.9-inch and four 6.5-inch
+  calendar/task/review/goal posters. None contains Pro, Trial, price,
+  subscription, or purchase CTA, so no image regeneration was needed.
+- Web and iOS Terms now match locally. The Web copy is not claimed production
+  live until Batch F deploy/probe.
+
+### Verification
+
+- Complete Web suite: 148/148 passed after removal of obsolete app-shell Toss
+  test scaffolding.
+- Web ESLint passed without warnings.
+- `git diff --check` passed.
+- No production deploy, AWS mutation, archive, build-number bump, TestFlight
+  upload, or App Review submission was performed.
+
+### Next
+
+- Batch F: run the final full verification set, deploy/probe the guarded Web,
+  complete or document the AWS schedule defense, run representative account
+  state and real-device smoke, then freeze scope before build 14.
+
+## 2026-08-21 Full-free Batch F local verification gate
+
+### Verification
+
+- Re-ran Web Vitest 148/148, Web ESLint, Web production build, Swift Package
+  tests 98/98, generic iOS Release app/widget build, and `git diff --check`.
+  All passed. Sandbox-only cache/port restrictions were confirmed by successful
+  approved reruns and were not source failures.
+- Ran the existing iOS simulator UI suite, then added a focused Free-account
+  Settings/export regression and reran the suite 5/5. The new case confirms
+  Just Do Mode, habit, goal, and data export access; absence of subscription,
+  current-plan, and PRO surfaces; and successful CSV export-sheet entry.
+- Strengthened the Web account-state matrix to assert the active app makes zero
+  subscription fetches for no-row, free, trial, active, expired, paused,
+  cancelled, malformed, and fetch-error fixtures.
+- Started the generated production Web bundle locally and verified issue-key,
+  charge, cancel, and Toss webhook all return HTTP 410 with
+  `{ "error": "billing_disabled" }` for valid-looking requests. Stale billing
+  success and Terms pages return HTTP 200.
+- Audited `.next/static` and `.next/server`: no Toss SDK loader/client key,
+  checkout caller, Pro price/upgrade, report lock, or Stats gate string exists.
+  A repository scan found no live-key pattern.
+
+### Scope review
+
+- No migration, package/dependency, auth, sync, task, habit, goal, widget,
+  stored-data, or Xcode build-number change was introduced by full-free work.
+- Remaining subscription decoding/persistence and unreferenced Toss helpers are
+  intentional compatibility/history. All app/widget/UI-test configurations
+  remain build 13.
+- Corrected stale README/handoff/submission wording that still listed the
+  already-complete Batch E audit as pending.
+
+### Next
+
+- Production deploy and deployed endpoint/data probes remain pending and need
+  explicit rollout authorization.
+- Disable the AWS billing schedule when access is available, or record the
+  verified deployed charge-route 410 as the release safety condition.
+- Run representative production-account and real-device/TestFlight smoke,
+  freeze scope, and only then bump all targets to build 14 and archive/upload.

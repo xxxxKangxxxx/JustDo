@@ -2,6 +2,12 @@
 
 Date: 2026-05-19
 
+Status: PAUSED 2026-08-21 — Just Do iOS/Web v1 launches with all current
+features free. Do not continue merchant onboarding, register a live webhook, or
+enable live keys unless a later monetization decision explicitly reactivates
+this plan. Before the free launch, disable every charge trigger as described in
+`docs/full_free_launch_plan.md`. Preserve this document as integration history.
+
 This document tracks the external work needed before Just Do can switch Toss
 Payments automatic billing from test keys to live keys.
 
@@ -10,25 +16,23 @@ Payments automatic billing from test keys to live keys.
 Enable production Pro subscription billing for `https://www.justdo.co.kr` using
 Toss Payments automatic billing.
 
-Current app state:
+Current app state (2026-08-21):
 
 - Production web app is live at `https://www.justdo.co.kr`.
 - Privacy and terms pages are live at `https://www.justdo.co.kr/privacy` and
   `https://www.justdo.co.kr/terms`; contact email is `kang071911@gmail.com`.
-- Toss Payments test-key billing flow is wired in the app.
-- Billing API routes exist, including `/api/billing/issue-key`,
+- Toss helper/schema history remains isolated, but the app has no checkout,
+  subscription UI, price, or Toss client caller.
+- Billing route names remain, including `/api/billing/issue-key`,
   `/api/billing/charge`, `/api/billing/cancel`, and `/api/webhook/toss`.
-- `/api/webhook/toss` is not registered in the Toss dashboard yet. Until Toss
-  webhook signature secret/header details are confirmed, the route is protected
-  by a Just Do shared-secret header (`x-justdo-webhook-secret` matched against
-  server env `TOSS_WEBHOOK_SECRET`) and should not be exposed as an active Toss
-  webhook without either that temporary gate or Toss official signature
-  verification.
+- All four mutation routes return unconditional
+  `410 { error: "billing_disabled" }` before auth, input parsing, database, or
+  Toss work. `/api/webhook/toss` remains unregistered.
 - Recurring billing cron infrastructure exists: AWS EventBridge Scheduler ->
   Lambda -> `/api/billing/charge`, daily 05:30 KST. Manual and first scheduled
   runs were confirmed. DLQ remains a live-billing-before-launch follow-up.
-- Live Toss automatic billing keys are blocked on business registration,
-  merchant contract/review, and automatic-billing MID approval.
+- Live Toss onboarding and keys are intentionally out of scope for full-free
+  v1, independent of merchant eligibility.
 
 ## Official References
 

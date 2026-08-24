@@ -1,6 +1,28 @@
 # App Store Submission Next Steps
 
-Updated: 2026-08-05
+Updated: 2026-08-21
+
+## Current Release Candidate Plan
+
+- TestFlight build 13 remains the latest uploaded build.
+- H-015 monthly List today-scroll and H-016 schedule-only notification body
+  timing are implemented and pushed to `main`, but the project build number is
+  still 13, so neither fix is in an uploaded TestFlight binary.
+- Full-free implementation batches A-E and the Batch F local verification gate
+  are complete: Web/iOS features no longer depend on legacy subscription state,
+  purchase UI is removed, Web billing mutation routes are hard-disabled, and
+  public copy is aligned. Production rollout, operational defense, and
+  representative account/real-device checks remain before build 14. Follow
+  `docs/full_free_launch_plan.md`.
+- After the full-free audit, collect any other low-risk, release-critical
+  fixes before assigning build 14. Do not add unrelated product features,
+  destructive schema changes, auth/sync redesign, or live-billing work.
+- After scope freeze: bump app/widget/UI-test build numbers to 14, rerun checks,
+  archive/upload once, verify all batched changes on a real device, then run the
+  final App Review smoke.
+- 2026-08-21 post-conversion verification passed: 98 Swift tests, 148 Web tests,
+  Web ESLint, Web production build, generic iOS Release app/widget build, and
+  5/5 iOS simulator UI tests including Free Settings/export access.
 
 ## Ready Assets
 
@@ -15,6 +37,8 @@ Updated: 2026-08-05
   - `app-store-screenshots/02-add-goals-flow.png`
   - `app-store-screenshots/03-review-flow.png`
   - `app-store-screenshots/04-goals-flow.png`
+- The 6.9-inch and 6.5-inch screenshot sets were visually audited on
+  2026-08-21 and contain no Pro/Trial/price/purchase/subscription surface.
 
 Do not store the demo account password in this repository. Enter it only in App
 Store Connect review notes.
@@ -36,7 +60,9 @@ Store Connect review notes.
 7. Add App Review notes:
    - Sign in with Apple is available.
    - Google demo account is available as fallback.
-   - The iOS app has no IAP purchase flow or external payment link.
+   - All current features are free.
+   - The iOS app has no IAP, subscription, purchase flow, external payment link,
+     paid entitlement, or purchase CTA.
 8. Archive from Xcode and upload the build.
 9. Wait for processing, attach the build, then submit for review.
 
@@ -134,12 +160,17 @@ Store Connect review notes.
   user ID, and user content for App Functionality.
 - Content rights are set for the app's own/user-entered productivity content
   model; the app does not provide third-party media/content catalogs.
-- App Review notes are saved with Sign in with Apple as the primary review path,
-  the Google demo account as fallback, and explicit confirmation that this iOS
-  build has no IAP, purchase flow, external payment link, or purchase CTA.
+- Existing App Review notes were saved before the 2026-08-19 full-free decision
+  and must be replaced before submission. The new notes should keep Sign in with
+  Apple as primary and the Google demo account as fallback, while stating that
+  all current features are free and there is no IAP, subscription, purchase
+  flow, external payment link, paid entitlement, or purchase CTA.
 - Build 11 real-device regression checks passed.
-- Next: consolidate any remaining changes, then verify the monthly List
-  today-scroll and schedule-only body follow-ups in the next TestFlight build.
+- Next: deploy/probe the production billing-disabled policy, complete the AWS
+  defense and representative account/real-device checks, close the low-risk
+  Release Candidate fix list, create one consolidated next
+  build (expected build 14), and verify full-free behavior plus every batched
+  change.
 
 ## Final Local Checks Before Archive
 

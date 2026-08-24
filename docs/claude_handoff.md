@@ -1,12 +1,37 @@
 # Handoff (next session — Codex or Claude Code)
 
-Date: 2026-06-16 (last content update; dated banner entries below carry their own dates)
+Date: 2026-08-21 (latest status refresh; dated banner entries below preserve history)
 Branch: `main`
 Remote: `origin` -> `https://github.com/xxxxKangxxxx/JustDo.git`
 
 This handoff is written so the next session can continue without replaying the
 chat. Chronological detail lives in `docs/worklog.md`; planned work lives in
 `docs/next_steps.md`.
+
+> **2026-08-21 ACTIVE HANDOFF — iOS v1 Release Candidate preparation.**
+> TestFlight build 13 is the latest uploaded binary and passed real-device
+> validation for monthly Task grouping/navigation/actions and relative
+> schedule-reminder titles. H-015 monthly List today-scroll and H-016 actual
+> Task date/time in schedule-only notification bodies are implemented and
+> pushed to `main`, but `CURRENT_PROJECT_VERSION` remains 13, so they are not in
+> TestFlight. **New release policy:** iOS/Web v1 launches with all current
+> features free. Full-free batches A-E and the Batch F local gate are complete:
+> Web/iOS plan gates and
+> purchase UI are removed, Web billing mutation routes return unconditional
+> `410 billing_disabled`, and Web/iOS Terms match. Verification: Swift 98/98,
+> Web 148/148, Web lint/build, and generic iOS Release app/widget build passed.
+> Next deploy and probe the production Web billing-disabled contract, complete
+> the AWS defense or record the deployed `410` guard, and run representative
+> account-state/real-device smoke. Then freeze scope, bump all
+> targets to build 14, run checks, archive/upload once, verify all batched
+> changes, and complete final App Review smoke. Do not mix unrelated features,
+> destructive schema/auth/sync redesign, live billing, or semantic-matching
+> tuning into this build.
+
+> **Commercial-history rule:** older dated entries and the historical checkout
+> sections below describe superseded builds. Keep them for archaeology only;
+> do not restore plan gates, subscription UI, prices, Toss checkout, or billing
+> mutations. `docs/full_free_launch_plan.md` is the current source of truth.
 
 > **2026-05-10 Platform Strategy 결정** — Web과 iOS의 UI/UX는 의도적으로 분기.
 > Web=데스크탑 productivity hub, iOS=모바일 네이티브, Android=v3.
@@ -595,14 +620,14 @@ iOS build/test commands below before doing the next real-device smoke pass.
 - Phase 5.6 User Preferences Sync — done.
 - Phase 5.7 Habit Recurrence (daily + weekly) — done for new habit creation,
   storage/sync, selectors, Habit screen, Stats screen, and Habit detail/edit.
-- **Phase 7 Web Desktop Redesign — 결제 외 완료; Pro checkout 잔여 진행 중**.
+- **Phase 7 Web Desktop Redesign — 완료; 전면 무료 변환 완료**.
   - 사용자가 `reference/web_proto/`와 `reference/Just Do - Web Prototype.html`에
     데스크탑 web prototype을 제공함.
   - First implementation pass shipped in `apps/web/src/features/just-do/app-shell.tsx`:
     sidebar/header desktop shell, month/week/list calendar, Today side panel,
     Task/Habit add modal, Task detail modal, command palette, bulk actions,
     Stats dashboard, Settings split layout, category/habit management, task tag
-    input, and Pro upgrade entry surface.
+    input. The former upgrade surface has been removed.
   - Mobile web 안내 page is implemented as a viewport-based fallback for
     `< lg` screens, before and after sign-in. iOS App Store URL is wired by
     `NEXT_PUBLIC_IOS_APP_STORE_URL`; Android waitlist is wired through
@@ -618,7 +643,7 @@ iOS build/test commands below before doing the next real-device smoke pass.
     controls backed by `position` swaps.
   - Manual offline sync verification and 1024 / 1280 / 1440 / 1920 visual
     verification passed on 2026-05-13.
-  - Pro checkout track is the remaining v1 blocker:
+  - Historical checkout implementation (disabled; not a current blocker):
     - B1 schema migration done: `20260514061000_toss_billing.sql`.
     - B2 API route skeleton done:
       `POST /api/billing/issue-key`, `POST /api/billing/charge`,
@@ -642,8 +667,8 @@ iOS build/test commands below before doing the next real-device smoke pass.
       two scheduled invocations confirmed. Remaining billing items are Toss
       test-key E2E smoke, Toss webhook signature verification once official
       dashboard secret/header details are available, and live-billing DLQ.
-    - v1 keeps Toss Payments billing. Naver Pay recurring, Kakao Pay recurring,
-      and PortOne multi-PG are documented as future payment-method expansion.
+    - These Toss/Naver Pay/Kakao Pay/PortOne notes are preserved only as past
+      design history. v1 offers no payment method or paid entitlement.
   - Amplify/Route 53 production deployment is live at
     `https://www.justdo.co.kr`. v3까지 Android 사용자는 데스크탑 web 으로 우회.
   - 자세한 punch list: `next_steps.md` Phase 7.
@@ -669,10 +694,10 @@ iOS build/test commands below before doing the next real-device smoke pass.
   - Pushed task/habit detail screens were removed. Home and app deep links open
     editor sheets instead. Task rows in the selected-day sheet edit inline and
     support delete; Habit rows in that sheet no-op except for the check control.
-  - iOS Supabase read-sync now reads `user_subscriptions` and maps Pro
-    entitlement into local `settings.plan`, so hosted Pro state can unlock
-    native Pro-gated features after sync.
-  - Goal & Pro Report iOS first pass is implemented:
+  - iOS Supabase read-sync still decodes `user_subscriptions` into local
+    `settings.plan` for snapshot compatibility, but no active UI reads it for
+    access.
+  - Goal & Report iOS first pass is implemented:
     - shared `Goal` / `GoalPromptDismissal` domain models.
     - Core Data `CDGoal` / `CDGoalPromptDismissal` mirror entities and mappers.
     - mutation queue cases `goal_upsert`, `goal_delete`,
@@ -796,8 +821,8 @@ Watch items (not active tasks):
   - Selected-day 정보는 inline panel이 아니라 **bottom sheet modal**
     (`.height(500)` + `.large` detent). Sheet 안 좌우 swipe → ±1 day.
     background tap / drag-down → dismiss.
-  - Selected-day sheet는 `오늘만` / `이 날까지` 전환을 제공한다. Pro +
-    Settings ON이면 둘 다 사용 가능하고, Settings OFF면 `이 날까지`는 lock.
+  - Selected-day sheet는 `오늘만` / `이 날까지` 전환을 제공한다. Settings의
+    Just Do Mode가 ON이면 둘 다 사용 가능하며 legacy plan 값은 무관하다.
   - Task row tap은 같은 sheet 안에서 editor로 전환하고 삭제도 가능. Habit row
     tap은 no-op이며 check control만 동작.
 - Settings owns dark mode and habit/category/goal management entry points.
@@ -808,7 +833,7 @@ Watch items (not active tasks):
   (`reference/proto/auth.jsx`, `auth-button.jsx`). 시스템 다크모드와
   무관하게 항상 light로 고정.
 
-### App Shape — Web (Phase 7 desktop shell + Pro checkout wiring)
+### App Shape — Web (Phase 7 desktop shell, full-free)
 
 > 현재 web은 `reference/web_proto/`와 `Just Do - Web Prototype.html`의 desktop
 > reference를 기준으로 재작성됨. iOS `reference/proto/`와 UI/UX는 의도적으로 분기.
@@ -819,19 +844,18 @@ Watch items (not active tasks):
 - Today panel: selected-date Task list and active Habit list; Task/Habit check toggles live on the right side. Task completion stays in the same list with checkbox/strikethrough, not a separate completed section. Just Do Mode uses panel-local `오늘만` / `이 날까지` state; date changes reset the panel to `오늘만`.
 - Desktop Web task time polish: month calendar task bars and Today panel task cards show task time as `HH:mm` only. Calendar bars keep title left / time right. Today panel cards keep title left / time near the right, aligned vertically with the checkbox.
 - Add modal: Task/Habit tabs. Task supports title, date range, time, category, priority, tag chips. Habit supports title, emoji, daily/weekly recurrence, weekday picker, reminder time.
-- Settings: left settings menu with one selected section rendered at a time. Sections include account, notifications, display, categories, habits, subscription, sync, and data.
+- Settings: left settings menu with one selected section rendered at a time.
+  Sections include account, notifications, display, categories, habits, sync,
+  and data. There is no subscription section or plan status.
 - Category management: add, rename, color edit, delete, up/down reorder.
 - Habit management: add from global add modal; edit/delete from Settings.
-- Subscription:
-  - Plan cards for monthly (`₩1,900 / 월`) and yearly (`₩9,900 / 년`).
-  - Upgrade modal has payment-method buttons. Toss is enabled and opens Toss
-    billing auth; card/bank/Naver Pay/Kakao Pay/other are disabled future
-    surfaces with provider colors.
-  - `/billing/success` receives Toss `authKey/customerKey/planInterval` and
-    calls `/api/billing/issue-key`.
-  - `/billing/fail` displays Toss error code/message.
-  - Subscription panel reads server state through `/api/billing/subscription`
-    and can call `/api/billing/cancel`.
+- Billing compatibility:
+  - The app shell has no billing API/Toss client caller, plan card, price,
+    upgrade modal, or subscription panel.
+  - Billing mutation routes always return `410 { error: "billing_disabled" }`
+    with no auth/DB/Toss side effects.
+  - `/api/billing/subscription` remains unused and read-only for legacy
+    compatibility. Stale success/fail routes show neutral free-service guidance.
 
 > Data layer remains the same: custom categories, task tags, habit recurrence,
 > IndexedDB local-first queue, Supabase sync/realtime, and auth still use the
@@ -894,7 +918,7 @@ https://cohkxnwsbhrsfmsjqdpa.supabase.co/auth/v1/callback
 `apps/web/.env.local` is gitignored and currently expected to point to the
 cloud project for browser testing. Do not print or commit real key values.
 
-Current expected hosted env keys for Pro checkout testing:
+Historical billing environment keys (do not activate for the full-free release):
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
@@ -1011,7 +1035,6 @@ apps/web/src/app/api/billing/cancel/route.ts
 apps/web/src/app/api/billing/subscription/route.ts
 apps/web/src/app/api/webhook/toss/route.ts
 apps/web/src/app/billing/success/page.tsx
-apps/web/src/app/billing/success/BillingSuccessClient.tsx
 apps/web/src/app/billing/fail/page.tsx
 
 apps/ios/Package.swift
@@ -1080,11 +1103,15 @@ Cloud manual checks already performed by the user/Codex:
 - User pushed hosted Supabase billing migration on 2026-05-14; after that,
   `/api/billing/subscription` returned 200 from the running dev server.
 
-## Pro Checkout Details For Claude
+## Historical Checkout Details — Do Not Execute For Full-Free v1
+
+The section below documents the superseded paid implementation. It is retained
+for archaeology only and must not be treated as a current plan, smoke path, or
+activation checklist.
 
 Provider decision:
 
-- v1 uses Toss Payments billing / automatic payment.
+- The historical implementation used Toss Payments billing / automatic payment.
 - UX should avoid saying "card registration" in the app. The user-facing flow
   says "Toss 결제" and the active payment method button itself opens the Toss
   flow.
@@ -1209,29 +1236,17 @@ Recommended immediate next steps:
 
 ## Recommended Next Work
 
-> **2026-06-16 기준 — 현재 활성 트랙 (아래 2026-05-25 블록은 히스토리로 보존).**
-> 제품 기능(목표 진행률 E1+E3, 리포트 롤업)·인증(Google+Apple)·운영 배포는 모두
-> LIVE. **v1 ship 병목은 순수 코드가 아니라 ① iOS App Store 제출 자산 ② Toss 가맹점
-> 심사 — 둘 다 사용자 외부 트랙.** 이어받는 세션(Codex/Claude Code)은 아래 순서로:
->
-> 1. **iOS App Store 제출 (활성 차단 트랙)** — 남은 건 거의 코드 외 작업.
->    체크리스트 = `docs/app_store_listing_draft.md` §0 + `next_steps.md` 5번.
->    - 코드 외(사용자): 스크린샷 6.9"/6.7", 데모 계정+심사 메모 입력, 앱 아이콘
->      dark/tinted polish, Archive→TestFlight→제출, 최종 실기기 시각 smoke(구독
->      그룹 변경 포함).
->    - 코드측 quick wins(iPhone 전용/export compliance/3.1.1 no-IAP/anon 키
->      커밋/privacy·terms LIVE)는 **완료**. 위 "2026-06-14~15 App Store 준비" 배너 참고.
->    - 에이전트가 도울 수 있는 것: 심사 메모/데모 계정 문구 초안, 메타데이터 마무리,
->      제출 후 리젝 대응.
-> 2. **Toss 가맹점 심사 (사용자 외부 트랙, 가장 긴 차단 ~2–3주)** — 아래 1번(구) 블록.
->    코드측은 Toss 테스트 키 E2E + webhook signature + live 직전 DLQ만 남음.
-> 3. **선택적 follow-up(급하지 않음)**: E3 캐시 invalidate(항목 mutation 시)/
->    sign-out `cache.clear()`(멀티계정)/iOS 공유 actor 캐시, E3 threshold 튜닝 또는
->    near-dup 목표 통합, Phase 7 web 데스크탑 재디자인(prototype 도착 후, 보류).
+> **2026-08-21 현재 활성 트랙.** 전면 무료화 코드 변환과 출시 문구/스크린샷
+> 감사까지 완료됐다. 다음 세션은 `docs/full_free_launch_plan.md`의 Batch F만
+> 따른다: 운영 Web 배포 후 결제 변경 API의 `410 billing_disabled` 확인,
+> EventBridge 결제 스케줄 비활성화/기록, 대표 legacy 계정 상태 실기기 smoke,
+> 최종 전체 검증, 범위 동결, build 13 → 14, 단일 archive/upload 순서다.
+> Toss 가맹점 심사나 결제 활성화는 v1 출시 작업이 아니다.
 >
 > ---
 >
-> 2026-05-25 기준 — 배포 트랙은 운영 LIVE로 종료됨. Phase 7 Web Desktop
+> **아래 권고안은 2026-05~06의 폐기된 유료 출시 계획으로 역사 보존한다. 실행하지
+> 않는다.** 2026-05-25 기준 — 배포 트랙은 운영 LIVE로 종료됨. Phase 7 Web Desktop
 > Redesign은 Pro checkout 운영 확인/외부 의존만 남아 있고, iOS 잔여 작업은
 > 실기기 시각 검증 중심. Toss 가맹점 심사는 가장 긴 차단 항목 (~2–3주)이라
 > 사용자 외부 트랙으로 먼저 시작하는 것이 유리. 운영 신규 가입 차단 버그
@@ -1316,7 +1331,10 @@ Recommended immediate next steps:
    환경변수 + CLI로 platform `WEB_COMPUTE` + framework `Next.js - SSR` 명시).
    새 Amplify 앱을 다시 만들 일이 생기면 이 세 가지 모두 적용해야 SSR로 배포됨.
 
-### Codex 또는 Claude Code 세션 재개 가이드 (2026-06-01 갱신)
+### Codex 또는 Claude Code 세션 재개 가이드 (2026-08-21 갱신)
+
+- 현재는 문서 상단 ACTIVE HANDOFF와 `docs/full_free_launch_plan.md` Batch F를
+  먼저 따른다. 아래 날짜별 항목은 구현 배경이며 Pro/Toss 활성화 지침이 아니다.
 
 - **2026-05-25 신규 fix 인지부터**: 운영 도메인의 신규 가입자가 로그인 루트로
   되돌아오던 DB 에러는 categories `(user_id, name)` unique index 부재로
@@ -1357,7 +1375,9 @@ Recommended immediate next steps:
   Category reorder, 1024–1920 시각 검증, manual offline sync 5-stage 검증,
   Toss Pro checkout B1·B2·B4-a·B4-b·B4-c·B5, B6 route/UI mock regression
   tests, 운영 배포 + smoke test.
-- **남은 v1 ship 차단 항목은 Toss 가맹점 심사와 Pro checkout 외부 의존 확인**.
+- **Web Pro live billing의 남은 차단 항목은 Toss 가맹점 심사와 checkout 외부
+  의존 확인**. 이는 구매 흐름·외부 결제 링크를 포함하지 않는 현재 iOS v1
+  App Review 제출과는 별도 트랙이다.
   B3 cron은 첫 자동 실행 두 번 확인까지 완료됐고, live billing 직전 DLQ만
   남음. B6은 Toss test-key E2E smoke와 webhook signature 검증만 남음.
   자세한 단계 / Track A·B 분리는 `next_steps.md` Phase 7-3.

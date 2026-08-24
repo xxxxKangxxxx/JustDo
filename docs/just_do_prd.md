@@ -5,6 +5,24 @@
 
 ---
 
+## 0. v1 전면 무료 출시 정책 (2026-08-19 override)
+
+- iOS와 Web v1의 현재 구현 기능은 모두 무료로 제공한다.
+- 로그인과 동기화 계정 요구사항은 유지하지만, `free` / `trial` / `pro` / 만료 /
+  중지 / 취소 상태는 기능 접근에 영향을 주지 않는다.
+- 리포트, 통계/활동 요약, Just Do Mode, 데이터 export, 목표 기능, 위젯을 포함한
+  현재 기능에서 Pro 잠금·블러·업그레이드 CTA·가격·결제 진입을 제거한다.
+- Toss live billing과 가맹점 심사는 중단하며 v1 출시 차단 항목에서 제외한다.
+- 기존 subscription/payment schema와 기록은 호환성과 감사 목적으로 보존하되,
+  entitlement source로 사용하지 않는다.
+- Web 결제 endpoint와 AWS billing schedule은 무료 출시 전에 비활성화한다.
+- App Store 설명·심사 메모·Web/앱 약관은 “현재 모든 기능 무료, 구매 없음”으로
+  통일한다.
+- 상세 구현·검증 순서는 `full_free_launch_plan.md`를 따른다. 아래의 과거
+  Free/Trial/Pro 서술은 해당 override와 충돌하는 범위에서 더 이상 유효하지 않다.
+
+---
+
 ## 1. 프로젝트 개요
 
 | 항목 | 내용 |
@@ -80,7 +98,9 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 - Apple 로그인, Google 로그인 지원
 - Supabase Auth 사용
 - 로그인 성공 시 `public.users` 테이블에 사용자 정보 upsert
-- 로그인 성공 시 `public.user_subscriptions` 테이블에 Trial 레코드 생성 (trial_end_at = NOW() + 30일)
+- 기존 트리거는 로그인 성공 시 `public.user_subscriptions` Trial 레코드를 만들 수
+  있으나, v1 무료화 이후 이 레코드는 기능 접근을 결정하지 않는다. 신규 Trial
+  생성 정책 정리는 무료 출시 후 호환성 cleanup으로 분리한다.
 
 #### 로그아웃 / 회원탈퇴
 - 로그아웃: 세션 종료, 로컬 캐시 유지
@@ -230,13 +250,14 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 - `함께`는 친구 추가, 가능한 시간 제안, 공유 일정 조율을 포함하는 후속 제품 트랙이다. TestFlight 전에는 전체 구현하지 않고 문서화한다.
 
 #### Just Do Mode
-- Trial/Pro 전용 Home 표시 모드다. Settings의 Just Do Mode toggle은 기능
-  availability를 켜는 설정이며, Home sheet/panel의 현재 선택 상태와는 분리한다.
+- 전 사용자에게 무료로 제공하는 Home 표시 모드다. Settings의 Just Do Mode
+  toggle은 기능 availability를 켜는 설정이며, Home sheet/panel의 현재 선택
+  상태와는 분리한다.
 - Home UI와 날짜 선택 흐름은 유지하되, 날짜를 선택했을 때 sheet/panel에서
   `오늘만`과 `이 날까지`를 전환한다.
-- Trial/Pro 사용자가 Settings에서 Just Do Mode를 켜면 sheet/panel 안에서
+- 사용자가 Settings에서 Just Do Mode를 켜면 sheet/panel 안에서
   `오늘만`과 `이 날까지`를 둘 다 사용할 수 있어야 한다. Settings가 꺼져 있거나
-  entitlement가 없으면 `이 날까지`는 lock 상태로 표시하고 전환하지 않는다.
+  기능을 사용하지 않는 상태면 기본 `오늘만`을 유지한다.
 - `오늘만`: 기존처럼 selectedDate에 해당하는 Task/Habit을 표시한다.
 - `이 날까지`: `endDate <= selectedDate && isCompleted == false`인 Task를
   표시한다. Habit은 누적하지 않고 selectedDate 기준을 유지한다.
@@ -250,11 +271,9 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
   - 기본 모드: `startDate = selectedDate`, `endDate = selectedDate`
   - Just Do Mode: `startDate = today`, `endDate = selectedDate`
   - `selectedDate < today`이면 둘 다 selectedDate로 설정한다.
-- Free 사용자가 `이 날까지` 또는 Settings toggle을 누르면 Pro upgrade/paywall로
-  유도하고 설정값은 변경하지 않는다.
-- 실제 적용은 항상 `effectiveJustDoMode = hasProEntitlement && settings.justDoMode`
-  로 계산한다. 단, 이 값은 `이 날까지` 사용 가능 여부이고 sheet/panel의 local
-  선택값은 별도 state로 둔다.
+- `이 날까지` 또는 Settings toggle에서 Pro upgrade/paywall을 표시하지 않는다.
+- 실제 적용은 `settings.justDoMode`만으로 계산하고 sheet/panel의 local 선택값은
+  별도 state로 둔다.
 
 #### 기간 전환
 - 주간 / 월간 / 전체
@@ -270,11 +289,9 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 - 전체 습관 달성률 요약
 
 #### 기간 종료 리포트
-- Trial/Pro 전용 리포트로 제공한다.
-- Free gating (2026-06-03 결정): 목표 입력·관리는 Free도 가능. **리포트와 배너는
-  Free에게도 노출**하되, 리포트를 열면 **실제 리포트 내용을 블러 처리하고 Pro
-  CTA**를 덮는다(clean preview 아님 — 가려진 알맹이를 보여 전환 유도). Trial/Pro는
-  블러 없이 전체를 본다.
+- 전 사용자에게 전체 리포트를 무료로 제공한다.
+- 리포트와 배너는 모든 계정 상태에서 동일하게 노출하며 블러, preview lock,
+  Pro CTA를 사용하지 않는다.
 - 초기 구현은 서버 snapshot 생성보다 앱/웹에서 실시간 계산 + 템플릿 narrative를
   우선한다. AI narrative와 report snapshot 저장은 후속 범위로 둔다.
 - 리포트 내용 (2026-06-03 결정):
@@ -322,9 +339,9 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
   - 목표 화면 보조 배너는 닫기 없이 유지해 사용자가 놓친 리포트를 다시 찾을 수 있게 한다.
   - 준비된 기간별로 연간/월간 섹션 근처에 작게 노출한다.
 
-#### Goal & Pro Report
+#### Goal & Report
 - Just Do Mode와 별도 기능으로 운영한다. Just Do Mode는 Home의 todo 표시
-  방식이고, Goal & Pro Report는 월간/연간 목표와 회고 리포트 기능이다.
+  방식이고, Goal & Report는 월간/연간 목표와 회고 리포트 기능이다.
 - 월간↔연간 목표 관계 (2026-06-03 결정): **완전 분리**한다. 저장된 부모 링크나
   하드 종속 없음. 진행률이 기간별 자동 산정이라 연간 목표는 스스로 진행률을
   가지며 월간 롤업이 불필요하다(관계는 UX 사안). 월간 목표 작성/조회 시 그 해
@@ -336,9 +353,8 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
   Settings → 목표 UI, goal prompt, goal CRUD/sync, locked-goal confirmation,
   lock toggle, 기간 종료 리포트 배너 진입 UX, 활동 요약 rollup, E3 의미 매칭까지
   구현/배포 완료됐다. Settings → 목표 focused smoke와 삭제 확인 UX도 완료됐다.
-  남은 v1 범위는 TestFlight/App Store 제출 준비와 Toss 외부 심사 트랙이다.
-- 목표 입력은 Free / Trial / Pro 모두 가능하다.
-- 목표 기반 월간/연간 리포트 상세 열람은 Trial / Pro 전용이다.
+  이후 2026-08-19 전면 무료 출시 정책으로 전환했다.
+- 목표 입력과 목표 기반 월간/연간 리포트 상세는 모든 사용자에게 무료다.
 - 첫 가입 또는 첫 실행 사용자는 목표 설정 모달을 본다. 모달은 강제 입력이
   아니며 하단의 `나중에 할게요`로 건너뛸 수 있다.
 - 월간 목표:
@@ -373,8 +389,7 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
     동시에 가능하면 **연간 우선**(리포트 배너 우선순위와 동일 논리).
   - 리포트는 배너(수동 surface)라 프롬프트 모달과 공존한다. 단 리포트 화면이
     떠 있는 동안에는 프롬프트 모달을 띄우지 않는다(기존 가드 유지).
-- 프롬프트는 Free 포함 전 사용자에게 적용한다(목표 입력은 Free 무료 — 모두
-  목표를 세우게 해 리포트 블러 전환을 유도).
+- 프롬프트는 전 사용자에게 적용한다. 리포트 전환을 위한 블러/paywall은 없다.
 - 초기 알림은 앱/웹 진입 시 모달만 사용한다. 푸시 알림은 후속 범위로 둔다.
 - MVP 구현 범위:
   - Web MVP를 먼저 구현하고, behavior가 안정되면 iOS에 반영한다.
@@ -387,35 +402,22 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 
 ---
 
-### 3-9. 구독 / Trial
+### 3-9. 전면 무료 접근 정책
 
-#### Trial
-- 가입 후 30일간 Pro 기능 전체 무료 체험
-- D-7: 푸시 알림 + 앱 내 배너로 구독 유도
-- D-Day: 구독 유도 팝업 → Free로 자동 다운그레이드
-- 만료 후 Trial/Pro 기간 데이터: 읽기만 가능, 편집 불가
+- 가입 후 Trial 기간이나 만료에 따른 기능 변화가 없다.
+- 모든 현재 v1 기능은 계정 plan/status와 무관하게 동일하게 사용할 수 있다.
+- 기존 `user_subscriptions` 데이터는 호환성·운영 기록으로만 유지한다.
+- 구독 유도 알림, downgrade, 읽기 전용 전환, paywall을 사용하지 않는다.
+- 향후 유료화를 다시 검토할 경우 현재 정책을 암묵적으로 되돌리지 않고 별도 PRD,
+  사용자 고지, 결제/스토어 심사를 거친다.
 
-#### 플랜별 기능 접근 제어
-| 기능 | Free | Trial / Pro |
-|------|------|-------------|
-| Task / Habit 기본 관리 | ✅ | ✅ |
-| 캘린더 뷰 | ✅ | ✅ |
-| 기본 위젯 3종 | ✅ | ✅ |
-| 소셜 로그인 / 동기화 | ✅ | ✅ |
-| 오프라인 지원 | ✅ | ✅ |
-| Task Dependency 시각화 | ❌ | ✅ |
-| 목표 입력 | ✅ | ✅ |
-| 월간/연간 목표 리포트 상세 | ❌ | ✅ |
-| 리포트/활동 요약 고급 분석 | ❌ | ✅ |
-| 데이터 export | ✅ | ✅ |
-| 고급 위젯 커스터마이징 (v2+) | 정책 미정 | 정책 미정 |
-| 공유/협업 (v2) | ❌ | ✅ |
-
-> 2026-05-19 결정: Free는 기록/관리와 기본 위젯 경험을 보장한다.
-> Trial/Pro는 분석·리포트·고급 기능 중심으로 구분한다. 월간 리포트와 Task
-> Dependency 시각화는 v2 도입 예정이며, 구현 시 Pro gate 대상이다. 위젯은
-> 제품 핵심 기능이므로 기본 3종은 Free에 유지하고, 추후 위젯 커스터마이징을
-> 도입할 때 고급 커스터마이징 범위만 별도 정책으로 확정한다.
+| 현재 v1 기능 | 모든 사용자 |
+|-------------|-------------|
+| Task / Habit 관리, 캘린더, 동기화, 오프라인 | ✅ 무료 |
+| 기본 위젯과 현재 제공 중인 커스터마이징 | ✅ 무료 |
+| 목표 입력과 월간/연간 리포트 상세 | ✅ 무료 |
+| 통계/활동 요약과 Just Do Mode | ✅ 무료 |
+| 데이터 export | ✅ 무료 |
 
 ---
 
@@ -425,8 +427,6 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 |-----------|------|--------|
 | Task 알림 | reminder_at 도달 시 | iOS (APNs), 웹 (FCM) |
 | Habit 알림 | reminder_at 매일 | iOS (APNs), 웹 (FCM) |
-| Trial 만료 D-7 알림 | trial_end_at - 7일 | iOS, 웹 |
-| Trial 만료 당일 알림 | trial_end_at 당일 | iOS, 웹 |
 
 - 알림 트리거: Supabase Edge Function (cron job)
 
@@ -450,9 +450,8 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 | 습관 | 설정 내부에서 진입. 기존 통계 화면을 흡수해 Task/Habit 월간 통계, 습관 카드, 최근 7일 습관 체크, `편집` 진입 제공 |
 | 습관 관리 | `설정 → 습관 → 편집`에서 full-screen으로 진입. 닫으면 습관 화면으로 복귀 |
 | 목표 | 설정 내부 full-screen 목표 관리 화면. 연간/월간 목표 추가, 수정, 고정, 삭제 |
-| 설정 | 홈 우측 상단 아이콘으로 full-screen 진입. 계정, 알림, 습관, 목표, 카테고리 관리, 디스플레이, 구독, 데이터, 앱 정보 |
+| 설정 | 홈 우측 상단 아이콘으로 full-screen 진입. 계정, 알림, 습관, 목표, 카테고리 관리, 디스플레이, 데이터, 앱 정보 |
 | 함께 (후속) | 친구 추가, 가능한 시간 제안, 공유 일정 조율. TestFlight 후 제품 트랙 |
-| 구독 유도 팝업 | Trial 만료 시 구독 안내 |
 
 ---
 
@@ -505,7 +504,7 @@ Web은 데스크탑 사용을 가정하므로, 모바일 브라우저 (특히 An
 
 | 단계 | 내용 |
 |------|------|
-| **v1** | iOS 앱 + Web (데스크탑 productivity hub) 동시 출시. Task/Habit CRUD, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인(Google/Apple), 실시간 동기화, 오프라인 지원, 목표/리포트, Trial/Pro entitlement. **Web Desktop Redesign (Phase 7)은 구현 완료**, 현재 출시 차단은 App Store 제출 자산과 Toss 가맹점 심사/운영 결제 확인 |
+| **v1** | iOS 앱 + Web (데스크탑 productivity hub) 동시 출시. Task/Habit CRUD, 캘린더 뷰, 위젯 3종 (iOS), 소셜 로그인(Google/Apple), 실시간 동기화, 오프라인 지원, 목표/리포트를 전면 무료로 제공. 현재 출시 차단은 full-free gate/billing 비활성화 구현, 통합 TestFlight RC 검증, App Review 제출 |
 | **v2** | Task Dependency 시각화 (웹), Habit 매월 반복/반복 종료일, `함께` 친구/일정 공유, 리포트 고도화, 이메일 회원가입 |
 | **v3** | Android 앱 출시 — v3 출시 전까지 Android 사용자는 데스크탑 web 사용 |
 

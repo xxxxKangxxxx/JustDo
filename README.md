@@ -11,40 +11,41 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
 
 - **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일
   네이티브, Android=v3. 자세한 내용: `docs/just_do_prd.md` §1.5.
-- **Active product track (2026-06-01)**: Goal & Pro Report MVP is implemented
-  across schema, Web, and native iOS first pass. Hosted Supabase migration
-  `20260529120000_goal_report.sql` is applied, Web Settings → 목표 and report
-  preview/detail surfaces are wired, and iOS goal management / onboarding
-  prompt / card management have been iterated through real-device feedback.
-  Focused smoke is user-confirmed, and iOS goal deletion now requires
-  destructive confirmation. The report-entry policy is period-end banners, not
-  an always-on menu. Web tag filter/input UX is complete. Current iOS work has
-  moved to IA cleanup and Settings-contained management screens. 자세한 내용:
-  `docs/next_steps.md` Active Track.
-- **Product IA implementation (2026-06-01)**: iOS Settings moved from the
-  bottom tab bar to a Home top-right icon, the bottom bar now shows only a
-  centered `홈` tab, and the old standalone Stats tab has been removed. The
-  previous stats surface is now accessible as `설정 → 습관`; its `편집` button
-  opens Habit management above the Habit screen itself. `설정 → 목표` and
-  `설정 → 카테고리 관리` open full-screen management surfaces inside Settings.
-  Future bottom-bar expansion is reserved for `함께` friendship/scheduling.
-- **Phase 7 Web Desktop Redesign** is complete except the Pro checkout track.
+- **Active release track (2026-08-21)**: iOS/Web v1 will launch with all current
+  product features free. Web/iOS feature gates and purchase surfaces have been
+  removed, Web billing mutation routes are hard-disabled, and both Terms
+  surfaces use the all-free policy. The static/copy audit and local Batch F
+  verification gate are complete. The remaining work is production rollout,
+  operations defense, representative account/real-device smoke, and scope
+  freeze before bumping build 13 → 14 and uploading once. H-015 (monthly List today-scroll)
+  and H-016 (actual Task date/time in schedule-only notification bodies) are
+  already implemented on `main` but are not in an uploaded binary. 자세한 내용:
+  `docs/full_free_launch_plan.md`, `docs/next_steps.md` Active Release Track,
+  and `docs/testflight_smoke_checklist.md`.
+- **Current verification (2026-08-21)**: `swift test` passed 98 tests, Web
+  Vitest passed 148 tests, Web ESLint and production build passed, and a generic
+  iOS Release build of the app + widget passed after full-free conversion.
+  The iOS simulator UI regression suite passed 5/5, including the dedicated
+  full-free Free-account Settings/export case.
+- **App Store preparation**: listing metadata, privacy/support URLs, 6.9-inch
+  screenshots, review notes, age rating, pricing, and privacy declarations are
+  recorded as ready. Public App Review submission waits for the consolidated
+  next TestFlight build and its real-device smoke.
+- **Phase 7 Web Desktop Redesign** is complete. The previous checkout track is
+  retained only as compatibility/history and is disabled for the full-free v1
+  launch.
   데스크탑 reference는 `reference/web_proto/`와
-  `reference/Just Do - Web Prototype.html`. 현재 Pro checkout은 Toss
-  Payments 빌링 기준으로 schema/API/UI wiring, subscription 상태 표시,
-  entitlement gate, 정기결제 cron, route/UI mock 회귀 테스트까지 완료됨.
-  남은 항목은 Toss 테스트 키 E2E, 운영 dashboard webhook signature 확인,
-  live billing 직전 DLQ 추가. 자세한 punch list:
-  `docs/next_steps.md` Phase 7.
-- iOS Phase 6 실기기 시각 검증은 iPhone 14 Pro iOS 26.5 기준으로
-  Auth landing, Home, Add Sheet, edit-sheet routing, pre-IA Stats/Settings,
-  Widget까지 통과. Task/Habit pushed detail page는 제거했고, Home과 app
-  deep link는 기존 add UI와 같은 editor sheet를 연다. 2026-06-01에는 Goal &
-  Pro Report iOS 목표 관리 UI와 새 IA가 반영되었고, `swift test
-  --package-path apps/ios` 46 tests 및 generic iOS `xcodebuild`가 통과했다.
+  `reference/Just Do - Web Prototype.html`. 결제 스키마와 격리된 Toss helper는
+  호환성/이력 보존 대상으로 남아 있지만 활성 UI 호출자는 없고 변경 API는
+  `410 billing_disabled`로 고정됐다. 운영 스케줄 비활성화는 출시 전 남은
+  방어선이다. 자세한 계획: `docs/full_free_launch_plan.md`.
+- iOS는 Home 중심 IA, Settings 내부 관리 화면, Goal & Report, 로컬 알림,
+  한국 공휴일 캘린더, 월간 Task List, Home/Lock Screen widget까지 구현·실기기
+  검증을 진행했다. 현재 App Store 프로젝트 버전은 `1.0 (13)`이며 다음 업로드
+  전까지 빌드 번호를 올리지 않는다.
 - 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
-  기존 구현을 유지함. 결제 모달은 v1에서 Toss만 활성화하고 네이버페이 /
-  카카오페이 / PortOne 경유 다중 PG는 추후 확장 트랙으로 남겨둠.
+  기존 구현을 유지한다. 결제 모달과 구독 UI의 사용자 진입 및 서버 결제 경로는
+  이미 제거/비활성화됐으며, AWS 스케줄러 비활성화만 운영 단계에 남아 있다.
 - Product and handoff documents live in `docs/`.
 - Original UI references remain in `reference/`.
 
@@ -135,12 +136,10 @@ Current status:
   `ASWebAuthenticationSession`. Successful sign-in writes access token, refresh
   token, user ID, and expiry into Keychain; expired sessions are refreshed
   before read-sync.
-- The signed-in iOS root now renders the native calendar home, stats, and
-  settings tabs based on `reference/proto/`, including task/habit add flows,
-  habit/category management entry points, Just Do Mode, and task/habit editor
-  sheets opened from Home or app deep links.
-- The settings tab owns the dark-mode toggle. The home header keeps only the
-  add button, matching the current native interaction model.
+- The signed-in iOS root uses a Home-centered IA based on `reference/proto/`.
+  Settings opens from the Home top-right icon; the former Stats surface lives
+  under `설정 → 습관`, and goal/category/habit management stays contained in
+  Settings. Task/habit editors open from Home or app deep links.
 - Core Data mirror writes are serialized through the managed object context,
   and Supabase snapshot replacement updates existing rows in place to avoid
   launch-time Core Data observer crashes.
@@ -167,12 +166,13 @@ native editor sheets rather than pushed detail pages. Detail edit/delete,
 app-facing sync status UI, hosted OAuth/offline sync, Supabase subscription
 plan read-sync, Home/Add/Stats/Settings/Widget visual checks, deep-link UI
 tests, 1-hour+ auth session refresh smoke, and final real-device smoke are
-complete. Goal & Pro Report MVP first pass is now included in native iOS:
+complete. Goal & Report MVP first pass is now included in native iOS:
 Settings → 목표, annual/monthly goal cards, onboarding/monthly/yearly prompt
 flows, centered add/edit dialog with delete confirmation, lock toggle, and
-Supabase goal sync. The next iOS IA target moves Settings to the Home top-right
-icon, folds Stats into report/activity summary, and introduces period-end report
-banners. iOS TestFlight/App Store preparation follows that IA/report-entry pass.
+Supabase goal sync, period-end report banners, local notification planning,
+Korean public-holiday calendars, and the monthly Home Task List are included.
+The next native milestone is the consolidated TestFlight Release Candidate and
+public App Review submission, not another IA pass.
 자세한 내용:
 `docs/ios_phase6_plan.md`, `docs/ios_phase6_status.md`,
 `docs/claude_handoff.md`.

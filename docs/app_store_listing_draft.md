@@ -1,7 +1,8 @@
 # App Store Connect 리스팅 초안 (iOS v1)
 
-> 2026-06-14 작성 (Claude Code). 코드 감사 기반 초안 — App Store Connect 제출 시
-> 그대로 복사/조정해서 사용. 추정이 아니라 실제 앱 동작/수집 기준으로 작성됨.
+> 2026-06-14 작성, 2026-08-21 전면 무료 구현·정적 감사 반영. App Store Connect
+> 제출 시 그대로 복사/조정해서 사용하고, 최종 Release Candidate 실기기 smoke에서
+> 한 번 더 확인한다.
 > 관련: `docs/next_steps.md` App Store prep, 메모리 `apple_signin_todo` /
 > `payment_provider` / `deployment_domain`.
 
@@ -16,7 +17,10 @@
 | **스크린샷** | ✅ 6.9" 포스터 PNG 생성 | `app-store-screenshots/01-calendar-flow.png` ~ `04-goals-flow.png` 생성 완료. §3 참고. |
 | **iPad 지원 여부 결정** | ✅ iPhone 전용 결정·적용 (2026-06-14) | `TARGETED_DEVICE_FAMILY` 전 타깃 `1`로 변경. iPad 스크린샷 불필요. |
 | **Export compliance 키** | ✅ 적용 (2026-06-14) | Info.plist에 `ITSAppUsesNonExemptEncryption = NO` 추가. |
-| **인앱 약관/방침 텍스트 stale** | ✅ 갱신 (2026-06-14) | `ContentView.swift` 약관 "계정"·방침 "수집 항목"에 Apple 로그인 반영. |
+| **인앱 약관/방침 텍스트 stale** | ✅ 갱신 (2026-08-21) | Apple/Google 로그인과 전체 기능 무료·결제/구독 미제공 정책 반영. |
+
+> `/privacy`와 `/terms` 라우트는 운영 중이지만 2026-08-21의 전면 무료 Terms
+> 문구는 아직 로컬 변경입니다. Batch F Web 배포·운영 확인 후 제출합니다.
 
 ---
 
@@ -26,7 +30,10 @@
 - 서드파티 SDK 0개 (원격 SPM 없음, 로컬 `JustDoShared`만). 분석/추적/광고/크래시 SDK **없음**. ATT/IDFA **없음**.
 - 앱이 통신하는 외부 서버 = **Supabase 프로젝트 하나뿐** (auth + REST 동기화). Apple/Google 로그인은 OS/웹 레벨, Gemini 임베딩은 **서버사이드**(앱에서 직접 호출 안 함).
 - `service_role` 키 iOS에 없음. anon(public) 키만 사용.
-- 로컬 알림 실제 미구현(설정 토글은 저장만). 위치/사진/연락처/건강 등 권한 요청 **없음**.
+- 로컬 알림 구현됨: Task 아침 브리핑/일정 알림, Habit 요일·시간 알림,
+  알림 권한 안내 및 거부 시 시스템 설정 이동을 제공한다. 알림은 기기에서
+  로컬 예약되며 새로운 서버 수집 항목을 만들지 않는다. 위치/사진/연락처/건강
+  등 권한 요청 **없음**.
 
 ### "Data Used to Track You" → **없음 (No)**
 추적/광고 식별자/제3자 데이터 결합 전혀 없음. ATT 프롬프트 불필요.
@@ -43,8 +50,10 @@
 
 ### "Data Not Linked to You" → **없음**
 
-### 판단 보류 / 선택 항목
-- **Purchases (구매 내역)**: 앱이 `user_subscriptions`의 plan 플래그(free/pro)를 **읽음**. 단 구매는 web Toss에서 발생하고 iOS는 entitlement만 읽는 수준 → **목록 미포함 권장**(인앱 구매 없음). 보수적으로 넣고 싶으면 "Purchases / App Functionality, Linked"로 추가 가능.
+### Purchases 판단
+- v1 전면 무료 출시에서는 구매·구독·유료 entitlement를 제공하지 않는다.
+  legacy `user_subscriptions` 데이터는 기능 접근에 사용하지 않으므로 Purchases는
+  **목록 미포함**으로 제출한다. 활성 UI/네트워크 경로 감사도 완료했다.
 
 ---
 
@@ -86,7 +95,7 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
 ■ 안전한 동기화
 - Apple 또는 Google로 로그인하면 기기 간 데이터가 동기화됩니다.
 
-* 일부 고급 기능(Pro)은 추후 제공되는 별도 정책에 따릅니다.
+* 현재 제공되는 모든 기능은 무료이며 앱 내 구매나 구독이 없습니다.
 ```
 
 ### Keywords (≤100자, 쉼표 구분, 공백 없이)
@@ -111,6 +120,8 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
   - `app-store-screenshots/02-add-goals-flow.png` — 오늘 할 일 확인 후 Task 입력.
   - `app-store-screenshots/03-review-flow.png` — 오늘/마감 기준으로 할 일 정리.
   - `app-store-screenshots/04-goals-flow.png` — 목표별 진행률과 실행 흐름.
+- 2026-08-21 6.9"/6.5" 8장 시각 감사 완료: Pro·Trial·가격·구매/구독 CTA
+  노출 없음. 무료화 사유로 재생성할 필요 없음.
 - 추가 후보가 필요하면 위젯 컷 1장을 5번째로 추가 가능.
 
 ---
@@ -124,10 +135,9 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
   Google demo account: kangym071900@gmail.com
   Password: <App Store Connect 제출 시에만 입력>
 
-- 구독(Pro) 안내: 본 앱은 인앱 결제(IAP)를 포함하지 않습니다.
-  Pro 기능은 당사 웹사이트(justdo.co.kr)에서 별도로 구독한 사용자의
-  계정에 한해 제공되는 멀티플랫폼 서비스이며, 앱 내에는 어떠한 구매 흐름이나
-  외부 결제 링크도 없습니다. (Guideline 3.1.1 관련)
+- 무료 제공 안내: 현재 제공되는 모든 기능은 무료입니다.
+  본 앱에는 IAP, 구독, 구매 흐름, 외부 결제 링크, 유료 계정 entitlement,
+  가격 표시 또는 구매 CTA가 없습니다.
 
 - 위젯: 홈/잠금 화면 위젯에서 할 일 완료·습관 체크가 가능합니다.
 ```
@@ -192,4 +202,4 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
 - [ ] TestFlight Beta App Review 승인
 - [ ] TestFlight smoke + 수정 필요 항목 반영
 - [ ] Public App Review 제출
-- [ ] 최종 실기기 시각 smoke (구독 그룹 변경 포함)
+- [ ] 최종 실기기 시각 smoke (전면 무료 설정·리포트·내보내기 포함)

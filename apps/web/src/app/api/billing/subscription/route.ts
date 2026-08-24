@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
+// Legacy compatibility endpoint only. The full-free app does not consume this
+// route, and it must remain read-only while the historical billing schema exists.
+
 const baseSubscriptionSelect = [
   "id",
   "plan_name",

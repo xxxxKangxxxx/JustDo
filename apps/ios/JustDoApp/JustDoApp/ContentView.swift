@@ -582,7 +582,7 @@ private struct HomeRootView: View {
                 onSetDefaultTaskReminderMinutes: setDefaultTaskReminderMinutes(_:),
                 notificationPermission: notificationPermission,
                 onSetWeekStart: setWeekStart(_:),
-                onSetJustDoMode: setJustDoModeFromSettings(_:),
+                onSetJustDoMode: setJustDoMode(_:),
                 onAddGoal: addGoal(_:),
                 onSaveGoal: saveGoal(_:),
                 onDeleteGoal: deleteGoal(_:),
@@ -903,12 +903,8 @@ private struct HomeRootView: View {
             .sorted(by: sortTasksByDueDate)
     }
 
-    private var isProPlan: Bool {
-        (snapshot?.settings.plan ?? "free") == "pro"
-    }
-
     private var effectiveJustDoMode: Bool {
-        isProPlan && (snapshot?.settings.justDoMode ?? false)
+        snapshot?.settings.justDoMode ?? false
     }
 
     private var homeReportBanner: GoalReportAvailability? {
@@ -930,8 +926,7 @@ private struct HomeRootView: View {
 
     private func openReport(_ report: GoalReportAvailability) {
         goalReportPresentation = GoalReportPresentation(
-            target: GoalReportTarget(periodType: report.periodType, periodKey: report.periodKey),
-            isPreview: !isProPlan
+            target: GoalReportTarget(periodType: report.periodType, periodKey: report.periodKey)
         )
     }
 
@@ -1396,14 +1391,6 @@ private struct HomeRootView: View {
 
     private func setJustDoMode(_ isOn: Bool) {
         setPreference(.justDoMode, value: isOn ? 1 : 0, successMessage: "Just Do Mode updated.")
-    }
-
-    private func setJustDoModeFromSettings(_ isOn: Bool) {
-        guard isProPlan else {
-            actionMessage = "Just Do Mode는 Pro 기능입니다."
-            return
-        }
-        setJustDoMode(isOn)
     }
 
     private func setPreference(_ key: JustDoShared.PreferenceKey, value: Int, successMessage: String) {
@@ -3797,7 +3784,6 @@ private struct SettingsRootTabView: View {
     @State private var isShowingWidgetColorSheet = false
     @State private var exportURL: ExportFile?
     @State private var legalDocument: LegalDocument?
-    @State private var settingsMessage: String?
     @State private var widgetColors = WidgetModeColors(
         task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
         habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
@@ -3805,10 +3791,6 @@ private struct SettingsRootTabView: View {
 
     private var resolvedProfile: AuthProfile {
         authProfile ?? AuthProfile(email: nil, displayName: nil, avatarURL: nil, authProvider: nil)
-    }
-
-    private var isProPlan: Bool {
-        (settings?.plan ?? "free") == "pro"
     }
 
     var body: some View {
@@ -3863,6 +3845,7 @@ private struct SettingsRootTabView: View {
                 }
                 SettingGroup(label: "디스플레이") {
                     SettingsRow(title: "다크모드", right: AnyView(ToggleSwitch(isOn: $isDarkMode)))
+                    SettingsRow(title: "Just Do Mode", right: AnyView(ToggleSwitch(isOn: justDoModeBinding)))
                     SettingsRow(
                         title: "캘린더 시작 요일",
                         detail: (settings?.weekStart ?? 0) == 0 ? "일요일" : "월요일",
@@ -3883,15 +3866,6 @@ private struct SettingsRootTabView: View {
                         }
                     )
                 }
-                SettingGroup(label: "구독") {
-                    SettingsRow(title: "현재 플랜", detail: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free")
-                    SettingsRow(
-                        title: "Just Do Mode",
-                        pro: !isProPlan,
-                        isLast: true,
-                        right: AnyView(ToggleSwitch(isOn: justDoModeBinding))
-                    )
-                }
                 SettingGroup(label: "데이터") {
                     SyncStatusRow(status: syncStatus, actionMessage: actionMessage, onRetry: onRetrySync)
                     SettingsRow(title: "습관", chevron: true, action: { isShowingStats = true })
@@ -3899,15 +3873,8 @@ private struct SettingsRootTabView: View {
                     SettingsRow(title: "카테고리 관리", chevron: true, action: { isShowingCategoryManager = true })
                     SettingsRow(
                         title: "데이터 내보내기",
-                        pro: true,
                         chevron: true,
-                        action: {
-                            guard isProPlan else {
-                                settingsMessage = "데이터 내보내기는 Pro 버전에서 사용할 수 있습니다."
-                                return
-                            }
-                            exportURL = onExportData()
-                        }
+                        action: { exportURL = onExportData() }
                     )
                     SettingsRow(
                         title: "모든 데이터 초기화",
@@ -3920,14 +3887,6 @@ private struct SettingsRootTabView: View {
                     SettingsRow(title: "버전", detail: "1.0.2")
                     SettingsRow(title: "이용약관", chevron: true, action: { legalDocument = .terms })
                     SettingsRow(title: "개인정보처리방침", chevron: true, isLast: true, action: { legalDocument = .privacy })
-                }
-                if let settingsMessage {
-                    Text(settingsMessage)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(JDTheme.secondaryText)
-                        .padding(.horizontal, 20)
-                        .padding(.top, -8)
-                        .padding(.bottom, 18)
                 }
             }
             .padding(.bottom, 8)
@@ -3947,7 +3906,6 @@ private struct SettingsRootTabView: View {
         .sheet(isPresented: $isShowingAccountDetail) {
             AccountDetailSheet(
                 profile: resolvedProfile,
-                plan: (settings?.plan ?? "free") == "pro" ? "Pro" : "Free",
                 message: accountMessage,
                 onSaveDisplayName: { name in
                     try await onUpdateDisplayName(name)
@@ -3989,7 +3947,6 @@ private struct SettingsRootTabView: View {
                 tasks: snapshot?.tasks ?? [],
                 habits: snapshot?.habits ?? [],
                 categories: snapshot?.categories ?? [],
-                isProPlan: isProPlan,
                 onAddGoal: onAddGoal,
                 onSaveGoal: onSaveGoal,
                 onDeleteGoal: onDeleteGoal
@@ -4080,14 +4037,8 @@ private struct SettingsRootTabView: View {
 
     private var justDoModeBinding: Binding<Bool> {
         Binding(
-            get: { isProPlan && (settings?.justDoMode ?? false) },
-            set: { value in
-                if value && !isProPlan {
-                    settingsMessage = "Just Do Mode는 Pro 버전에서 사용할 수 있습니다."
-                    return
-                }
-                onSetJustDoMode(value)
-            }
+            get: { settings?.justDoMode ?? false },
+            set: onSetJustDoMode
         )
     }
 
@@ -4365,7 +4316,6 @@ private struct WeekStartPickerSheet: View {
 
 private struct AccountDetailSheet: View {
     let profile: AuthProfile
-    let plan: String
     let message: String?
     let onSaveDisplayName: (String) async throws -> Void
     let onChangeAccount: () -> Void
@@ -4448,8 +4398,7 @@ private struct AccountDetailSheet: View {
                 VStack(spacing: 0) {
                     AccountInfoRow(title: "이름", value: profile.title)
                     AccountInfoRow(title: "이메일", value: profile.email ?? "-")
-                    AccountInfoRow(title: "로그인 방식", value: profile.loginMethodTitle ?? "-")
-                    AccountInfoRow(title: "현재 플랜", value: plan, isLast: true)
+                    AccountInfoRow(title: "로그인 방식", value: profile.loginMethodTitle ?? "-", isLast: true)
                 }
                 .background(JDTheme.surfaceAlt)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -4680,7 +4629,7 @@ private enum LegalDocument: String, Identifiable {
                 ("서비스 이용", "Just Do는 할 일과 습관을 기록하고 관리하기 위한 개인 생산성 서비스입니다. 사용자는 본인의 계정과 데이터 사용에 대한 책임을 가집니다."),
                 ("계정", "Apple 또는 Google 로그인을 통해 서비스를 사용할 수 있으며, 계정 정보는 로그인과 동기화 기능 제공을 위해 사용됩니다."),
                 ("데이터", "사용자가 입력한 할 일, 습관, 카테고리, 설정 정보는 서비스 제공과 동기화를 위해 저장될 수 있습니다."),
-                ("유료 기능", "Pro 기능과 결제 기능은 추후 별도 결제 정책과 함께 제공될 예정입니다."),
+                ("무료 이용", "Just Do의 현재 앱 및 웹 기능은 로그인한 사용자에게 무료로 제공됩니다. 서비스는 결제 수단 등록, 유료 구독, 자동 갱신을 제공하지 않으므로 이용 요금의 청구·구독 해지·환불 절차가 발생하지 않습니다."),
                 ("변경", "본 약관은 서비스 개선 또는 정책 변경에 따라 업데이트될 수 있습니다.")
             ]
         case .privacy:
@@ -6028,9 +5977,8 @@ private struct GoalReportTarget: Identifiable, Equatable {
 
 private struct GoalReportPresentation: Identifiable, Equatable {
     var target: GoalReportTarget
-    var isPreview: Bool
 
-    var id: String { "\(target.id)-\(isPreview ? "preview" : "report")" }
+    var id: String { target.id }
 }
 
 private struct GoalProgress: Identifiable {
@@ -6317,7 +6265,6 @@ private struct GoalManagementSheet: View {
     let tasks: [Task]
     let habits: [Habit]
     let categories: [JDCategory]
-    let isProPlan: Bool
     let onAddGoal: (GoalDraft) -> Void
     let onSaveGoal: (Goal) -> Void
     let onDeleteGoal: (Goal) -> Void
@@ -6367,8 +6314,7 @@ private struct GoalManagementSheet: View {
 
     private func openSupportingReport(_ report: GoalReportAvailability) {
         reportPresentation = GoalReportPresentation(
-            target: GoalReportTarget(periodType: report.periodType, periodKey: report.periodKey),
-            isPreview: !isProPlan
+            target: GoalReportTarget(periodType: report.periodType, periodKey: report.periodKey)
         )
     }
 
@@ -6974,12 +6920,6 @@ private struct GoalReportFullScreen: View {
         ZStack {
             JDTheme.background.ignoresSafeArea()
             reportFlow
-                .blur(radius: presentation.isPreview ? 6 : 0)
-                .disabled(presentation.isPreview)
-                .accessibilityHidden(presentation.isPreview)
-            if presentation.isPreview {
-                GoalReportLockedOverlay(onClose: onClose)
-            }
         }
         .task {
             matches = await GoalMatchProvider().fetch(
@@ -7135,61 +7075,6 @@ private struct GoalReportPage<Content: View>: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 12)
-        }
-    }
-}
-
-private struct GoalReportLockedOverlay: View {
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button(action: onClose) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(JDTheme.accent)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                Spacer()
-                Text("FREE")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(JDTheme.tertiaryText)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(JDTheme.tertiaryText.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                    .padding(.trailing, 14)
-            }
-            .padding(.top, 8)
-
-            Spacer()
-
-            VStack(spacing: 8) {
-                Image(systemName: "lock")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(JDTheme.secondaryText)
-                Text("전체 리포트는 Pro에서 펼쳐져요")
-                    .font(.system(size: 16, weight: .bold))
-                    .multilineTextAlignment(.center)
-                Text("목표별 진행, 활동 흐름, 이번 기간의 이야기까지\nTrial 또는 Pro에서 볼 수 있어요.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(JDTheme.secondaryText)
-                    .multilineTextAlignment(.center)
-                Button("닫기") { onClose() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(JDTheme.primaryText)
-                    .padding(.top, 4)
-            }
-            .padding(22)
-            .frame(maxWidth: 300)
-            .background(JDTheme.surface)
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(JDTheme.divider, lineWidth: 0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.16), radius: 22, y: 10)
-
-            Spacer()
         }
     }
 }
@@ -7453,7 +7338,6 @@ private struct SettingsRow: View {
     var avatar = false
     var avatarText = "?"
     var danger = false
-    var pro = false
     var chevron = false
     var isLast = false
     var right: AnyView?
@@ -7484,20 +7368,9 @@ private struct SettingsRow: View {
                             .foregroundStyle(.white)
                     }
             }
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(.system(size: 15, weight: .medium))
-                if pro {
-                    Text("PRO")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(JDTheme.me)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(JDTheme.me.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-            }
-            .foregroundStyle(danger ? JDTheme.external : (pro ? JDTheme.me : JDTheme.primaryText))
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(danger ? JDTheme.external : JDTheme.primaryText)
             Spacer()
             if let detail {
                 Text(detail)

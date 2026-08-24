@@ -1,27 +1,18 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
-const single = (value: string | string[] | undefined) =>
-  Array.isArray(value) ? value[0] ?? "" : value ?? "";
-
-export default async function BillingFailPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const params = await searchParams;
-  const code = single(params.code) || "PAY_PROCESS_ABORTED";
-  const message = single(params.message) || "Toss 결제가 완료되지 않았습니다.";
-
+export default function BillingFailPage() {
   return (
     <main style={pageStyle}>
       <section style={cardStyle}>
-        <div style={eyebrowStyle}>Just Do Pro</div>
-        <h1 style={titleStyle}>Toss 결제가 중단되었습니다</h1>
-        <p style={copyStyle}>{message}</p>
-        <div style={errorStyle}>{code}</div>
-        <Link href="/?settings=subscription" style={buttonStyle}>
-          구독 화면으로 돌아가기
+        <div style={eyebrowStyle}>Just Do</div>
+        <h1 style={titleStyle}>결제 기능을 제공하지 않습니다</h1>
+        <p style={copyStyle}>
+          Just Do의 모든 기능은 현재 무료입니다. 결제를 다시 시도할 필요 없이
+          앱으로 돌아가 모든 기능을 이용할 수 있습니다.
+        </p>
+        <Link href="/" style={buttonStyle}>
+          Just Do로 돌아가기
         </Link>
       </section>
     </main>
@@ -50,7 +41,7 @@ const cardStyle = {
 
 const eyebrowStyle = {
   marginBottom: 8,
-  color: "#D36A3A",
+  color: "#4F6FD8",
   fontSize: 12,
   fontWeight: 800,
   textTransform: "uppercase",
@@ -69,17 +60,6 @@ const copyStyle = {
   color: "#69717D",
   fontSize: 14,
   lineHeight: 1.55,
-} satisfies CSSProperties;
-
-const errorStyle = {
-  border: "1px solid #E3E6EA",
-  borderRadius: 10,
-  background: "#F7F8FA",
-  padding: "12px 14px",
-  marginBottom: 18,
-  fontSize: 12,
-  color: "#D36A3A",
-  fontWeight: 700,
 } satisfies CSSProperties;
 
 const buttonStyle = {

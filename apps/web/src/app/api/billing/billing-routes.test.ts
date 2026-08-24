@@ -3,50 +3,43 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   authUser: { id: "user-1" } as { id: string } | null,
   serviceClient: null as unknown,
+  createSupabaseServerClient: vi.fn(),
+  getSupabaseServiceRoleClient: vi.fn(),
   issueTossBillingKey: vi.fn(),
   chargeTossBillingKey: vi.fn(),
   deleteTossBillingKey: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: vi.fn(async () => ({
-    auth: {
-      getUser: vi.fn(async () => ({
-        data: { user: mocks.authUser },
-        error: mocks.authUser ? null : new Error("unauthorized"),
-      })),
-    },
-  })),
+  createSupabaseServerClient: mocks.createSupabaseServerClient,
 }));
 
 vi.mock("@/lib/supabase/service-role", () => ({
-  getSupabaseServiceRoleClient: vi.fn(() => mocks.serviceClient),
+  getSupabaseServiceRoleClient: mocks.getSupabaseServiceRoleClient,
 }));
 
 vi.mock("server-only", () => ({}));
 
-vi.mock("@/lib/billing/toss", () => {
-  return {
-    TOSS_BILLING_PLANS: {
-      monthly: { amount: 1900, orderName: "Just Do Pro 월간" },
-      yearly: { amount: 9900, orderName: "Just Do Pro 연간" },
-    },
-    TossPaymentsError: class TossPaymentsError extends Error {
-      constructor(
-        message: string,
-        readonly status: number,
-        readonly code?: string,
-      ) {
-        super(message);
-      }
-    },
-    isTossBillingPlanInterval: (value: unknown) =>
-      value === "monthly" || value === "yearly",
-    issueTossBillingKey: mocks.issueTossBillingKey,
-    chargeTossBillingKey: mocks.chargeTossBillingKey,
-    deleteTossBillingKey: mocks.deleteTossBillingKey,
-  };
-});
+vi.mock("@/lib/billing/toss", () => ({
+  TOSS_BILLING_PLANS: {
+    monthly: { amount: 1900, orderName: "Just Do Pro 월간" },
+    yearly: { amount: 9900, orderName: "Just Do Pro 연간" },
+  },
+  TossPaymentsError: class TossPaymentsError extends Error {
+    constructor(
+      message: string,
+      readonly status: number,
+      readonly code?: string,
+    ) {
+      super(message);
+    }
+  },
+  isTossBillingPlanInterval: (value: unknown) =>
+    value === "monthly" || value === "yearly",
+  issueTossBillingKey: mocks.issueTossBillingKey,
+  chargeTossBillingKey: mocks.chargeTossBillingKey,
+  deleteTossBillingKey: mocks.deleteTossBillingKey,
+}));
 
 const jsonRequest = (body: unknown, init: RequestInit = {}) =>
   new Request("http://test.local", {
@@ -54,6 +47,13 @@ const jsonRequest = (body: unknown, init: RequestInit = {}) =>
     headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
     body: JSON.stringify(body),
     ...init,
+  });
+
+const malformedJsonRequest = () =>
+  new Request("http://test.local", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{",
   });
 
 const queryBuilder = <T,>(result: T) => {
@@ -77,11 +77,33 @@ const createServiceClient = (tables: Record<string, unknown>) => ({
   from: vi.fn((table: string) => tables[table]),
 });
 
+const expectBillingDisabled = async (response: Response) => {
+  expect.soft(response.status).toBe(410);
+  expect.soft(await response.json()).toEqual({ error: "billing_disabled" });
+};
+
+const expectNoExternalSideEffects = () => {
+  expect.soft(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
+  expect.soft(mocks.getSupabaseServiceRoleClient).not.toHaveBeenCalled();
+  expect.soft(mocks.issueTossBillingKey).not.toHaveBeenCalled();
+  expect.soft(mocks.chargeTossBillingKey).not.toHaveBeenCalled();
+  expect.soft(mocks.deleteTossBillingKey).not.toHaveBeenCalled();
+};
+
 beforeEach(() => {
-  vi.useRealTimers();
-  vi.setSystemTime(new Date("2026-05-19T00:00:00.000Z"));
   mocks.authUser = { id: "user-1" };
   mocks.serviceClient = createServiceClient({});
+  mocks.createSupabaseServerClient.mockReset();
+  mocks.createSupabaseServerClient.mockImplementation(async () => ({
+    auth: {
+      getUser: vi.fn(async () => ({
+        data: { user: mocks.authUser },
+        error: mocks.authUser ? null : new Error("unauthorized"),
+      })),
+    },
+  }));
+  mocks.getSupabaseServiceRoleClient.mockReset();
+  mocks.getSupabaseServiceRoleClient.mockImplementation(() => mocks.serviceClient);
   mocks.issueTossBillingKey.mockReset();
   mocks.chargeTossBillingKey.mockReset();
   mocks.deleteTossBillingKey.mockReset();
@@ -89,25 +111,10 @@ beforeEach(() => {
   process.env.TOSS_WEBHOOK_SECRET = "webhook-secret";
 });
 
-describe("billing server helpers", () => {
-  it("advances billing dates to the target month end when needed", async () => {
-    const { addBillingInterval } = await import("@/lib/billing/server");
-
-    expect(addBillingInterval(new Date("2026-01-31T00:00:00.000Z"), "monthly").toISOString())
-      .toBe("2026-02-28T00:00:00.000Z");
-    expect(addBillingInterval(new Date("2028-01-31T00:00:00.000Z"), "monthly").toISOString())
-      .toBe("2028-02-29T00:00:00.000Z");
-    expect(addBillingInterval(new Date("2028-02-29T00:00:00.000Z"), "yearly").toISOString())
-      .toBe("2029-02-28T00:00:00.000Z");
-  });
-});
-
-describe("billing issue-key route", () => {
-  it("issues a Toss billing key and stores subscription metadata", async () => {
+describe("full-free billing-disabled contract", () => {
+  it("disables billing-key issuance before auth, database, or Toss calls", async () => {
     const upsert = vi.fn(async () => ({ error: null }));
-    mocks.serviceClient = createServiceClient({
-      user_subscriptions: { upsert },
-    });
+    mocks.serviceClient = createServiceClient({ user_subscriptions: { upsert } });
     mocks.issueTossBillingKey.mockResolvedValue({
       billingKey: "billing-key",
       customerKey: "customer-key",
@@ -124,44 +131,20 @@ describe("billing issue-key route", () => {
       }),
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      ok: true,
-      planInterval: "yearly",
-      amount: 9900,
-    });
-    expect(mocks.issueTossBillingKey).toHaveBeenCalledWith({
-      authKey: "auth-key",
-      customerKey: "customer-key",
-    });
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_id: "user-1",
-        status: "trial",
-        billing_provider: "toss_payments",
-        toss_billing_key: "billing-key",
-        toss_customer_key: "customer-key",
-        plan_interval: "yearly",
-        amount_krw: 9900,
-        payment_method_last4: "7890",
-      }),
-      { onConflict: "user_id" },
-    );
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
+    expect.soft(upsert).not.toHaveBeenCalled();
   });
 
-  it("rejects unauthenticated issue-key requests", async () => {
-    mocks.authUser = null;
+  it("returns the same disabled response for malformed issue-key input", async () => {
     const { POST } = await import("./issue-key/route");
-    const response = await POST(
-      jsonRequest({ authKey: "auth-key", customerKey: "customer-key" }),
-    );
+    const response = await POST(malformedJsonRequest());
 
-    expect(response.status).toBe(401);
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
   });
-});
 
-describe("billing charge route", () => {
-  it("charges due subscriptions and advances billing dates", async () => {
+  it("disables scheduled charges even with a valid-looking cron secret", async () => {
     const subscriptionId = "11111111-1111-4111-8111-111111111111";
     const dueQuery = queryBuilder({
       data: [
@@ -173,16 +156,16 @@ describe("billing charge route", () => {
           plan_interval: "monthly",
           amount_krw: 1900,
           payment_failures: 0,
-          next_billing_at: "2026-01-31T00:00:00.000Z",
+          next_billing_at: "2026-08-21T00:00:00.000Z",
         },
       ],
       error: null,
     });
-    const insertEvent = vi.fn(async () => ({ error: null }));
-    const updateSubscription = vi.fn(() => mutationBuilder());
+    const update = vi.fn(() => mutationBuilder());
+    const insert = vi.fn(async () => ({ error: null }));
     mocks.serviceClient = createServiceClient({
-      user_subscriptions: { ...dueQuery, update: updateSubscription },
-      payment_events: { insert: insertEvent },
+      user_subscriptions: { ...dueQuery, update },
+      payment_events: { insert },
     });
     mocks.chargeTossBillingKey.mockResolvedValue({
       paymentKey: "payment-key",
@@ -190,7 +173,7 @@ describe("billing charge route", () => {
       orderName: "Just Do Pro 월간",
       status: "DONE",
       totalAmount: 1900,
-      approvedAt: "2026-05-19T00:00:00.000Z",
+      approvedAt: "2026-08-21T00:00:00.000Z",
     });
 
     const { POST } = await import("./charge/route");
@@ -201,220 +184,66 @@ describe("billing charge route", () => {
       }),
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      ok: true,
-      charged: [subscriptionId],
-      failed: [],
-    });
-    expect(mocks.chargeTossBillingKey).toHaveBeenCalledWith(
-      expect.objectContaining({
-        billingKey: "billing-key",
-        customerKey: "customer-key",
-        amount: 1900,
-      }),
-    );
-    expect(updateSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "active",
-        payment_failures: 0,
-        expires_at: "2026-02-28T00:00:00.000Z",
-        next_billing_at: "2026-02-28T00:00:00.000Z",
-        toss_last_payment_key: "payment-key",
-      }),
-    );
-    expect(insertEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event_type: "BILLING_CHARGE_REQUESTED",
-        payment_key: "payment-key",
-        subscription_id: subscriptionId,
-      }),
-    );
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
+    expect.soft(update).not.toHaveBeenCalled();
+    expect.soft(insert).not.toHaveBeenCalled();
   });
 
-  it("pauses subscriptions after the third charge failure", async () => {
-    const subscriptionId = "22222222-2222-4222-8222-222222222222";
-    const dueQuery = queryBuilder({
-      data: [
-        {
-          id: subscriptionId,
-          user_id: "user-1",
-          toss_billing_key: "billing-key",
-          toss_customer_key: "customer-key",
-          plan_interval: "monthly",
-          amount_krw: 1900,
-          payment_failures: 2,
-          next_billing_at: "2026-05-19T00:00:00.000Z",
-        },
-      ],
-      error: null,
-    });
-    const insertEvent = vi.fn(async () => ({ error: null }));
-    const updateSubscription = vi.fn(() => mutationBuilder());
-    mocks.serviceClient = createServiceClient({
-      user_subscriptions: { ...dueQuery, update: updateSubscription },
-      payment_events: { insert: insertEvent },
-    });
-    mocks.chargeTossBillingKey.mockRejectedValue(new Error("card declined"));
-
+  it("returns the same disabled response without cron authorization", async () => {
     const { POST } = await import("./charge/route");
-    const response = await POST(
-      new Request("http://test.local", {
-        method: "POST",
-        headers: { Authorization: "Bearer cron-secret" },
-      }),
-    );
+    const response = await POST(new Request("http://test.local", { method: "POST" }));
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      ok: true,
-      charged: [],
-      failed: [subscriptionId],
-    });
-    expect(updateSubscription).toHaveBeenCalledWith({
-      status: "paused",
-      payment_failures: 3,
-      next_billing_at: null,
-    });
-    expect(insertEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event_type: "BILLING_CHARGE_FAILED",
-        processing_error: "card declined",
-      }),
-    );
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
   });
-});
 
-describe("billing cancel route", () => {
-  it("cancels an active Toss subscription, deletes the billing key, and records an event", async () => {
-    const subscriptionId = "44444444-4444-4444-8444-444444444444";
+  it("disables cancellation before auth, database, or Toss calls", async () => {
     const subscriptionQuery = queryBuilder({
       data: {
-        id: subscriptionId,
+        id: "44444444-4444-4444-8444-444444444444",
         user_id: "user-1",
         toss_billing_key: "billing-key",
       },
       error: null,
     });
-    const updateSubscription = vi.fn(() => mutationBuilder());
-    const insertEvent = vi.fn(async () => ({ error: null }));
+    const update = vi.fn(() => mutationBuilder());
+    const insert = vi.fn(async () => ({ error: null }));
     mocks.serviceClient = createServiceClient({
-      user_subscriptions: { ...subscriptionQuery, update: updateSubscription },
-      payment_events: { insert: insertEvent },
+      user_subscriptions: { ...subscriptionQuery, update },
+      payment_events: { insert },
     });
     mocks.deleteTossBillingKey.mockResolvedValue({});
 
     const { POST } = await import("./cancel/route");
     const response = await POST();
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true });
-    expect(mocks.deleteTossBillingKey).toHaveBeenCalledWith("billing-key");
-    expect(updateSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "cancelled",
-        next_billing_at: null,
-        toss_billing_key: null,
-        payment_failures: 0,
-      }),
-    );
-    expect(insertEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "toss_payments",
-        event_type: "BILLING_CANCELLED",
-        subscription_id: subscriptionId,
-        user_id: "user-1",
-      }),
-    );
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
+    expect.soft(update).not.toHaveBeenCalled();
+    expect.soft(insert).not.toHaveBeenCalled();
   });
 
-  it("cancels local subscription state even when no Toss billing key exists", async () => {
-    const subscriptionId = "55555555-5555-4555-8555-555555555555";
-    const subscriptionQuery = queryBuilder({
-      data: {
-        id: subscriptionId,
-        user_id: "user-1",
-        toss_billing_key: null,
-      },
-      error: null,
-    });
-    const updateSubscription = vi.fn(() => mutationBuilder());
-    mocks.serviceClient = createServiceClient({
-      user_subscriptions: { ...subscriptionQuery, update: updateSubscription },
-      payment_events: { insert: vi.fn(async () => ({ error: null })) },
-    });
-
+  it("returns the same disabled cancellation response for signed-out callers", async () => {
+    mocks.authUser = null;
     const { POST } = await import("./cancel/route");
     const response = await POST();
 
-    expect(response.status).toBe(200);
-    expect(mocks.deleteTossBillingKey).not.toHaveBeenCalled();
-    expect(updateSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "cancelled",
-        toss_billing_key: null,
-      }),
-    );
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
   });
 
-  it("returns a Toss error without clearing local subscription state when billing-key deletion fails", async () => {
-    const subscriptionQuery = queryBuilder({
-      data: {
-        id: "66666666-6666-4666-8666-666666666666",
-        user_id: "user-1",
-        toss_billing_key: "billing-key",
-      },
-      error: null,
-    });
-    const updateSubscription = vi.fn(() => mutationBuilder());
-    mocks.serviceClient = createServiceClient({
-      user_subscriptions: { ...subscriptionQuery, update: updateSubscription },
-      payment_events: { insert: vi.fn(async () => ({ error: null })) },
-    });
-    const { TossPaymentsError } = await import("@/lib/billing/toss");
-    mocks.deleteTossBillingKey.mockRejectedValue(
-      new TossPaymentsError("invalid billing key", 400, "INVALID_BILLING_KEY"),
-    );
-
-    const { POST } = await import("./cancel/route");
-    const response = await POST();
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: "toss_error",
-      code: "INVALID_BILLING_KEY",
-      message: "invalid billing key",
-    });
-    expect(updateSubscription).not.toHaveBeenCalled();
-  });
-
-  it("returns 404 when there is no subscription to cancel", async () => {
-    mocks.serviceClient = createServiceClient({
-      user_subscriptions: queryBuilder({ data: null, error: null }),
-    });
-
-    const { POST } = await import("./cancel/route");
-    const response = await POST();
-
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({
-      error: "subscription_not_found",
-    });
-  });
-});
-
-describe("toss webhook route", () => {
-  it("stores webhook events idempotently and activates completed payments", async () => {
+  it("disables valid-looking Toss webhooks before database writes", async () => {
     const subscriptionId = "33333333-3333-4333-8333-333333333333";
     const subscriptionQuery = queryBuilder({
       data: { id: subscriptionId, user_id: "user-1", plan_interval: "yearly" },
       error: null,
     });
-    const upsertEvent = vi.fn(async () => ({ error: null }));
-    const updateSubscription = vi.fn(() => mutationBuilder());
+    const upsert = vi.fn(async () => ({ error: null }));
+    const update = vi.fn(() => mutationBuilder());
     mocks.serviceClient = createServiceClient({
-      user_subscriptions: { ...subscriptionQuery, update: updateSubscription },
-      payment_events: { upsert: upsertEvent },
+      user_subscriptions: { ...subscriptionQuery, update },
+      payment_events: { upsert },
     });
 
     const { POST } = await import("../webhook/toss/route");
@@ -423,12 +252,12 @@ describe("toss webhook route", () => {
         {
           eventId: "event-1",
           eventType: "PAYMENT_STATUS_CHANGED",
-          createdAt: "2026-01-31T00:00:00.000Z",
+          createdAt: "2026-08-21T00:00:00.000Z",
           data: {
             paymentKey: "payment-key",
             orderId: `justdo-${subscriptionId}-1710000000000`,
             status: "DONE",
-            approvedAt: "2026-01-31T00:00:00.000Z",
+            approvedAt: "2026-08-21T00:00:00.000Z",
             totalAmount: 9900,
           },
         },
@@ -436,29 +265,13 @@ describe("toss webhook route", () => {
       ),
     );
 
-    expect(response.status).toBe(200);
-    expect(upsertEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "toss_payments",
-        provider_event_id: "event-1",
-        payment_key: "payment-key",
-        subscription_id: subscriptionId,
-      }),
-      { onConflict: "provider,provider_event_id", ignoreDuplicates: true },
-    );
-    expect(updateSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "active",
-        plan_name: "pro",
-        expires_at: "2027-01-31T00:00:00.000Z",
-        next_billing_at: "2027-01-31T00:00:00.000Z",
-        toss_last_payment_key: "payment-key",
-        payment_failures: 0,
-      }),
-    );
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
+    expect.soft(upsert).not.toHaveBeenCalled();
+    expect.soft(update).not.toHaveBeenCalled();
   });
 
-  it("rejects webhook requests without the configured shared secret", async () => {
+  it("returns the same disabled webhook response without a shared secret", async () => {
     const { POST } = await import("../webhook/toss/route");
     const response = await POST(
       jsonRequest({
@@ -468,22 +281,7 @@ describe("toss webhook route", () => {
       }),
     );
 
-    expect(response.status).toBe(401);
-  });
-
-  it("rejects webhook events without a stable provider event id", async () => {
-    const { POST } = await import("../webhook/toss/route");
-    const response = await POST(
-      jsonRequest(
-        {
-          eventType: "PAYMENT_STATUS_CHANGED",
-          data: { status: "DONE" },
-        },
-        { headers: { "x-justdo-webhook-secret": "webhook-secret" } },
-      ),
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "missing_event_id" });
+    await expectBillingDisabled(response);
+    expectNoExternalSideEffects();
   });
 });

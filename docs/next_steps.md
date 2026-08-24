@@ -12,7 +12,90 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Active Track (2026-06-06)
+## Active Release Track (2026-08-19)
+
+> **Current state:** iOS v1 is preparing a consolidated Release Candidate after
+> TestFlight build 13. Build 13 passed real-device checks for the monthly Home
+> Task List and relative schedule-reminder titles. H-015 (scroll the monthly
+> List to today on entry / `오늘`) and H-016 (show the actual Task date/time in
+> schedule-only notification bodies) are implemented and pushed to `main`, but
+> the Xcode project still uses build number 13 and no newer TestFlight binary
+> contains them.
+>
+> **Full-free launch decision:** iOS and Web v1 must expose all currently shipped
+> features for free, regardless of legacy Free/Trial/Pro/subscription state.
+> Remove entitlement gates, report blur, upgrade/payment CTA, prices, and
+> subscription sales surfaces; guard active billing endpoints and disable the
+> AWS billing schedule. Preserve schema/history for compatibility. Toss live
+> billing and merchant review are PAUSED and are not release blockers. The
+> detailed required plan is `docs/full_free_launch_plan.md`.
+>
+> **Batching decision:** full-free behavior is the one required product-policy
+> exception before the next Release Candidate. Do not upload a build only for
+> H-015/H-016. Implement and verify full-free first, then collect any remaining
+> low-risk, release-critical fixes; exclude other new features, destructive
+> schema changes, auth/sync redesign, semantic-matching retuning, and live
+> billing work. Once the candidate list is closed, freeze scope, bump build
+> 13 → 14, run automated checks, archive/upload once, and verify the affected
+> paths plus the final App Review smoke.
+>
+> **Verified on 2026-08-19:** `swift test` 98/98, Web Vitest 146/146, Web
+> ESLint, Web production build, and generic iOS Release app/widget build all
+> pass. Before the documentation refresh, the implementation baseline was clean
+> and `main` matched `origin/main` at `a0ed238`. These results predate the
+> full-free implementation and must be rerun afterward.
+>
+> **Immediate order:**
+> 1. Run the billing safety audit and implement `docs/full_free_launch_plan.md`.
+> 2. Deploy/verify the Web and operations-side full-free policy.
+> 3. Review and close the remaining low-risk Release Candidate fix list.
+> 4. Update affected tests and rerun Swift/Web checks.
+> 5. Bump all app/widget/UI-test build numbers to 14 and archive/upload.
+> 6. Verify full-free behavior, H-015/H-016, and every added fix on TestFlight.
+> 7. Run Apple/Google login, calendar/Task, goal/report, sync, and widget sanity
+>    smoke; mark the release decision PASS and submit to public App Review.
+> 8. Keep Toss merchant review/live billing paused until a new monetization
+>    decision is made after launch.
+>
+> **Phase 0 complete (2026-08-20):** production DB and deployed-Web audits found
+> no billing/customer keys, no next charge, no payment event, and only test Toss
+> configuration in reachable locations. The six Trial/Pro rows come from the
+> signup default and are not payment records. Repository inspection confirmed
+> that the remaining risk and release work is in active UI/entitlement code:
+> Web gates Stats, Just Do Mode, and reports and exposes Toss checkout surfaces;
+> iOS gates Just Do Mode, export, and reports using the synced plan. Begin the
+> UI/code conversion now. AWS schedule inspection/disablement remains a
+> defense-in-depth operations follow-up; before production rollout it must be
+> disabled or rendered inert by the verified server billing-disabled guard.
+> Build 14 remains gated on the complete full-free implementation, not on AWS
+> access alone. See `docs/full_free_launch_plan.md` Phase 0.
+>
+> **Implementation-plan checkpoint (2026-08-20):** the full-free work is now
+> locked into six ordered batches: contract/tests, Web access/UI, Web billing
+> guards/legal routes, iOS access/UI, cross-platform copy/static audit, and
+> release verification/rollout. The fixed choices are: remove subscription UI
+> rather than show a neutral plan, make every billing mutation route return
+> unconditional `410 billing_disabled`, retain legacy schema/decoding only for
+> compatibility, and make no migration/build-number/deploy change until local
+> verification passes. Start with Batch A in `docs/full_free_launch_plan.md`.
+>
+> **Batch A complete (2026-08-21):** the focused pre-change baseline passed
+> 31/31 tests. The new full-free contract suite has 33 tests with the expected
+> red result: 14 pass and 19 fail only on legacy UI gates/commercial surfaces
+> and billing routes not yet returning `410 billing_disabled`. ESLint and
+> `git diff --check` pass. No product code changed. Continue with Batch B Web
+> access/UI conversion, then Batch C route guards.
+>
+> **Batch B complete (2026-08-21):** the Web app shell no longer imports Toss,
+> fetches subscription state for access, or contains plan gates, subscription
+> navigation, prices, checkout actions, report blur, or upgrade UI. Stats,
+> reports, and Just Do Mode are available independently of every legacy account
+> state; the Just Do preference now lives under `화면`. UI tests pass 25/25,
+> all non-billing-route Web tests pass 140/140, ESLint passes, and the production
+> build passes. The focused checkpoint is 25 pass / 8 expected fail, with only
+> Batch C billing-disabled route contracts remaining.
+
+## Completed Goal & Pro Report Track (2026-06-06 baseline)
 
 > **Goal Progress A-track is DONE (web + iOS).** The 2026-06-03 decisions were
 > implemented end to end: B (drop the all-tasks progress fallback), A1 (E1
@@ -67,7 +150,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 > 활동 스텝 스크롤화; 실기기 레이아웃 + web↔iOS 수치 cross-check 완료);
 > (5) Toss merchant review / Pro checkout DLQ (external).
 
-Recommended order for the next coding session:
+Historical Goal & Pro Report implementation order (completed unless noted):
 
 1. **Goal & Pro Report schema / sync status**
    - 2026-05-29: initial migration file added at
@@ -289,6 +372,8 @@ Recommended order for the next coding session:
 > 2026-05-28 implemented on iOS and web. 2026-05-29 iOS/Web follow-up separated
 > feature availability from the selected-day sheet/panel's local display mode.
 > Product spec anchor: `docs/just_do_prd.md` Just Do Mode.
+> The Pro-gated behavior below records the historical implementation. The
+> 2026-08-19 full-free plan supersedes its entitlement/paywall rules.
 
 - Pro-gated Home display mode.
 - Home UI remains the same; selected-date sheet/panel exposes `오늘만` and
@@ -1096,6 +1181,10 @@ Recommended order for the next coding session:
 ## Phase 7: Web Desktop Redesign
 
 > 2026-05-10 결정. v1 출시 차단 항목. Platform Strategy (`just_do_prd.md` §1.5)에 따라 web은 데스크탑 productivity hub로 재디자인.
+>
+> **2026-08-19 override:** desktop redesign remains complete, but the Pro/Toss
+> launch path below is historical. v1 launches fully free; billing activation,
+> merchant review, and DLQ work are PAUSED. See `docs/full_free_launch_plan.md`.
 
 ### 7-1. 자산 / 가드레일
 - [x] 데스크탑 prototype 추가 — 현재 자산: `reference/web_proto/`,
@@ -1375,3 +1464,69 @@ Recommended order for the next coding session:
 - [x] User-customizable categories — v1 에 풀 CRUD 도입 (Pro 게이팅 없음). `me`/`ext` enum 폐기, `Task.categoryId: string | null` 로 전환. Settings 에 카테고리 관리 화면 (rename/색상/reorder/삭제). 색상은 v1 부터 custom hex picker (preset 팔레트 + hex 입력 동시 제공). 카테고리 개수 무제한, 검색 없음, 사용자 reorder 만. Habit 은 별개 — `Habit.category = "habit"` 유지. 별도 Phase 5.5 로 분리하여 Phase 6 iOS 시작 전 완료.
 - [x] `settings` / `view` 원격 영속화 — `public.users.preferences jsonb` 컬럼 도입 (Phase 5.6). v1 동기화 필드는 `week_start` 하나만. 그 외 (`notify`, `notifyTime`, `dark`, `view.*`) 는 영구 device-local. `plan` 은 기존 `user_subscriptions` 그대로 사용.
 - [x] `Habit.recur_type` 도메인 모델 정식화 — v1 에 daily + weekly 구현 (Phase 5.7). monthly 와 `recur_end_date` 는 v2. 도메인에 `Habit.recurType: 'daily' | 'weekly'`, `Habit.recurDays?: number[]` (0=일~6=토) 추가.
+
+## 2026-08-21 전면 무료화 Batch C 완료
+
+- [x] Web 결제 변경 API 4개(`issue-key`, `charge`, `cancel`, Toss webhook)를
+  입력 파싱·인증·DB·Toss 호출 전에 항상
+  `410 { error: "billing_disabled" }`를 반환하도록 비활성화.
+- [x] `/api/billing/subscription`은 앱에서 호출하지 않는 읽기 전용 레거시
+  호환 경로로 명시하고, 결제 스키마·이력은 보존.
+- [x] `/billing/success`, `/billing/fail`을 결제나 재시도를 유도하지 않는
+  무료화 안내 페이지로 교체하고 `BillingSuccessClient` 제거.
+- [x] Web 이용약관을 전체 기능 무료·결제/유료 구독/자동 갱신 미제공
+  정책으로 갱신.
+- [x] 검증: 결제 경로 계약 8/8, Web 전체 148/148, ESLint 무경고,
+  프로덕션 빌드 및 14개 페이지 생성, `git diff --check` 통과.
+- [x] 다음: Batch D에서 iOS의 `isProPlan` 기반 접근 제한, 구독/플랜 UI,
+  Trial/Pro 문구를 제거하고 Swift 테스트와 generic Release 빌드를 실행.
+
+## 2026-08-21 전면 무료화 Batch D 완료
+
+- [x] iOS 활성 UI에서 `settings.plan`/`isProPlan` 기반 접근 판정을 제거하고
+  Just Do Mode를 저장 설정만으로 동작하도록 변경.
+- [x] 목표 리포트의 미리보기 상태, 블러·비활성화, 잠금 오버레이와
+  Trial/Pro 안내를 제거해 홈과 목표 관리 양쪽에서 전체 리포트 제공.
+- [x] 설정의 구독 그룹, Free/Pro 표시, PRO 배지 지원과 계정 상세의 현재
+  플랜 행을 제거하고 Just Do Mode를 디스플레이 그룹으로 이동.
+- [x] 데이터 내보내기 플랜 가드를 제거하고 인앱 약관을 전체 기능 무료,
+  결제·유료 구독·자동 갱신 미제공 정책으로 갱신.
+- [x] `Settings.plan`, Supabase 구독 디코딩과 Core Data 저장은 기존 데이터
+  호환을 위해 유지하되 활성 UI에서 참조하지 않음.
+- [x] 검증: Swift 패키지 테스트 98/98, generic iOS Release 앱·위젯 빌드,
+  `git diff --check` 통과. 모든 타깃 빌드 번호는 13 유지.
+- [x] 다음: Batch E에서 Web/iOS 활성 소스와 앱스토어·리뷰·체크리스트·README
+  등 공개 문구의 Pro/Trial/결제 잔존 항목을 분류하고 정리.
+
+## 2026-08-21 전면 무료화 Batch E 완료
+
+- [x] Web/iOS 활성 소스의 Pro·Trial·upgrade·subscription·billing·Toss·결제·
+  구독·유료 표현을 전수 검색하고 호환/역사/차단 계약과 금지 노출로 분류.
+- [x] 금지 대상인 활성 기능 gate, 가격, 판매 문구, checkout 링크, Toss SDK
+  호출자, 결제 mutation 구현이 없음을 확인.
+- [x] 앱 셸 테스트의 불필요한 Toss SDK·가격 mock과 테스트 키 설정 제거.
+  결제 API 테스트 mock은 외부 호출 0회 계약 검증용으로 유지.
+- [x] README, App Store 리스팅/심사 메모, 제출 순서, TestFlight 체크리스트,
+  iOS 상태, handoff, Toss PAUSED 문서, Web env 예제를 무료화 기준으로 갱신.
+- [x] App Store 6.9" 4장과 6.5" 4장을 직접 확인: Pro·Trial·가격·구독·구매
+  CTA 없음. 이미지 재생성 불필요.
+- [x] 검증: Web 테스트 148/148, ESLint, `git diff --check` 통과.
+- [ ] 다음: Batch F에서 전체 검증 재실행, 운영 Web 배포/결제 API 410 probe,
+  AWS 결제 스케줄 방어선, 계정 상태별 smoke, 범위 동결과 build 14 준비 진행.
+
+## 2026-08-21 전면 무료화 Batch F 로컬 게이트 통과
+
+- [x] Web 전체 테스트 148/148, ESLint, production build 재실행 통과.
+- [x] Swift Package 테스트 98/98, generic iOS Release 앱/위젯 build 통과.
+- [x] iOS simulator UI 회귀 테스트 5/5 통과. Free fixture에서 Just Do Mode,
+  습관, 목표, 데이터 내보내기 노출과 구독/플랜/PRO 미노출, CSV sheet 진입 확인.
+- [x] 로컬 production server에서 issue-key, charge, cancel, Toss webhook이
+  유효해 보이는 입력에도 모두 `410 billing_disabled`를 반환함을 확인.
+- [x] production bundle에 Toss SDK loader/client key, checkout 호출, Pro 가격·
+  업그레이드, 리포트 lock, Stats gate 문자열이 없음을 확인.
+- [x] diff/비밀값/빌드 번호 감사: 스키마·패키지·데이터·auth/sync 변경 없음,
+  live key 패턴 없음, app/widget/UI-test build는 모두 13 유지.
+- [x] 추가한 Free Settings/export iOS UI 회귀 케이스를 포함한 최종 재실행.
+- [ ] 운영 Web 배포 후 동일 4개 API의 `410`과 데이터/event 무변경 probe.
+- [ ] AWS schedule을 비활성화하거나 배포된 charge `410` 방어선을 기록.
+- [ ] 대표 계정 상태 및 실제 기기 smoke 후 범위를 동결하고 build 14 준비.
