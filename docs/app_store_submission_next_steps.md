@@ -157,6 +157,10 @@ Store Connect review notes.
 - Build 13 relative schedule-only titles passed on a real device. A next-build
   local follow-up now adds the actual Task date/time to the body, such as
   `오늘 15:00에 ‘Task’ 일정이 있어요.` or `내일 15:00에 …`.
+- Build 14 finished processing and was installed from TestFlight on 2026-08-25.
+  Version confirmation, launch, existing session, existing Task/Habit/Goal data,
+  and force-quit/relaunch retention all passed on a real iPhone. Full-free and
+  H-015/H-016 targeted checks remain.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information

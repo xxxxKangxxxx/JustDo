@@ -12,8 +12,8 @@ for public App Review.
 - Device: real iPhone with the TestFlight build installed.
 - Baseline build: App Store Connect / TestFlight build 13, installed and
   validated on 2026-08-05.
-- Next build: 14. The Release Candidate scope is frozen; archive/upload
-  succeeded at 2026-08-24 23:44 KST and App Store Connect processing is pending.
+- Current build: TestFlight build 14, installed and initial launch/data-retention
+  smoke passed on 2026-08-25.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -56,10 +56,20 @@ for public App Review.
 - [x] Run Swift tests, Web tests/lint/build, generic iOS Release build, and
   `git diff --check`.
 - [x] Archive/upload one consolidated build and record processing state. Build
-  14 uploaded without warnings/errors; installation remains pending.
+  14 uploaded without warnings/errors and is installed on the real device.
 - [ ] Verify H-015, H-016, and every additional batched fix on a real device.
 - [ ] Run the final App Review-visible sanity smoke before changing the release
   decision to PASS.
+
+### Build 14 Install and Data-Retention Check
+
+- [x] Confirm TestFlight reports version 1.0 (14).
+- [x] Launch without a crash, blank screen, or unrecoverable loading state.
+- [x] Confirm the existing signed-in session remains active.
+- [x] Confirm existing Task, Habit, and Goal data remains intact.
+- [x] Force-quit and relaunch; confirm session and data remain intact.
+
+Result: PASS on 2026-08-25, confirmed by the user on a real iPhone.
 
 ### Full-Free Release Verification
 

@@ -6689,3 +6689,12 @@ checkpoint.
 - Next: wait for processing, attach build 14 to the internal TestFlight group,
   install it on a real iPhone, and run the full-free plus H-015/H-016 smoke in
   `docs/testflight_smoke_checklist.md`.
+
+## 2026-08-25 TestFlight build 14 install and retention smoke
+
+- The user updated to TestFlight version 1.0 (14) on a real iPhone.
+- All five intake checks passed: normal launch, no crash/blank screen, existing
+  login session retained, existing Task/Habit/Goal data retained, and the same
+  session/data remained intact after force-quit and relaunch.
+- Release decision remains pending while full-free UI/access, H-015/H-016,
+  sync/widget, and final App Review-visible sanity checks continue.
