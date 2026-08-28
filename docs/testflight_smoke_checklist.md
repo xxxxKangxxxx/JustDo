@@ -435,16 +435,16 @@ Notes: Build 12 was archived and uploaded successfully on 2026-08-04. The archiv
   previous month appears under the displayed month's first day.
 - [x] Tap a date-section header and confirm the existing daily detail panel
   opens with that day's Tasks and Habits.
-- [ ] On the next build, switch to List in the current month and confirm it
+- [x] On build 14, switch to List in the current month and confirm it
   automatically scrolls to today's date section.
-- [ ] On the next build, scroll away from today, tap `오늘`, and confirm the
+- [x] On build 14, scroll away from today, tap `오늘`, and confirm the
   list scrolls back to today's date section.
 
 Result:
 
 ```text
-Status: PARTIAL PASS WITH NEXT-BUILD FOLLOW-UP
-Notes: Build 13 was archived and uploaded successfully on 2026-08-05. The archive contains app and widget version 1.0 (13), bundle IDs `kr.justdo.app` and `kr.justdo.app.widget`, and both privacy manifests. Pre-upload verification passed 96 Swift tests, Release archive validation, and `git diff --check`. The user confirmed installation with existing data and all monthly List behaviors: date grouping, month navigation, Task actions, multi-day/carry-over handling, and daily-detail entry. The user also confirmed the relative schedule-only titles. H-015 adds automatic scrolling to today's section when entering List or tapping `오늘`. H-016 adds the actual Task date/time to schedule-only bodies. Both are implemented and pushed to `main`, while the project remains build 13; they must be included in the consolidated next TestFlight build.
+Status: BUILD 14 H-015 PASS / H-016 PENDING
+Notes: Build 13 established the monthly List and relative schedule-only titles. On 2026-08-28, the user verified H-015 on real-device TestFlight build 14: entering List in the current month positions today's section in view; scrolling away and tapping `오늘` returns to it; using `오늘` from another month returns to the current month and today's section; and date-header/detail plus Task-row/edit behavior remain intact. H-016 schedule-only notification body delivery remains pending.
 ```
 
 ## Issue Log
@@ -654,11 +654,11 @@ Screenshot or screen recording: Not needed; user reported during build 13 smoke
 on 2026-08-05.
 Reproducible: Yes; the List had no programmatic scroll target or today-button
 scroll request.
-Notes: Implemented and pushed to `main` using stable date-section IDs and a
-dedicated today-scroll request. It also retries after asynchronously loaded
-sections become available. The project remains build 13, so this change is not
-in an uploaded TestFlight binary. Swift tests passed: 98 tests; generic iOS
-Release app/widget build passed.
+Notes: Implemented using stable date-section IDs and a dedicated today-scroll
+request, including a retry after asynchronously loaded sections become
+available. Verified PASS on real-device TestFlight build 14 on 2026-08-28,
+including entry, scroll-away/`오늘`, other-month return, and detail/edit
+regression checks.
 ```
 
 ```text

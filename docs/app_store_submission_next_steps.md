@@ -167,6 +167,10 @@ Store Connect review notes.
   no lock/blur/price/upgrade/Toss/expiry UI was found. Exact no-row and every
   legacy-state account fixture remain covered by automation rather than this
   single real-device account.
+- Build 14 H-015 passed on 2026-08-28: current-month List entry scrolls to
+  today's section, `오늘` restores it after scrolling or visiting another month,
+  and date-detail plus Task edit behavior remains intact. H-016 notification
+  delivery remains pending.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information

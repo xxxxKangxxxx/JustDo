@@ -6714,3 +6714,14 @@ checkpoint.
 - Next: verify H-015 monthly List today-scroll, then H-016 schedule-only
   notification body date/time, sync/widget sanity, and final App Review-visible
   smoke.
+
+## 2026-08-28 TestFlight build 14 H-015 validation
+
+- The user completed all seven monthly List navigation checks on a real iPhone.
+- PASS: entering List in the current month automatically positions today's
+  section; scrolling away and tapping `오늘` returns to it; tapping `오늘` from a
+  previous/next month restores the current month and today's section.
+- PASS: the destination date header and Task rows still open the existing daily
+  detail and edit flows correctly, so no navigation regression was found.
+- H-015 is closed. Next: receive and inspect H-016 schedule-only notifications,
+  then run sync/widget and final App Review-visible sanity checks.
