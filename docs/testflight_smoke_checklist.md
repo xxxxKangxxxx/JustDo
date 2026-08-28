@@ -83,14 +83,22 @@ checks and are intentionally not marked complete from local evidence alone.
   Just Do Mode, data export, goals, and every other current feature.
 - [ ] Repeat entitlement-sensitive checks with legacy free, trial, active Pro,
   expired, paused, and cancelled account states; access is identical.
-- [ ] Confirm no Free/Pro/Trial badge, lock, blur, price, upgrade action, Toss
+- [x] Confirm no Free/Pro/Trial badge, lock, blur, price, upgrade action, Toss
   button, billing redirect, or Trial-expiry message remains user-visible.
-- [ ] Confirm Settings has no subscription sales surface or paid-plan status.
+- [x] Confirm Settings has no subscription sales surface or paid-plan status.
 - [ ] Confirm Web and in-app Terms use the same all-current-features-free policy.
 - [x] Confirm production Web cannot initiate a charge and the EventBridge
   billing schedule is disabled.
 - [ ] Confirm App Review notes state that all current features are free and no
   IAP, subscription, purchase flow, external link, or paid entitlement exists.
+
+Build 14 current-account result (2026-08-28): PASS on a real iPhone. Settings
+contains no subscription/current-plan badge, price, payment, or upgrade surface;
+Just Do Mode works; CSV export opens the share flow; Stats/activity and the full
+Goal report are accessible; the report has no blur, lock, or Pro expansion CTA;
+and no price, Toss, subscription-expiry, or other commercial UI was found across
+the reviewed app surfaces. The account's exact legacy subscription row/state
+was not asserted, so the separate no-row and multi-state items remain open.
 
 Current progress:
 

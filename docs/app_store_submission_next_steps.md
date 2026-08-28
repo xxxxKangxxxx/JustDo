@@ -161,6 +161,12 @@ Store Connect review notes.
   Version confirmation, launch, existing session, existing Task/Habit/Goal data,
   and force-quit/relaunch retention all passed on a real iPhone. Full-free and
   H-015/H-016 targeted checks remain.
+- Build 14 full-free UI/access smoke passed on 2026-08-28 for the installed
+  production account: Settings has no plan/subscription/payment surface, Just
+  Do Mode and CSV export work, Stats and full Goal reports are accessible, and
+  no lock/blur/price/upgrade/Toss/expiry UI was found. Exact no-row and every
+  legacy-state account fixture remain covered by automation rather than this
+  single real-device account.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information

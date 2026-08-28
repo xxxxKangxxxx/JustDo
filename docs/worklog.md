@@ -6698,3 +6698,19 @@ checkpoint.
   session/data remained intact after force-quit and relaunch.
 - Release decision remains pending while full-free UI/access, H-015/H-016,
   sync/widget, and final App Review-visible sanity checks continue.
+
+## 2026-08-28 TestFlight build 14 full-free UI/access smoke
+
+- The user completed all seven requested checks on the installed real-device
+  build 14.
+- PASS: Settings exposes no subscription/current-plan badge, price, payment, or
+  upgrade surface; Just Do Mode works; data export opens the CSV share flow;
+  Stats/activity and full Goal reports open without a plan restriction; reports
+  contain no blur, lock, or Pro expansion CTA; and no price, Toss, subscription
+  expiry, or other commercial UI was found in the reviewed app surfaces.
+- This proves the installed production account behavior. Its exact legacy
+  subscription row/state was not inspected, so no-row and all-state equality
+  remain automated regression evidence rather than seven real-device accounts.
+- Next: verify H-015 monthly List today-scroll, then H-016 schedule-only
+  notification body date/time, sync/widget sanity, and final App Review-visible
+  smoke.
