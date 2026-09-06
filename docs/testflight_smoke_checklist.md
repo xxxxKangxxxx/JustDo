@@ -1,6 +1,6 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-08-24
+Updated: 2026-09-06
 
 Purpose: preserve TestFlight build 13 validation, collect a bounded set of
 remaining Release Candidate fixes, verify the required full-free policy, and
@@ -14,6 +14,8 @@ for public App Review.
   validated on 2026-08-05.
 - Current build: TestFlight build 14, installed and initial launch/data-retention
   smoke passed on 2026-08-25.
+- Latest uploaded build: TestFlight build 15, uploaded on 2026-09-06 and
+  processing. It is the targeted public-holiday calendar/detail-sheet build.
 - Network: start online. Run one short offline check near the end.
 - Accounts:
   - Apple Sign-In: primary review path.
@@ -70,6 +72,15 @@ for public App Review.
 - [x] Force-quit and relaunch; confirm session and data remain intact.
 
 Result: PASS on 2026-08-25, confirmed by the user on a real iPhone.
+
+### Build 15 Public-Holiday Display Check
+
+- [ ] Confirm TestFlight reports version 1.0 (15).
+- [ ] In September 2026, confirm September 24-26 are red holiday dates.
+- [ ] Open September 25 and confirm the sheet header shows the red date with
+  `추석` immediately to its right in red.
+- [ ] Open an ordinary Sunday and confirm the sheet date is red without an
+  incorrect holiday name.
 
 ### Full-Free Release Verification
 

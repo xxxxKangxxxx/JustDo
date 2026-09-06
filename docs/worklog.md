@@ -6725,3 +6725,28 @@ checkpoint.
   detail and edit flows correctly, so no navigation regression was found.
 - H-015 is closed. Next: receive and inspect H-016 schedule-only notifications,
   then run sync/widget and final App Review-visible sanity checks.
+
+## 2026-09-06 Korean public-holiday parity and TestFlight build 15 upload
+
+- Added the iOS selected-day sheet treatment requested for Sundays and Korean
+  public holidays: the date is red, and a holiday such as `추석` appears in red
+  immediately to the date's right.
+- Added the app's offline Korean public-holiday rules to Web, including fixed,
+  lunar, substitute, election, and announced temporary holidays. Web month and
+  week dates now use the same red-day treatment; the September 2026 Chuseok UI
+  path has regression coverage.
+- Verification passed: Web Vitest 152/152, focused holiday/UI tests 30/30, Web
+  ESLint, Swift Package tests 98/98, generic iOS Simulator app/widget build,
+  signed Release archive validation, and `git diff --check`.
+- Bumped all app, widget, and UI-test configurations to build 15, committed as
+  `ec95962`, and pushed `main`. The production Web bundle was checked and
+  contains the new Chuseok holiday code.
+- Archived app and widget version 1.0 (15) to
+  `apps/ios/build/JustDoApp-b15-holiday-sheet.xcarchive`. Both Privacy
+  Manifests and app/widget dSYMs are present.
+- The first export attempt stopped because the Xcode Apple ID session had
+  expired. After the user reauthenticated, `xcodebuild -exportArchive` uploaded
+  build 15 successfully at 17:13 KST. App Store Connect reported that the
+  uploaded package is processing.
+- Next: wait for processing, install build 15 from TestFlight, and verify the
+  targeted holiday/Sunday sheet-header behavior on a real iPhone.
