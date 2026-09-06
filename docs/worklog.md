@@ -6750,3 +6750,14 @@ checkpoint.
   uploaded package is processing.
 - Next: wait for processing, install build 15 from TestFlight, and verify the
   targeted holiday/Sunday sheet-header behavior on a real iPhone.
+
+## 2026-09-07 TestFlight build 15 public-holiday display verification
+
+- The user updated the real iPhone to TestFlight version 1.0 (15) after App
+  Store Connect processing completed.
+- PASS: September 24-26, 2026 display as red Chuseok holiday dates.
+- PASS: opening September 25 shows the red date and red `추석` label immediately
+  to its right in the selected-day sheet header.
+- PASS: opening an ordinary Sunday shows the sheet date in red without an
+  incorrect holiday label.
+- The targeted build 15 public-holiday work is complete.

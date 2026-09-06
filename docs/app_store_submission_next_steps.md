@@ -1,14 +1,13 @@
 # App Store Submission Next Steps
 
-Updated: 2026-09-06
+Updated: 2026-09-07
 
 ## Current Release Candidate Plan
 
-- TestFlight build 15 was uploaded successfully at 2026-09-06 17:13 KST and is
-  processing in App Store Connect. It adds the selected-day holiday name/red
-  date treatment; the archive and upload completed without warnings or errors.
-- Build 14 remains the latest installed and device-validated build until build
-  15 finishes processing and is installed from TestFlight.
+- TestFlight build 15 was uploaded successfully at 2026-09-06 17:13 KST,
+  processed, installed, and passed its targeted real-device verification on
+  2026-09-07. The selected-day holiday name/red date treatment and ordinary
+  Sunday red-date behavior display correctly.
 - Build 14 includes H-015 monthly List today-scroll, H-016 schedule-only
   notification body timing, and the full-free iOS policy conversion.
 - Full-free implementation batches A-E and the Batch F local verification gate
@@ -175,9 +174,9 @@ Store Connect review notes.
   delivery remains pending.
 - Build 15 was archived and uploaded to App Store Connect on 2026-09-06. The
   app and widget are version 1.0 (15), both Privacy Manifests and dSYMs are
-  present, and App Store Connect reported that the uploaded package is
-  processing. Install it from TestFlight when processing completes and verify
-  the selected-day Sunday/public-holiday red date plus public-holiday name.
+  present, and App Store Connect accepted the package without warnings or
+  errors. It was installed and its targeted public-holiday/Sunday display
+  checks passed on a real iPhone on 2026-09-07.
 - External testers have been added.
 - Build 1 has been submitted for TestFlight Beta App Review.
 - App Store Connect required metadata currently shows no red missing-information

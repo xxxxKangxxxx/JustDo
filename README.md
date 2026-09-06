@@ -11,22 +11,18 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
 
 - **Platform Strategy (2026-05-10)**: Web=데스크탑 productivity hub, iOS=모바일
   네이티브, Android=v3. 자세한 내용: `docs/just_do_prd.md` §1.5.
-- **Active release track (2026-08-21)**: iOS/Web v1 will launch with all current
+- **Active release track (2026-09-07)**: iOS/Web v1 will launch with all current
   product features free. Web/iOS feature gates and purchase surfaces have been
   removed, Web billing mutation routes are hard-disabled, and both Terms
-  surfaces use the all-free policy. The static/copy audit and local Batch F
-  verification gate are complete. The remaining work is production rollout,
-  operations defense, representative account/real-device smoke, and scope
-  freeze before bumping build 13 → 14 and uploading once. H-015 (monthly List today-scroll)
-  and H-016 (actual Task date/time in schedule-only notification bodies) are
-  already implemented on `main` but are not in an uploaded binary. 자세한 내용:
+  surfaces use the all-free policy. TestFlight build 15 is installed and its
+  targeted Korean public-holiday/Sunday calendar and detail-sheet behavior
+  passed real-device verification. 자세한 내용:
   `docs/full_free_launch_plan.md`, `docs/next_steps.md` Active Release Track,
   and `docs/testflight_smoke_checklist.md`.
-- **Current verification (2026-08-21)**: `swift test` passed 98 tests, Web
-  Vitest passed 148 tests, Web ESLint and production build passed, and a generic
-  iOS Release build of the app + widget passed after full-free conversion.
-  The iOS simulator UI regression suite passed 5/5, including the dedicated
-  full-free Free-account Settings/export case.
+- **Current verification (2026-09-07)**: `swift test` passed 98 tests, Web
+  Vitest passed 152 tests, Web ESLint passed, and the signed iOS 1.0 (15)
+  app/widget archive uploaded successfully. Build 15 then passed its targeted
+  real-device TestFlight verification.
 - **App Store preparation**: listing metadata, privacy/support URLs, 6.9-inch
   screenshots, review notes, age rating, pricing, and privacy declarations are
   recorded as ready. Public App Review submission waits for the consolidated
@@ -41,8 +37,7 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
   방어선이다. 자세한 계획: `docs/full_free_launch_plan.md`.
 - iOS는 Home 중심 IA, Settings 내부 관리 화면, Goal & Report, 로컬 알림,
   한국 공휴일 캘린더, 월간 Task List, Home/Lock Screen widget까지 구현·실기기
-  검증을 진행했다. 현재 App Store 프로젝트 버전은 `1.0 (13)`이며 다음 업로드
-  전까지 빌드 번호를 올리지 않는다.
+  검증을 진행했다. 현재 App Store 프로젝트 버전은 `1.0 (15)`이다.
 - 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
   기존 구현을 유지한다. 결제 모달과 구독 UI의 사용자 진입 및 서버 결제 경로는
   이미 제거/비활성화됐으며, AWS 스케줄러 비활성화만 운영 단계에 남아 있다.
