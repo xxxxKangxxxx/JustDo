@@ -14,6 +14,7 @@ import {
   weekdayLabels,
   weekdayOfISO,
 } from "@/lib/date";
+import { koreanPublicHolidays } from "@/lib/korean-public-holidays";
 import { authProviders } from "@/lib/auth/providers";
 import { AuthProvider, useAuth } from "@/lib/auth/useAuth";
 import type { Goal, GoalPeriodType, Habit, HabitRecurType, Priority, Task } from "@/types/domain";
@@ -931,6 +932,7 @@ function MonthGrid({
   const weeks = monthWeeks(s.state.view.year, s.state.view.month, s.state.settings.weekStart, tasks);
   const labels = weekdayLabels(s.state.settings.weekStart);
   const today = todayISO();
+  const holidays = koreanPublicHolidays(s.state.view.year);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="grid grid-cols-7 border-b" style={{ background: t.bg, borderColor: t.divider }}>
@@ -946,11 +948,17 @@ function MonthGrid({
             {week.cells.map((cell, index) => {
               const isSelected = cell.iso === s.state.view.selectedDate;
               const isToday = cell.iso === today;
+              const holiday = cell.muted ? undefined : holidays.get(cell.iso);
+              const weekday = weekdayOfISO(cell.iso);
+              const isRedDay = !cell.muted && (holiday !== undefined || weekday === 0);
+              const isSaturday = !cell.muted && weekday === 6;
               return (
                 <div
                   key={cell.iso}
                   role="button"
                   tabIndex={0}
+                  aria-label={holiday ? `${cell.day}일, ${holiday.name}` : `${cell.day}일`}
+                  title={holiday?.name}
                   onClick={() => s.selectDate(cell.iso)}
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
@@ -969,7 +977,7 @@ function MonthGrid({
                     opacity: cell.muted ? 0.45 : 1,
                   }}
                 >
-                  <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full text-[12px]" style={{ background: isToday ? t.accent : "transparent", color: isToday ? "#fff" : t.text, fontWeight: isToday ? 700 : 500 }}>
+                  <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full text-[12px]" style={{ background: isToday ? (holiday ? t.ext.solid : t.accent) : "transparent", color: isToday ? "#fff" : cell.muted ? t.textTertiary : isRedDay ? t.ext.ink : isSaturday ? t.me.ink : t.text, fontWeight: isToday ? 700 : 500 }}>
                     {cell.day}
                   </span>
                   <span
@@ -1057,16 +1065,23 @@ function WeekView({
   const start = weekStart(s.state.view.selectedDate, s.state.settings.weekStart);
   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
   const labels = weekdayLabels(s.state.settings.weekStart);
+  const holidaysByYear = new Map(
+    [...new Set(days.map((day) => parseISO(day).year))]
+      .map((year) => [year, koreanPublicHolidays(year)]),
+  );
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="grid border-b" style={{ gridTemplateColumns: "50px repeat(7, 1fr)", borderColor: t.divider, background: t.bg }}>
         <div />
         {days.map((day, index) => {
           const parsed = parseISO(day);
+          const holiday = holidaysByYear.get(parsed.year)?.get(day);
+          const weekday = weekdayOfISO(day);
+          const isToday = day === todayISO();
           return (
-            <button key={day} type="button" onClick={() => s.selectDate(day)} className="border-l px-2.5 py-2 text-left" style={{ borderColor: t.divider }}>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3px]" style={{ color: t.textTertiary }}>{labels[index]}</div>
-              <div className="mt-0.5 flex h-[26px] w-[26px] items-center justify-center rounded-full text-[16px] font-bold" style={{ background: day === todayISO() ? t.accent : "transparent", color: day === todayISO() ? "#fff" : t.text }}>{parsed.day}</div>
+            <button key={day} type="button" onClick={() => s.selectDate(day)} className="border-l px-2.5 py-2 text-left" style={{ borderColor: t.divider }} aria-label={holiday ? `${parsed.day}일, ${holiday.name}` : `${parsed.day}일`} title={holiday?.name}>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.3px]" style={{ color: weekday === 0 ? t.ext.ink : weekday === 6 ? t.me.ink : t.textTertiary }}>{labels[index]}</div>
+              <div className="mt-0.5 flex h-[26px] w-[26px] items-center justify-center rounded-full text-[16px] font-bold" style={{ background: isToday ? (holiday ? t.ext.solid : t.accent) : "transparent", color: isToday ? "#fff" : holiday || weekday === 0 ? t.ext.ink : weekday === 6 ? t.me.ink : t.text }}>{parsed.day}</div>
             </button>
           );
         })}

@@ -2505,6 +2505,8 @@ private struct SelectedDayPanel: View {
         VStack(spacing: 0) {
             SheetCloseHeader(
                 title: "\(components.month)월 \(components.day)일",
+                titleColor: isRedDay ? JDTheme.external : JDTheme.primaryText,
+                adjacentTitle: holiday?.name,
                 onClose: { dismiss() }
             )
             listView
@@ -2670,6 +2672,14 @@ private struct SelectedDayPanel: View {
 
     private var weekdayName: String {
         ["일", "월", "화", "수", "목", "금", "토"][JDDate.weekday(selectedDate)]
+    }
+
+    private var holiday: KoreanPublicHoliday? {
+        KoreanPublicHolidayCalendar.holiday(on: selectedDate)
+    }
+
+    private var isRedDay: Bool {
+        holiday != nil || JDDate.weekday(selectedDate) == 0
     }
 
     private var groupedTasks: [(category: JDCategory, tasks: [Task])] {
@@ -4650,6 +4660,8 @@ private enum LegalDocument: String, Identifiable {
 /// ToolbarItem buttons in a circular background.
 private struct SheetCloseHeader: View {
     let title: String
+    var titleColor: Color = JDTheme.primaryText
+    var adjacentTitle: String?
     var actionTitle: String?
     var actionSystemImage: String?
     var onAction: (() -> Void)?
@@ -4657,9 +4669,19 @@ private struct SheetCloseHeader: View {
 
     var body: some View {
         HStack(alignment: .center) {
-            Text(title)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(JDTheme.primaryText)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(titleColor)
+                if let adjacentTitle {
+                    Text(adjacentTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(JDTheme.external)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
+            .accessibilityElement(children: .combine)
             Spacer()
             if let actionTitle, let onAction {
                 Button(action: onAction) {

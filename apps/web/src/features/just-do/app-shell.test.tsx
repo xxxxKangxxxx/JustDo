@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays, parseISO, todayISO } from "@/lib/date";
 import type { Persisted } from "./persistence";
 import { createMemoryStorage } from "./persistence";
-import { defaultCategories } from "./tokens";
+import { defaultCategories, tokens } from "./tokens";
 import { JustDoApp } from "./app-shell";
 
 const authMock = vi.hoisted(() => ({
@@ -369,6 +369,22 @@ describe("desktop app shell interactions", () => {
 
     click(screen.getAllByLabelText(`${selected.day}일에 항목 추가`)[0]);
     expect(await screen.findByPlaceholderText("무엇을 할까요?")).toBeInTheDocument();
+  });
+
+  it("marks Chuseok as a red day in the September calendar", async () => {
+    renderApp(persistedState({
+      view: {
+        tab: "home",
+        year: 2026,
+        month: 9,
+        selectedDate: "2026-09-25",
+        dark: false,
+      },
+    }));
+
+    const chuseok = await screen.findByRole("button", { name: "25일, 추석" });
+    expect(chuseok).toHaveAttribute("title", "추석");
+    expect(chuseok.firstElementChild).toHaveStyle({ color: tokens.light.ext.ink });
   });
 
   it("toggles today task and habit completion in place", async () => {
