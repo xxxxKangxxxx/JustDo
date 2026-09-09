@@ -6,6 +6,11 @@ implementation gaps, and checks to run before testing or shipping.
 > Current policy as of 2026-08-21: all shipped features are free. Historical
 > Pro/Trial entries under Resolved Issues document old builds only and must not
 > be used as current product or test instructions.
+>
+> 2026-09-08 release audit: build 15 passed the device smoke but App Review
+> submission is on HOLD. Build 16 must implement full account deletion, add an
+> explicit support/contact route, and replace the hard-coded Settings version.
+> See `docs/app_store_pre_submission_audit_2026-09-08.md`.
 
 ## Current Implementation
 
@@ -249,6 +254,16 @@ implementation gaps, and checks to run before testing or shipping.
 
 ## Remaining App Gaps
 
+- App Store build 16 requirements:
+  - [ ] Replace the placeholder-only `회원 탈퇴` action with authenticated full
+    account deletion, associated-data cleanup, confirmation states, local
+    cleanup, and Sign in with Apple token revocation.
+  - [x] Add an easy-to-find Settings support/contact row backed by the public
+    signed-out Web support page. Implemented locally; production/device smoke
+    remains.
+  - [x] Derive the Settings version/build label from the application bundle;
+    the simulator UI regression verifies the version/build format.
+
 - Real-device visual verification (iPhone 14 Pro / iOS 26.5):
   - [x] Auth landing — passed after `.preferredColorScheme(.light)` fix.
   - [x] Home calendar / panel — passed after the bottom-sheet redesign,
@@ -414,15 +429,13 @@ swift test
 > 2026-06-17 refresh: 2026-06-01 제품 IA, 기간 종료 리포트 배너, Web 태그 UX는
 > 모두 구현/검증 완료로 문서화됨. 현재 다음 차례는 TestFlight/App Store 제출
 > 자산과 Toss 외부 심사 트랙.
-> 2026-08-21 refresh: TestFlight build 13까지 업로드·실기기 검증됨. 월간 List
-> today-scroll(H-015)과 일정 알림 본문 실제 날짜/시간(H-016)은 `main`에 구현돼
-> 있으나 새 바이너리에는 아직 미포함. 다른 저위험 출시 필수 수정과 묶어 다음
-> Release Candidate(예상 build 14)를 한 번 업로드한 뒤 최종 App Review smoke를
-> 진행한다. 전면 무료화 코드 변환 후 자동 검증은 Swift 98 tests, Web 148
-> tests/lint/build, generic iOS Release app/widget build와 simulator UI 5/5
-> 통과. Free fixture의 Settings/export 접근과 구독/플랜/PRO 미노출도 확인했다. iOS 리포트, Just
-> Do Mode, 데이터 export의 plan gate와 구독 UI는 제거됐으며, build 14 실기기에서
-> legacy plan 상태별 동일 접근을 최종 확인한다. 상세:
+> 2026-09-08 refresh: 현재 Release Candidate는 설치된 TestFlight 1.0 (15)다.
+> build 14에서 설치/데이터 유지, 전면 무료 UI/access, H-015 today-scroll이
+> 실기기 통과했고, build 15에서 선택 날짜의 공휴일명·빨간 날짜 및 일반 일요일
+> 표시가 실기기 통과했다. H-016 일정 알림 본문의 실제 Task 날짜/시간도 build
+> 15에서 실제 알림 수신까지 통과했다.
+> 2026-09-08 기준 Swift 98/98, Web 153/153, Web ESLint와 diff check가 통과한다.
+> 다음 단계는 build 15 최종 App Review smoke 후 공개 심사 제출이다. 상세:
 > `docs/full_free_launch_plan.md`.
 
 - [x] **iOS 최종 실기기 smoke (2026-05-29 통과)**.

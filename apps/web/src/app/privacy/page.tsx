@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Just Do 개인정보처리방침",
 };
 
-const EFFECTIVE_DATE = "2026-06-14";
+const EFFECTIVE_DATE = "2026-09-09";
 const CONTACT_EMAIL = "kang071911@gmail.com";
 
 export default function PrivacyPage() {
@@ -64,8 +64,12 @@ export default function PrivacyPage() {
         <div>
           <h2 className="text-lg font-semibold">5. 보관 및 삭제</h2>
           <p className="mt-2 text-neutral-700">
-            데이터는 서비스 이용 기간 동안 보관되며, 계정 또는 데이터 삭제 요청 시
-            처리됩니다.
+            데이터는 서비스 이용 기간 동안 보관됩니다. iOS 앱의 설정에서 계정
+            화면을 열고 “회원 탈퇴”를 선택하면 계정 삭제를 요청할 수 있습니다.
+            삭제가 완료되면 인증 계정과 사용자가 입력한 할 일, 습관, 목표,
+            카테고리 및 설정 데이터가 삭제됩니다. Apple 로그인 계정은 연결된
+            로그인 토큰도 함께 철회됩니다. 법령상 별도의 보관 의무가 있는 정보는
+            해당 기간 동안 보관될 수 있습니다.
           </p>
         </div>
 

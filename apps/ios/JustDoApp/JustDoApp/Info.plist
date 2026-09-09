@@ -15,6 +15,10 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>JUSTDO_ACCOUNT_DELETE_URL</key>
+	<string>https://www.justdo.co.kr/api/account/delete</string>
+	<key>JUSTDO_SUPPORT_URL</key>
+	<string>https://www.justdo.co.kr/support</string>
 	<key>JUSTDO_SUPABASE_ANON_KEY</key>
 	<string>$(JUSTDO_SUPABASE_ANON_KEY)</string>
 	<key>JUSTDO_SUPABASE_URL</key>

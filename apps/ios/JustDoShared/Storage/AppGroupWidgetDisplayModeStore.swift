@@ -53,6 +53,12 @@ public final class AppGroupWidgetDisplayModeStore {
         userDefaults.set(normalizedHex(colors.habit) ?? Self.defaultHabitColor, forKey: Self.habitColorKey)
     }
 
+    public func clear() {
+        userDefaults.removeObject(forKey: Self.displayModeKey)
+        userDefaults.removeObject(forKey: Self.taskColorKey)
+        userDefaults.removeObject(forKey: Self.habitColorKey)
+    }
+
     private func normalizedHex(_ value: String?) -> String? {
         guard var value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return nil

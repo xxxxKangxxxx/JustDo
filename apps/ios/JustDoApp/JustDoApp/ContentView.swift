@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import JustDoShared
+import UserNotifications
 #if canImport(WidgetKit)
 import WidgetKit
 #endif
@@ -98,7 +99,8 @@ struct ContentView: View {
                 onSignOut: {
                     auth.signOut()
                     _Concurrency.Task { await onSessionChanged() }
-                }
+                },
+                onDeleteAccount: deleteAccount
             )
         case .working(let provider):
             AuthLandingView(workingProvider: provider, onSignIn: signIn(with:))
@@ -116,6 +118,68 @@ struct ContentView: View {
             await auth.signIn(with: provider)
             await onSessionChanged()
         }
+    }
+
+    @MainActor
+    private func deleteAccount() async throws {
+        try await auth.deleteAccount()
+        clearDeletedAccountData()
+    }
+
+    @MainActor
+    private func clearDeletedAccountData() {
+        do {
+            try snapshotStore?.clearAllAccountData()
+        } catch {
+            #if DEBUG
+            print("Failed to clear deleted account Core Data: \(error)")
+            #endif
+        }
+        do {
+            try AppGroupMutationQueueStore().clear()
+        } catch {
+            #if DEBUG
+            print("Failed to clear deleted account widget queue: \(error)")
+            #endif
+        }
+        do {
+            try AppGroupWidgetSnapshotStore().remove()
+        } catch {
+            #if DEBUG
+            print("Failed to clear deleted account widget snapshot: \(error)")
+            #endif
+        }
+        do {
+            try AppGroupWidgetDisplayModeStore().clear()
+        } catch {
+            #if DEBUG
+            print("Failed to clear deleted account widget preferences: \(error)")
+            #endif
+        }
+
+        [
+            "justdo.homeDisplayMode",
+            "justdo.isDarkMode",
+            "justdo.didExplainNotificationPermission",
+        ].forEach { UserDefaults.standard.removeObject(forKey: $0) }
+
+        let exportDirectory = FileManager.default.temporaryDirectory
+        if let files = try? FileManager.default.contentsOfDirectory(
+            at: exportDirectory,
+            includingPropertiesForKeys: nil
+        ) {
+            for file in files where file.lastPathComponent.hasPrefix("justdo-export-") {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
+
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        pendingDetailRoute = nil
+        syncStatus.reset()
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
     }
 
     private func open(_ url: URL) {
@@ -517,6 +581,7 @@ private struct HomeRootView: View {
     let onRequestSync: () async -> Void
     let onSnapshotChanged: (AppSnapshot) async -> Void
     let onSignOut: () -> Void
+    let onDeleteAccount: () async throws -> Void
 
     @State private var snapshot: AppSnapshot?
     @State private var selectedDate = JDDate.todayISO
@@ -597,6 +662,7 @@ private struct HomeRootView: View {
                 onRetrySync: retrySync,
                 onUpdateDisplayName: onUpdateDisplayName,
                 onSignOut: onSignOut,
+                onDeleteAccount: onDeleteAccount,
                 onDismiss: { isShowingSettings = false }
             )
         }
@@ -3749,6 +3815,8 @@ private struct StatsRootTabView: View {
 }
 
 private struct SettingsRootTabView: View {
+    @Environment(\.openURL) private var openURL
+
     let snapshot: AppSnapshot?
     let settings: Settings?
     let authProfile: AuthProfile?
@@ -3780,6 +3848,7 @@ private struct SettingsRootTabView: View {
     let onRetrySync: () -> Void
     let onUpdateDisplayName: (String) async throws -> Void
     let onSignOut: () -> Void
+    let onDeleteAccount: () async throws -> Void
     let onDismiss: () -> Void
 
     @State private var isShowingAccountDetail = false
@@ -3894,7 +3963,12 @@ private struct SettingsRootTabView: View {
                     )
                 }
                 SettingGroup(label: "앱 정보") {
-                    SettingsRow(title: "버전", detail: "1.0.2")
+                    SettingsRow(title: "버전", detail: AppInformation.displayVersion)
+                    SettingsRow(
+                        title: "고객지원",
+                        chevron: true,
+                        action: { openURL(AppInformation.supportURL) }
+                    )
                     SettingsRow(title: "이용약관", chevron: true, action: { legalDocument = .terms })
                     SettingsRow(title: "개인정보처리방침", chevron: true, isLast: true, action: { legalDocument = .privacy })
                 }
@@ -3929,11 +4003,9 @@ private struct SettingsRootTabView: View {
                     isShowingAccountDetail = false
                     onSignOut()
                 },
-                onDeleteAccount: {
-                    accountMessage = "회원 탈퇴는 서버 API 연결 후 활성화됩니다."
-                }
+                onDeleteAccount: onDeleteAccount
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(JDTheme.surface)
         }
@@ -4052,6 +4124,37 @@ private struct SettingsRootTabView: View {
         )
     }
 
+}
+
+private enum AppInformation {
+    private static let defaultSupportURL = URL(string: "https://www.justdo.co.kr/support")!
+
+    static var displayVersion: String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        switch (shortVersion, buildVersion) {
+        case let (shortVersion?, buildVersion?) where !shortVersion.isEmpty && !buildVersion.isEmpty:
+            return "\(shortVersion) (\(buildVersion))"
+        case let (shortVersion?, _) where !shortVersion.isEmpty:
+            return shortVersion
+        case let (_, buildVersion?) where !buildVersion.isEmpty:
+            return buildVersion
+        default:
+            return "-"
+        }
+    }
+
+    static var supportURL: URL {
+        guard
+            let configuredValue = Bundle.main.object(forInfoDictionaryKey: "JUSTDO_SUPPORT_URL") as? String,
+            let configuredURL = URL(string: configuredValue),
+            configuredURL.scheme == "https"
+        else {
+            return defaultSupportURL
+        }
+        return configuredURL
+    }
 }
 
 private struct NotificationSettingsSheet: View {
@@ -4330,11 +4433,14 @@ private struct AccountDetailSheet: View {
     let onSaveDisplayName: (String) async throws -> Void
     let onChangeAccount: () -> Void
     let onSignOut: () -> Void
-    let onDeleteAccount: () -> Void
+    let onDeleteAccount: () async throws -> Void
 
     @State private var displayNameText = ""
     @State private var isSavingDisplayName = false
     @State private var displayNameMessage: String?
+    @State private var isShowingDeleteConfirmation = false
+    @State private var isDeletingAccount = false
+    @State private var accountDeletionMessage: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -4416,15 +4522,21 @@ private struct AccountDetailSheet: View {
                 VStack(spacing: 0) {
                     SettingsRow(title: "계정 변경", chevron: true, action: onChangeAccount)
                     SettingsRow(title: "로그아웃", danger: true, action: onSignOut)
-                    SettingsRow(title: "회원 탈퇴", danger: true, isLast: true, action: onDeleteAccount)
+                    SettingsRow(
+                        title: isDeletingAccount ? "계정 삭제 중…" : "회원 탈퇴",
+                        danger: true,
+                        isLast: true,
+                        action: { isShowingDeleteConfirmation = true }
+                    )
+                    .disabled(isDeletingAccount)
                 }
                 .background(JDTheme.surfaceAlt)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                if let message {
-                    Text(message)
+                if let visibleMessage = accountDeletionMessage ?? message {
+                    Text(visibleMessage)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(JDTheme.secondaryText)
+                        .foregroundStyle(accountDeletionMessage == nil ? JDTheme.secondaryText : JDTheme.external)
                         .padding(.horizontal, 2)
                 }
 
@@ -4441,6 +4553,14 @@ private struct AccountDetailSheet: View {
         .onChange(of: profile.displayName ?? "") { _, value in
             guard !isSavingDisplayName else { return }
             displayNameText = value
+        }
+        .alert("계정을 삭제할까요?", isPresented: $isShowingDeleteConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("계정 및 데이터 삭제", role: .destructive) {
+                _Concurrency.Task { await deleteAccount() }
+            }
+        } message: {
+            Text("서버에 저장된 계정과 할 일·습관·목표 데이터가 영구 삭제되며 되돌릴 수 없습니다. Apple 로그인 계정은 계속하기 전에 Apple 계정 확인이 표시됩니다.")
         }
     }
 
@@ -4464,6 +4584,19 @@ private struct AccountDetailSheet: View {
             displayNameMessage = "닉네임을 저장하지 못했습니다."
         }
         isSavingDisplayName = false
+    }
+
+    @MainActor
+    private func deleteAccount() async {
+        guard !isDeletingAccount else { return }
+        isDeletingAccount = true
+        accountDeletionMessage = nil
+        do {
+            try await onDeleteAccount()
+        } catch {
+            accountDeletionMessage = error.localizedDescription
+            isDeletingAccount = false
+        }
     }
 }
 
@@ -4646,9 +4779,9 @@ private enum LegalDocument: String, Identifiable {
             return [
                 ("수집 항목", "서비스는 Apple 또는 Google 로그인으로 제공되는 이메일과 (제공 시) 기본 프로필 정보, 사용자가 입력한 할 일·습관·목표 데이터를 처리할 수 있습니다."),
                 ("이용 목적", "수집된 정보는 로그인, 데이터 동기화, 위젯 표시, 사용자 설정 유지 등 서비스 제공 목적으로 사용됩니다."),
-                ("보관", "데이터는 사용자가 서비스를 이용하는 동안 보관되며, 계정 삭제 기능 제공 시 삭제 요청에 따라 처리될 예정입니다."),
+                ("보관 및 삭제", "데이터는 사용자가 서비스를 이용하는 동안 보관됩니다. 설정의 계정 화면에서 ‘회원 탈퇴’를 선택해 삭제할 수 있으며, 완료되면 인증 계정과 사용자가 입력한 할 일·습관·목표·카테고리·설정 데이터 및 기기의 로그인 정보와 캐시가 삭제됩니다. Apple 로그인 계정은 연결된 로그인 토큰도 함께 철회됩니다."),
                 ("제3자 제공", "법령에 따른 경우를 제외하고 사용자 정보를 임의로 제3자에게 제공하지 않습니다."),
-                ("문의", "개인정보 관련 문의는 앱 내 고객지원 채널 또는 운영자가 제공하는 연락처를 통해 접수할 수 있습니다.")
+                ("문의", "개인정보 관련 문의는 kang071911@gmail.com으로 접수할 수 있습니다.")
             ]
         }
     }

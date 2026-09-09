@@ -29,15 +29,19 @@ final class AuthViewModel: ObservableObject {
     private let configurationLoader: SupabaseAppConfigurationLoader
     private let sessionStore: SupabaseSessionStoring
     private let authClient: SupabaseAuthClient
+    private let userDefaults: UserDefaults
+    private static let deletedSessionCleanupKey = "justdo.deletedSessionNeedsCleanup"
 
     init(
         configurationLoader: SupabaseAppConfigurationLoader,
         sessionStore: SupabaseSessionStoring,
-        authClient: SupabaseAuthClient
+        authClient: SupabaseAuthClient,
+        userDefaults: UserDefaults = .standard
     ) {
         self.configurationLoader = configurationLoader
         self.sessionStore = sessionStore
         self.authClient = authClient
+        self.userDefaults = userDefaults
     }
 
     convenience init() {
@@ -49,6 +53,17 @@ final class AuthViewModel: ObservableObject {
     }
 
     func reload() async {
+        if userDefaults.bool(forKey: Self.deletedSessionCleanupKey) {
+            do {
+                try sessionStore.clear()
+                userDefaults.removeObject(forKey: Self.deletedSessionCleanupKey)
+            } catch {
+                profile = nil
+                status = .signedOut
+                return
+            }
+        }
+
         #if DEBUG
         if JustDoUITestSupport.isEnabled {
             profile = AuthProfile(email: "uitest@justdo.local", displayName: "UI Test", avatarURL: nil, authProvider: nil)
@@ -143,6 +158,7 @@ final class AuthViewModel: ObservableObject {
                 presentationAnchor: anchor
             )
             try sessionStore.save(session)
+            userDefaults.removeObject(forKey: Self.deletedSessionCleanupKey)
             profile = session.profile
             status = .signedIn
         } catch {
@@ -205,6 +221,94 @@ final class AuthViewModel: ObservableObject {
         try sessionStore.save(session)
         profile = session.profile
         status = .signedIn
+    }
+
+    func deleteAccount() async throws {
+        #if DEBUG
+        if JustDoUITestSupport.isEnabled {
+            profile = nil
+            status = .signedOut
+            return
+        }
+        #endif
+
+        guard let configuration = configurationLoader.load() else {
+            throw AccountDeletionError.missingConfiguration
+        }
+        guard let endpointURL = configurationLoader.accountDeletionURL() else {
+            throw AccountDeletionError.missingEndpoint
+        }
+        guard var session = try sessionStore.load() else {
+            throw AccountDeletionError.missingSession
+        }
+
+        if session.isExpired() {
+            guard let refreshToken = session.refreshToken else {
+                throw AccountDeletionError.invalidSession
+            }
+            do {
+                session = try await authClient.refreshSession(
+                    configuration: configuration,
+                    refreshToken: refreshToken
+                )
+                try sessionStore.save(session)
+            } catch {
+                throw AccountDeletionError.invalidSession
+            }
+        }
+
+        var appleAuthorizationCode: String?
+        if session.profile.authProvider == .apple {
+            appleAuthorizationCode = try await requestAppleDeletionAuthorizationCode()
+        }
+
+        do {
+            try await authClient.deleteAccount(
+                endpointURL: endpointURL,
+                session: session,
+                appleAuthorizationCode: appleAuthorizationCode
+            )
+        } catch AccountDeletionError.missingAppleAuthorizationCode where appleAuthorizationCode == nil {
+            // Handles an older/linked session whose access-token metadata did
+            // not identify Apple even though the server found an Apple identity.
+            appleAuthorizationCode = try await requestAppleDeletionAuthorizationCode()
+            try await authClient.deleteAccount(
+                endpointURL: endpointURL,
+                session: session,
+                appleAuthorizationCode: appleAuthorizationCode
+            )
+        }
+
+        // Persist the tombstone before clearing Keychain. If an unusual
+        // Keychain failure occurs, the next launch retries cleanup and never
+        // restores the now-deleted remote session as signed in.
+        userDefaults.set(true, forKey: Self.deletedSessionCleanupKey)
+        do {
+            try sessionStore.clear()
+            userDefaults.removeObject(forKey: Self.deletedSessionCleanupKey)
+        } catch {
+            #if DEBUG
+            print("Failed to clear deleted account session: \(error)")
+            #endif
+        }
+        profile = nil
+        status = .signedOut
+    }
+
+    private func requestAppleDeletionAuthorizationCode() async throws -> String {
+        guard let anchor = Self.presentationAnchor() else {
+            throw AccountDeletionError.invalidResponse
+        }
+        do {
+            return try await authClient.appleAuthorizationCodeForAccountDeletion(
+                presentationAnchor: anchor
+            )
+        } catch {
+            if Self.isUserCancellation(error) {
+                throw AccountDeletionError.appleReauthenticationCancelled
+            }
+            throw error
+        }
     }
 
     private static func presentationAnchor() -> ASPresentationAnchor? {

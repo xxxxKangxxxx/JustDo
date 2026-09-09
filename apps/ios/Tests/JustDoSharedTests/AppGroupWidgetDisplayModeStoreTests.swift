@@ -47,4 +47,20 @@ final class AppGroupWidgetDisplayModeStoreTests: XCTestCase {
 
         XCTAssertEqual(store.readColors(), WidgetModeColors(task: "#4F6FD8", habit: "#69A17D"))
     }
+
+    func testClearRestoresDefaults() {
+        store.write(.habit)
+        store.writeColors(WidgetModeColors(task: "#112233", habit: "#445566"))
+
+        store.clear()
+
+        XCTAssertEqual(store.read(), .task)
+        XCTAssertEqual(
+            store.readColors(),
+            WidgetModeColors(
+                task: AppGroupWidgetDisplayModeStore.defaultTaskColor,
+                habit: AppGroupWidgetDisplayModeStore.defaultHabitColor
+            )
+        )
+    }
 }

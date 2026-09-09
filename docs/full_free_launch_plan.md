@@ -1,7 +1,7 @@
 # Just Do Full-Free Launch Plan
 
 Decision date: 2026-08-19
-Status: BUILD 14 UPLOADED — TESTFLIGHT DEVICE SMOKE NEXT
+Status: IMPLEMENTED AND DEPLOYED — BUILD 15 FINAL SMOKE PENDING
 
 ## Launch Policy
 
@@ -22,10 +22,11 @@ Status: BUILD 14 UPLOADED — TESTFLIGHT DEVICE SMOKE NEXT
 
 ## Release Gate
 
-Full-free behavior is the required exception to the otherwise low-risk build 14
-scope. The implementation and automated gates pass, production Web is live,
-the billing schedule is disabled, and the candidate scope is frozen. Build 14
-was uploaded successfully and real-device TestFlight verification is next.
+Full-free behavior was the required exception to the otherwise low-risk Release
+Candidate scope. The implementation and automated gates pass, production Web is
+live, the billing schedule is disabled, and the candidate scope is frozen.
+Build 14 passed its current-account full-free device check; those changes are in
+installed TestFlight build 15. Only the final build 15 App Review smoke remains.
 
 ## Locked Implementation Decisions
 
@@ -55,8 +56,8 @@ These decisions remove ambiguity before product-code edits begin.
    clients already tolerate and store the legacy value, and the row is inert.
 8. **Release rule:** the implementation gate is green, production Web is live,
    the AWS schedule is disabled, scope is frozen, and all Xcode configurations
-   are now build 14. The single archive/upload succeeded; use TestFlight for
-   the remaining real-device checks.
+   are now build 15. The archive/upload succeeded; use the installed TestFlight
+   build for the remaining final smoke.
 
 ## Detailed Execution Plan
 
@@ -356,8 +357,15 @@ account-state matrix, and real-device smoke are all recorded as PASS.
   settings remain at 13.
 - This checkpoint itself did not deploy or mutate operations. Production Web
   rollout/probes and AWS schedule disablement were subsequently completed on
-  2026-08-24. Representative production-account/real-device smoke, build 14
-  bump, archive/upload, and App Review submission remain pending.
+  2026-08-24. Build 14 and build 15 were later archived/uploaded; build 14
+  passed the current-account full-free device check, and build 15 passed its
+  final App Review-visible smoke. A separate 2026-09-08 pre-submission audit
+  placed submission on HOLD for account deletion, support/contact, in-app
+  version display, and screenshot encoding corrections. The first three are
+  now implemented locally and await production/device gates; screenshot
+  flattening remains. See
+  `docs/app_store_pre_submission_audit_2026-09-08.md`. These findings do not
+  change the completed full-free billing-safety result.
 
 ## Implementation Stop Conditions
 
@@ -571,12 +579,17 @@ Primary audit locations:
 
 - [x] Web: run tests, lint, and production build.
 - [x] iOS: run Swift tests and generic Release app/widget build.
-- [ ] Test representative account states on Web and iOS: no subscription row,
-  free, trial, active Pro, expired, paused, and cancelled.
-- [ ] Confirm reports, Stats/activity, Just Do Mode, export, goals, widgets, and
-  sync are available in every state.
-- [ ] Confirm no Pro badge, lock, blur, upgrade action, price, Toss button,
-  billing redirect, or Trial-expiry message remains user-visible.
+- [x] Cover no subscription row and every legacy state in deterministic Web
+  access tests; retain Swift compatibility tests for all decoded legacy states.
+- [x] Accept the deterministic no-subscription-row access test instead of
+  creating a manual device fixture. Ordinary signup creates a legacy
+  subscription row independently of payment, so another OAuth signup would not
+  produce the desired state.
+- [x] Confirm on the current production account that reports, Stats/activity,
+  Just Do Mode, export, goals, widgets, and sync are available and that no Pro
+  badge, lock, blur, upgrade action, price, Toss button, billing redirect, or
+  Trial-expiry message is visible. Passed on build 14 on 2026-08-28; included
+  unchanged in build 15.
 - [x] Confirm the production Web cannot initiate a charge. The issue-key,
   charge, cancel, and Toss webhook routes all return `410 billing_disabled`.
 - [x] Confirm the AWS schedule is disabled. The user verified the production
@@ -585,9 +598,9 @@ Primary audit locations:
   preserving its Lambda target and schedule resource.
 - [x] Deploy the full-free Web policy before or together with the next iOS
   TestFlight build.
-- [ ] Then freeze the remaining Release Candidate scope, bump all iOS targets
-  from build 13 to 14, archive/upload, and verify full-free behavior plus
-  H-015/H-016 and other batched fixes on a real device.
+- [x] Freeze the Release Candidate scope, upload builds 14 and 15, and verify
+  full-free behavior plus H-015 and the build 15 holiday fix on a real device.
+  H-016 deterministic tests and build 15 notification delivery also pass.
 - [ ] Complete final App Review smoke and submit only after the full-free audit
   passes.
 

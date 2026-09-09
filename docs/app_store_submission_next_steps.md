@@ -1,28 +1,39 @@
 # App Store Submission Next Steps
 
-Updated: 2026-09-07
+Updated: 2026-09-09
 
 ## Current Release Candidate Plan
+
+> **2026-09-08 pre-submission audit: HOLD. Do not submit build 15.** The final
+> device smoke passed, but source inspection found a placeholder-only account
+> deletion action, a non-public Support URL/contact path, and a hard-coded
+> in-app version (`1.0.2`) that does not match the submitted `1.0`. These require
+> fixes and a new build 16. The screenshot files also need RGB/no-alpha
+> flattening before submission. See
+> `docs/app_store_pre_submission_audit_2026-09-08.md`.
 
 - TestFlight build 15 was uploaded successfully at 2026-09-06 17:13 KST,
   processed, installed, and passed its targeted real-device verification on
   2026-09-07. The selected-day holiday name/red date treatment and ordinary
   Sunday red-date behavior display correctly.
-- Build 14 includes H-015 monthly List today-scroll, H-016 schedule-only
-  notification body timing, and the full-free iOS policy conversion.
+- Build 15 contains the build 14 full-free policy, H-015 monthly List
+  today-scroll, and H-016 schedule-only notification body changes in addition
+  to the latest holiday/detail-sheet fix.
 - Full-free implementation batches A-E and the Batch F local verification gate
   are complete: Web/iOS features no longer depend on legacy subscription state,
   purchase UI is removed, Web billing mutation routes are hard-disabled, and
   public copy is aligned. Commit `f0e584c` is live on production Web and every
   billing mutation route returns unconditional `410 billing_disabled` with
   unchanged billing-data aggregates. The production EventBridge billing
-  schedule was confirmed and disabled on 2026-08-24. Representative
-  account/real-device checks will run on TestFlight build 14. Follow
-  `docs/full_free_launch_plan.md`.
+  schedule was confirmed and disabled on 2026-08-24. The existing production
+  account passed the full-free device check on build 14; deterministic tests
+  cover no-row and legacy subscription states. Follow
+  `docs/full_free_launch_plan.md` for the implementation record.
 - The candidate scope is frozen. Do not add unrelated product features,
   destructive schema changes, auth/sync redesign, or live-billing work.
-- Wait for build 14 processing, attach/install it in internal TestFlight, verify
-  all batched changes on a real device, then run the final App Review smoke.
+- Build 15 is the frozen candidate. H-016 notification delivery passed on
+  2026-09-08. Continue the final App Review-visible smoke on this installed
+  build; do not upload another build unless it finds a release-critical defect.
 - 2026-08-21 post-conversion verification passed: 98 Swift tests, 148 Web tests,
   Web ESLint, Web production build, generic iOS Release app/widget build, and
   5/5 iOS simulator UI tests including Free Settings/export access.
@@ -31,13 +42,32 @@ Updated: 2026-09-07
   The expanded Free/legacy-plan UI scenarios are reserved for real-device
   TestFlight verification as requested; no new simulator run was used for this
   candidate.
+- 2026-09-08 verification refresh passed: 153 Web tests, Web ESLint, 98 Swift
+  Package tests, and `git diff --check`.
+
+## Remaining Submission Actions
+
+1. Configure the implemented account-deletion route with the server-only Apple
+   credentials, deploy it, and run disposable Google/Apple account deletion
+   checks plus the local-data verification in `docs/account_deletion_runbook.md`.
+2. Deploy the implemented public `/support` page and verify it signed out; on a
+   device, confirm the new iOS Settings customer-support row opens it.
+3. Confirm Settings shows the bundle-derived version/build in the build 16
+   device smoke.
+4. Flatten the App Store screenshots to RGB/no-alpha and reupload them.
+5. Run the full gate, bump every target to build 16, archive/upload, and rerun
+   the affected real-device smoke.
+6. Rotate and verify the Google demo password, replace App Review Notes, select
+   build 16 for iOS version 1.0, and submit only after the release decision is
+   changed to PASS.
 
 ## Ready Assets
 
 - App name: `Just Do`
 - Subtitle: `할 일·습관·목표를 한 곳에`
 - Privacy Policy URL: `https://www.justdo.co.kr/privacy`
-- Support URL: `https://www.justdo.co.kr`
+- Support URL: `https://www.justdo.co.kr/support` after the new public page is
+  deployed; do not submit with the authenticated root URL.
 - Marketing URL: `https://www.justdo.co.kr`
 - Demo Google account: `kangym071900@gmail.com`
 - Screenshot PNGs:
@@ -48,8 +78,8 @@ Updated: 2026-09-07
 - The 6.9-inch and 6.5-inch screenshot sets were visually audited on
   2026-08-21 and contain no Pro/Trial/price/purchase/subscription surface.
 
-Do not store the demo account password in this repository. Enter it only in App
-Store Connect review notes.
+Do not store the demo account password in this repository or screenshots. Enter
+it only in the dedicated App Review login-information password field.
 
 ## App Store Connect Input Order
 
@@ -65,16 +95,19 @@ Store Connect review notes.
    - Purpose for all listed data: App Functionality
 5. Fill version metadata using `docs/app_store_listing_draft.md`.
 6. Upload the four screenshot PNGs under the 6.9-inch iPhone slot.
-7. Add App Review notes:
+7. Under App Review Information, enable login required and enter the Google
+   demo credentials in the dedicated login-information fields. Then add Review
+   Notes:
    - Sign in with Apple is available.
    - Google demo account is available as fallback.
    - All current features are free.
    - The iOS app has no IAP, subscription, purchase flow, external payment link,
      paid entitlement, or purchase CTA.
-8. Archive from Xcode and upload the build.
-9. Wait for processing, attach the build, then submit for review.
+8. Select processed build 16 for iOS version 1.0 after the required fixes and
+   focused TestFlight verification.
+9. Submit for review only after the release decision is PASS.
 
-## Current TestFlight State
+## Historical TestFlight Timeline
 
 - Internal TestFlight build 1 is installed.
 - Build 2 was uploaded to App Store Connect on 2026-06-23 via
@@ -160,8 +193,7 @@ Store Connect review notes.
   `오늘 15:00에 ‘Task’ 일정이 있어요.` or `내일 15:00에 …`.
 - Build 14 finished processing and was installed from TestFlight on 2026-08-25.
   Version confirmation, launch, existing session, existing Task/Habit/Goal data,
-  and force-quit/relaunch retention all passed on a real iPhone. Full-free and
-  H-015/H-016 targeted checks remain.
+  and force-quit/relaunch retention all passed on a real iPhone.
 - Build 14 full-free UI/access smoke passed on 2026-08-28 for the installed
   production account: Settings has no plan/subscription/payment surface, Just
   Do Mode and CSV export work, Stats and full Goal reports are accessible, and
@@ -171,7 +203,7 @@ Store Connect review notes.
 - Build 14 H-015 passed on 2026-08-28: current-month List entry scrolls to
   today's section, `오늘` restores it after scrolling or visiting another month,
   and date-detail plus Task edit behavior remains intact. H-016 notification
-  delivery remains pending.
+  delivery later passed on build 15 on 2026-09-08.
 - Build 15 was archived and uploaded to App Store Connect on 2026-09-06. The
   app and widget are version 1.0 (15), both Privacy Manifests and dSYMs are
   present, and App Store Connect accepted the package without warnings or
@@ -189,25 +221,23 @@ Store Connect review notes.
   model; the app does not provide third-party media/content catalogs.
 - Existing App Review notes were saved before the 2026-08-19 full-free decision
   and must be replaced before submission. The new notes should keep Sign in with
-  Apple as primary and the Google demo account as fallback, while stating that
+  Apple as primary and the Google demo account from the dedicated login fields
+  as fallback, while stating that
   all current features are free and there is no IAP, subscription, purchase
   flow, external payment link, paid entitlement, or purchase CTA.
 - Build 11 real-device regression checks passed.
-- Next: complete representative account/real-device checks, close the low-risk
-  Release Candidate fix list, create one consolidated next
-  build (expected build 14), and verify full-free behavior plus every batched
-  change.
+- Current next action is the required build 16 fix set described at the top of
+  this document. Build 15 must not be submitted for public App Review.
 
-## Final Local Checks Before Archive
+## Build 15 Baseline Checks
 
-- Release build succeeds.
+- Signed build 15 archive/upload succeeded.
 - App icon has no alpha.
 - Privacy manifests are included in app and widget targets.
 - `ITSAppUsesNonExemptEncryption = NO` is present.
-- Real-device smoke:
-  - Apple sign-in.
-  - Google demo sign-in.
-  - Calendar, task add, goal screen, report entry, widget.
+- The final build 15 real-device smoke passed, but the pre-submission source
+  audit found release blockers outside that smoke path. Follow the build 16
+  exit gate in `docs/app_store_pre_submission_audit_2026-09-08.md`.
 
 For the current TestFlight internal validation pass, use
 `docs/testflight_smoke_checklist.md`.

@@ -19,28 +19,32 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
   passed real-device verification. 자세한 내용:
   `docs/full_free_launch_plan.md`, `docs/next_steps.md` Active Release Track,
   and `docs/testflight_smoke_checklist.md`.
-- **Current verification (2026-09-07)**: `swift test` passed 98 tests, Web
-  Vitest passed 152 tests, Web ESLint passed, and the signed iOS 1.0 (15)
-  app/widget archive uploaded successfully. Build 15 then passed its targeted
-  real-device TestFlight verification.
-- **App Store preparation**: listing metadata, privacy/support URLs, 6.9-inch
-  screenshots, review notes, age rating, pricing, and privacy declarations are
-  recorded as ready. Public App Review submission waits for the consolidated
-  next TestFlight build and its real-device smoke.
+- **Current verification (2026-09-09)**: the account-deletion implementation
+  and support/version correction pass 100 Swift tests, 163 Web tests, Web
+  ESLint, Web production build, and all 10 iOS simulator UI tests. The signed iOS 1.0 (15)
+  app/widget archive remains the previously verified TestFlight build.
+- **App Store preparation**: build 15 passed the final real-device smoke, but a
+  2026-09-08 source audit put submission on HOLD. Full account deletion is now
+  implemented locally but still needs Apple server credentials, deployment,
+  and disposable-account device verification. The public support/contact path
+  and bundle-derived in-app version display are also implemented locally and
+  await deployment/device verification. No-alpha screenshots still remain
+  before build 16 can be submitted. See
+  `docs/app_store_pre_submission_audit_2026-09-08.md`.
 - **Phase 7 Web Desktop Redesign** is complete. The previous checkout track is
   retained only as compatibility/history and is disabled for the full-free v1
   launch.
   데스크탑 reference는 `reference/web_proto/`와
   `reference/Just Do - Web Prototype.html`. 결제 스키마와 격리된 Toss helper는
   호환성/이력 보존 대상으로 남아 있지만 활성 UI 호출자는 없고 변경 API는
-  `410 billing_disabled`로 고정됐다. 운영 스케줄 비활성화는 출시 전 남은
-  방어선이다. 자세한 계획: `docs/full_free_launch_plan.md`.
+  `410 billing_disabled`로 고정됐다. 운영 스케줄도 2026-08-24 비활성화됐다.
+  자세한 계획: `docs/full_free_launch_plan.md`.
 - iOS는 Home 중심 IA, Settings 내부 관리 화면, Goal & Report, 로컬 알림,
   한국 공휴일 캘린더, 월간 Task List, Home/Lock Screen widget까지 구현·실기기
   검증을 진행했다. 현재 App Store 프로젝트 버전은 `1.0 (15)`이다.
 - 현재 `apps/web/` 은 데스크탑 productivity hub shell이며, 도메인/sync 레이어는
   기존 구현을 유지한다. 결제 모달과 구독 UI의 사용자 진입 및 서버 결제 경로는
-  이미 제거/비활성화됐으며, AWS 스케줄러 비활성화만 운영 단계에 남아 있다.
+  이미 제거/비활성화됐고 AWS 스케줄러도 비활성화됐다.
 - Product and handoff documents live in `docs/`.
 - Original UI references remain in `reference/`.
 

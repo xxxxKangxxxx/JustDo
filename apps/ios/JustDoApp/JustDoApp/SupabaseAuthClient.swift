@@ -51,6 +51,40 @@ enum SupabaseProfileError: Error {
     case httpStatus(Int, String)
 }
 
+enum AccountDeletionError: Error, Equatable, LocalizedError {
+    case missingConfiguration
+    case missingSession
+    case missingEndpoint
+    case appleReauthenticationCancelled
+    case missingAppleAuthorizationCode
+    case invalidSession
+    case appleNotConfigured
+    case appleExchangeFailed
+    case appleIdentityMismatch
+    case appleRevokeFailed
+    case serverFailure
+    case invalidResponse
+
+    var errorDescription: String? {
+        switch self {
+        case .missingConfiguration, .missingEndpoint:
+            return "계정 삭제 설정을 확인하지 못했습니다. 잠시 후 다시 시도해주세요."
+        case .missingSession, .invalidSession:
+            return "로그인 세션이 만료되었습니다. 다시 로그인한 뒤 시도해주세요."
+        case .appleReauthenticationCancelled:
+            return "Apple 계정 확인이 취소되어 회원 탈퇴를 중단했습니다."
+        case .missingAppleAuthorizationCode, .appleExchangeFailed:
+            return "Apple 계정을 확인하지 못했습니다. 다시 시도해주세요."
+        case .appleIdentityMismatch:
+            return "현재 로그인한 Apple 계정과 확인된 계정이 다릅니다."
+        case .appleNotConfigured, .appleRevokeFailed:
+            return "Apple 로그인 연결을 해제하지 못했습니다. 잠시 후 다시 시도해주세요."
+        case .serverFailure, .invalidResponse:
+            return "계정을 삭제하지 못했습니다. 잠시 후 다시 시도해주세요."
+        }
+    }
+}
+
 struct SupabaseAuthClient {
     private let session: URLSession
     private let callbackScheme = "justdo"
@@ -194,6 +228,78 @@ struct SupabaseAuthClient {
                 httpResponse.statusCode,
                 String(data: data, encoding: .utf8) ?? ""
             )
+        }
+    }
+
+    @MainActor
+    func appleAuthorizationCodeForAccountDeletion(
+        presentationAnchor: ASPresentationAnchor
+    ) async throws -> String {
+        let rawNonce = Self.randomNonceString()
+        let credential = try await AppleAuthorizationRunner().start(
+            nonceHash: Self.sha256Hex(rawNonce),
+            presentationAnchor: presentationAnchor
+        )
+        guard
+            let codeData = credential.authorizationCode,
+            let authorizationCode = String(data: codeData, encoding: .utf8),
+            !authorizationCode.isEmpty
+        else {
+            throw AccountDeletionError.missingAppleAuthorizationCode
+        }
+        return authorizationCode
+    }
+
+    func deleteAccount(
+        endpointURL: URL,
+        session storedSession: SupabaseStoredSession,
+        appleAuthorizationCode: String?
+    ) async throws {
+        var request = URLRequest(url: endpointURL)
+        request.httpMethod = "POST"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 30
+        request.setValue("Bearer \(storedSession.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(
+            AccountDeletionRequest(appleAuthorizationCode: appleAuthorizationCode)
+        )
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AccountDeletionError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let failure = try? decoder.decode(AccountDeletionFailure.self, from: data)
+            throw Self.accountDeletionError(
+                statusCode: httpResponse.statusCode,
+                serverCode: failure?.error
+            )
+        }
+    }
+
+    private static func accountDeletionError(
+        statusCode: Int,
+        serverCode: String?
+    ) -> AccountDeletionError {
+        switch serverCode {
+        case "invalid_session":
+            return .invalidSession
+        case "apple_reauthentication_required":
+            return .missingAppleAuthorizationCode
+        case "apple_not_configured":
+            return .appleNotConfigured
+        case "apple_exchange_failed":
+            return .appleExchangeFailed
+        case "apple_identity_mismatch":
+            return .appleIdentityMismatch
+        case "apple_revoke_failed":
+            return .appleRevokeFailed
+        case "account_delete_failed":
+            return .serverFailure
+        default:
+            return statusCode == 401 ? .invalidSession : .serverFailure
         }
     }
 
@@ -452,6 +558,18 @@ private struct DisplayNameUpdateRequest: Encodable {
     private enum CodingKeys: String, CodingKey {
         case displayName = "display_name"
     }
+}
+
+private struct AccountDeletionRequest: Encodable {
+    var appleAuthorizationCode: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case appleAuthorizationCode = "apple_authorization_code"
+    }
+}
+
+private struct AccountDeletionFailure: Decodable {
+    var error: String
 }
 
 private struct TokenResponse: Decodable {

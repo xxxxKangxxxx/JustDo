@@ -100,6 +100,34 @@ final class CoreDataAppSnapshotStoreTests: XCTestCase {
         XCTAssertEqual(try store.queuedMutations().count, 1)
     }
 
+    func testClearAllAccountDataRemovesMirrorPreferencesAndQueuedMutations() throws {
+        var snapshot = makeSnapshot(taskTitle: "Private task")
+        snapshot.settings.plan = "pro"
+        try store.replaceSnapshot(snapshot)
+        try store.applyAndEnqueue(
+            QueuedMutation(
+                id: UUID(uuidString: "90000000-0000-0000-0000-000000000002")!,
+                updatedAt: "2026-09-09T00:00:00Z",
+                mutation: .preferencesSet(key: .weekStart, value: 0)
+            )
+        )
+
+        try store.clearAllAccountData()
+
+        let cleared = try store.loadSnapshot(
+            view: snapshot.view,
+            settings: AppSnapshotDefaults.settings()
+        )
+        XCTAssertTrue(cleared.categories.isEmpty)
+        XCTAssertTrue(cleared.tasks.isEmpty)
+        XCTAssertTrue(cleared.habits.isEmpty)
+        XCTAssertTrue(cleared.goals.isEmpty)
+        XCTAssertTrue(cleared.goalPromptDismissals.isEmpty)
+        XCTAssertEqual(cleared.settings, AppSnapshotDefaults.settings())
+        XCTAssertTrue(try store.queuedMutations().isEmpty)
+        XCTAssertFalse(try store.hasMirrorData())
+    }
+
     private func makeSnapshot(taskTitle: String) -> AppSnapshot {
         let categoryID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!
         return AppSnapshot(

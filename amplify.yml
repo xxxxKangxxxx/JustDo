@@ -12,11 +12,12 @@ applications:
           commands:
             # Amplify Hosting injects env vars into the build shell, but not
             # into the SSR Lambda runtime. Persist only the Supabase server
-            # credential still used by the app. Billing is disabled for the
-            # full-free launch, so payment secrets must not enter the bundle.
+            # credential and native Apple revocation credentials used by
+            # server-only routes. Billing is disabled for the full-free launch,
+            # so payment secrets must not enter the bundle.
             # NEXT_PUBLIC_* values are already inlined client/server by
             # Next.js's normal env handling.
-            - printenv | grep -E "^SUPABASE_SERVICE_ROLE_KEY=" > .env.production
+            - printenv | grep -E "^(SUPABASE_SERVICE_ROLE_KEY|APPLE_NATIVE_CLIENT_ID|APPLE_SIGN_IN_TEAM_ID|APPLE_SIGN_IN_KEY_ID|APPLE_SIGN_IN_PRIVATE_KEY_BASE64)=" > .env.production
             - npm run build
       artifacts:
         baseDirectory: .next

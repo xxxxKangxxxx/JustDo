@@ -65,6 +65,36 @@ final class DeepLinkUITests: XCTestCase {
         try assertStatsAndReportAccess(plan: "pro")
     }
 
+    func testAccountDeletionRequiresConfirmationAndReturnsToSignedOutScreen() throws {
+        let app = launchApp()
+
+        app.buttons["설정"].tap()
+        XCTAssertTrue(app.staticTexts["UI Test"].waitForExistence(timeout: 5))
+        app.staticTexts["UI Test"].tap()
+        XCTAssertTrue(app.buttons["회원 탈퇴"].waitForExistence(timeout: 3))
+        app.buttons["회원 탈퇴"].tap()
+
+        XCTAssertTrue(app.alerts["계정을 삭제할까요?"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["취소"].exists)
+        app.buttons["계정 및 데이터 삭제"].tap()
+
+        XCTAssertTrue(app.buttons["Apple로 계속하기"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Google로 계속하기"].exists)
+    }
+
+    func testSettingsExposeSupportAndBundleVersion() throws {
+        let app = launchApp()
+
+        app.buttons["설정"].tap()
+        XCTAssertTrue(app.staticTexts["고객지원"].waitForExistence(timeout: 5))
+
+        let versionPattern = NSPredicate(
+            format: "label MATCHES %@",
+            #"[0-9]+\.[0-9]+(?:\.[0-9]+)? \([0-9]+\)"#
+        )
+        XCTAssertTrue(app.staticTexts.matching(versionPattern).firstMatch.exists)
+    }
+
     private func assertSettingsAndExportAccess(plan: String) throws {
         let app = launchApp(plan: plan)
 
@@ -94,7 +124,13 @@ final class DeepLinkUITests: XCTestCase {
         app.staticTexts["습관"].tap()
         XCTAssertTrue(app.staticTexts["TASK"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["HABIT"].exists)
-        app.buttons["닫기"].tap()
+        // Settings remains in the accessibility tree under the presented
+        // Stats sheet, so target the foreground sheet's close button.
+        let closeButtons = app.buttons.matching(identifier: "xmark")
+        let closeButton = closeButtons.count > 1
+            ? closeButtons.element(boundBy: closeButtons.count - 1)
+            : closeButtons.firstMatch
+        closeButton.tap()
 
         XCTAssertTrue(app.staticTexts["목표"].waitForExistence(timeout: 3))
         app.staticTexts["목표"].tap()

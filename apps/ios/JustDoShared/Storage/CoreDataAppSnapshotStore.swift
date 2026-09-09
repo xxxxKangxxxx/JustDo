@@ -72,6 +72,31 @@ public final class CoreDataAppSnapshotStore: @unchecked Sendable {
         }
     }
 
+    /// Removes every account-scoped value mirrored on this device.
+    ///
+    /// Account deletion calls this only after the server confirms that the
+    /// authenticated account was deleted. Unlike `replaceSnapshot`, this also
+    /// removes queued offline writes and local preferences so another account
+    /// can never inherit the deleted user's state.
+    public func clearAllAccountData() throws {
+        try performSynchronously {
+            try deleteAll(entityNames: [
+                "CDHabitLog",
+                "CDQueuedMutation",
+                "CDGoalPromptDismissal",
+                "CDTask",
+                "CDHabit",
+                "CDGoal",
+                "CDCategory",
+                "CDUserPreference",
+            ])
+            if context.hasChanges {
+                try context.save()
+            }
+            context.reset()
+        }
+    }
+
     public func task(id: UUID) throws -> Task? {
         try performSynchronously {
             guard let object = try fetchObject("CDTask", id: id) else {

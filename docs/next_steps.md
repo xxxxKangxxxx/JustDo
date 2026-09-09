@@ -12,98 +12,73 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Active Release Track (2026-08-19)
+## Active Release Track (2026-09-09)
 
-> **Current state:** the full-free Web policy is live in production from commit
-> `f0e584c`; iOS v1 has frozen the consolidated Release Candidate after
-> TestFlight build 13. Build 13 passed real-device checks for the monthly Home
-> Task List and relative schedule-reminder titles. H-015 (scroll the monthly
-> List to today on entry / `오늘`) and H-016 (show the actual Task date/time in
-> schedule-only notification bodies) and the full-free policy are included in
-> the candidate. Build 14 was archived and uploaded successfully at 2026-08-24
-> 23:44 KST with no upload warnings/errors; App Store Connect processing and
-> real-device TestFlight verification are next.
->
-> **Full-free launch decision:** iOS and Web v1 must expose all currently shipped
-> features for free, regardless of legacy Free/Trial/Pro/subscription state.
-> Remove entitlement gates, report blur, upgrade/payment CTA, prices, and
-> subscription sales surfaces; guard active billing endpoints and disable the
-> AWS billing schedule. Preserve schema/history for compatibility. Toss live
-> billing and merchant review are PAUSED and are not release blockers. The
-> detailed required plan is `docs/full_free_launch_plan.md`.
->
-> **Batching decision:** full-free behavior is the one required product-policy
-> exception before the next Release Candidate. Do not upload a build only for
-> H-015/H-016. Implement and verify full-free first, then collect any remaining
-> low-risk, release-critical fixes; exclude other new features, destructive
-> schema changes, auth/sync redesign, semantic-matching retuning, and live
-> billing work. Once the candidate list is closed, freeze scope, bump build
-> 13 → 14, run automated checks, archive/upload once, and verify the affected
-> paths plus the final App Review smoke.
->
-> **Verified on 2026-08-19:** `swift test` 98/98, Web Vitest 146/146, Web
-> ESLint, Web production build, and generic iOS Release app/widget build all
-> pass. Before the documentation refresh, the implementation baseline was clean
-> and `main` matched `origin/main` at `a0ed238`. These results predate the
-> full-free implementation and must be rerun afterward.
->
-> **Immediate order:**
-> 1. Run the billing safety audit and implement `docs/full_free_launch_plan.md`.
-> 2. ✅ Deploy/verify the Web full-free policy and disable the production AWS
->    billing schedule. The live charge route is also unconditionally inert.
-> 3. ✅ Review and close the remaining low-risk Release Candidate fix list.
-> 4. ✅ Update affected tests and rerun Swift/Web checks.
-> 5. ✅ Bump all app/widget/UI-test build numbers to 14 and archive/upload once.
-> 6. Verify full-free behavior, H-015/H-016, and every added fix on TestFlight.
-> 7. Run Apple/Google login, calendar/Task, goal/report, sync, and widget sanity
->    smoke; mark the release decision PASS and submit to public App Review.
-> 8. Keep Toss merchant review/live billing paused until a new monetization
->    decision is made after launch.
->
-> **Build 14 preflight (2026-08-24):** Web Vitest 149/149, Swift 98/98, Web
-> ESLint, `git diff --check`, and the signed generic iOS Release app/widget build
-> pass. The candidate adds explicit legacy-state compatibility coverage and
-> Free/legacy-Pro UI equality scenarios. Per the user's direction, the new UI
-> scenarios will be validated through TestFlight on a real device rather than
-> by another simulator run.
->
-> **Phase 0 complete (2026-08-20):** production DB and deployed-Web audits found
-> no billing/customer keys, no next charge, no payment event, and only test Toss
-> configuration in reachable locations. The six Trial/Pro rows come from the
-> signup default and are not payment records. Repository inspection confirmed
-> that the remaining risk and release work is in active UI/entitlement code:
-> Web gates Stats, Just Do Mode, and reports and exposes Toss checkout surfaces;
-> iOS gates Just Do Mode, export, and reports using the synced plan. Begin the
-> UI/code conversion now. AWS schedule inspection/disablement remains a
-> defense-in-depth operations follow-up; before production rollout it must be
-> disabled or rendered inert by the verified server billing-disabled guard.
-> Build 14 remains gated on the complete full-free implementation, not on AWS
-> access alone. See `docs/full_free_launch_plan.md` Phase 0.
->
-> **Implementation-plan checkpoint (2026-08-20):** the full-free work is now
-> locked into six ordered batches: contract/tests, Web access/UI, Web billing
-> guards/legal routes, iOS access/UI, cross-platform copy/static audit, and
-> release verification/rollout. The fixed choices are: remove subscription UI
-> rather than show a neutral plan, make every billing mutation route return
-> unconditional `410 billing_disabled`, retain legacy schema/decoding only for
-> compatibility, and make no migration/build-number/deploy change until local
-> verification passes. Start with Batch A in `docs/full_free_launch_plan.md`.
->
-> **Batch A complete (2026-08-21):** the focused pre-change baseline passed
-> 31/31 tests. The new full-free contract suite has 33 tests with the expected
-> red result: 14 pass and 19 fail only on legacy UI gates/commercial surfaces
-> and billing routes not yet returning `410 billing_disabled`. ESLint and
-> `git diff --check` pass. No product code changed. Continue with Batch B Web
-> access/UI conversion, then Batch C route guards.
->
-> **Batch B complete (2026-08-21):** the Web app shell no longer imports Toss,
-> fetches subscription state for access, or contains plan gates, subscription
-> navigation, prices, checkout actions, report blur, or upgrade UI. Stats,
-> reports, and Just Do Mode are available independently of every legacy account
-> state; the Just Do preference now lives under `화면`. UI tests pass 25/25,
-> all non-billing-route Web tests pass 140/140, ESLint passes, and the production
-> build passes. The focused checkpoint is 25 pass / 8 expected fail, with only
-> Batch C billing-disabled route contracts remaining.
+This section is the single source of truth for current release status and next
+actions. Completed implementation details remain in `docs/worklog.md` and
+`docs/full_free_launch_plan.md`; older sections below are historical context.
+
+### Current State
+
+- **Submission decision: HOLD.** The 2026-09-08 pre-submission source audit
+  found placeholder-only account deletion, an inadequate public support/contact
+  path, and a hard-coded in-app version mismatch. Account deletion is now
+  implemented locally, including Apple token revocation and local cleanup, but
+  needs server credentials, production deployment, and disposable-account
+  verification. Build 15 cannot be submitted; build 16 is required. The current
+  screenshot PNGs also contain alpha channels and should be flattened. See
+  `docs/app_store_pre_submission_audit_2026-09-08.md`.
+
+- iOS v1 Release Candidate is TestFlight **1.0 (15)**. It was uploaded on
+  2026-09-06, installed, and its targeted Korean public-holiday/Sunday calendar
+  and selected-day sheet checks passed on a real iPhone on 2026-09-07.
+- Build 14 already passed install/data retention, full-free UI/access, and
+  H-015 monthly List today-scroll checks. Those changes are included in build
+  15. H-016 schedule-only notification body delivery also passed on build 15
+  on 2026-09-08, so every targeted candidate fix has real-device coverage.
+- Web/iOS v1 exposes every current feature for free. Active purchase UI and
+  entitlement gates are removed, four Web billing mutation routes always
+  return `410 billing_disabled`, and the production EventBridge billing
+  schedule has been disabled since 2026-08-24. Toss live billing and merchant
+  review remain paused and are not release blockers.
+- App Store listing copy, age rating, pricing, privacy declarations, and the
+  replacement full-free review-note draft are ready. Support URL and screenshot
+  file encoding require correction before submission. The Google demo password
+  must exist only in App Store Connect.
+- Verification refreshed on 2026-09-09: Web Vitest **161/161**, Web ESLint,
+  Web production build, Swift Package tests **100/100**, and all **9/9** iOS
+  simulator UI tests pass. The signed build 15 app/widget archive was
+  previously accepted without upload warnings or errors.
+
+### Immediate Order
+
+1. Register the four server-only Apple deletion credentials in Amplify, deploy
+   the implemented account-deletion route, and verify Google/Apple deletion on
+   disposable accounts. Follow `docs/account_deletion_runbook.md`.
+2. Deploy the locally implemented public `/support`; verify signed-out access,
+   the iOS Settings customer-support route, and bundle-derived version/build on
+   a device.
+3. Flatten the 6.9-inch and 6.5-inch screenshots to RGB/no-alpha and reupload.
+4. Run automated verification, bump all iOS targets to build 16,
+   archive/upload, and rerun the focused account-deletion/support/version smoke.
+5. Rotate/verify the demo password, update App Review information and notes,
+   attach build 16 to version 1.0, and submit only after PASS.
+6. Keep the fix scope bounded to the audit findings and required regression
+   coverage; defer unrelated product, billing, and architecture work.
+
+### Open but Not Blocking the Smoke Start
+
+- The existing production account passed full-free device checks. Web tests
+  cover no-row and every legacy subscription state; Swift tests cover legacy
+  state decoding. A normal new OAuth account would receive the signup-created
+  legacy row, so the no-row automated fixture is accepted without creating a
+  special manual database state.
+- Confirm the latest Web public-holiday commit is live in Amplify when doing the
+  Web/Terms production check.
+- Post-launch work includes CI, large-file decomposition, auth refresh
+  serialization, identity-linking policy, semantic-match cache improvements,
+  and the v2 roadmap. Apple Sign-In client secret renewal is due before
+  2026-12-14.
 
 ## Completed Goal & Pro Report Track (2026-06-06 baseline)
 
@@ -1521,8 +1496,8 @@ Historical Goal & Pro Report implementation order (completed unless noted):
 - [x] App Store 6.9" 4장과 6.5" 4장을 직접 확인: Pro·Trial·가격·구독·구매
   CTA 없음. 이미지 재생성 불필요.
 - [x] 검증: Web 테스트 148/148, ESLint, `git diff --check` 통과.
-- [x] 다음: Batch F에서 전체 검증 재실행, 운영 Web 배포/결제 API 410 probe,
-  AWS 결제 스케줄 방어선, 계정 상태별 smoke, 범위 동결과 build 14 준비 진행.
+- [x] Batch F에서 전체 검증 재실행, 운영 Web 배포/결제 API 410 probe,
+  AWS 결제 스케줄 방어선, 범위 동결과 build 14 준비를 진행.
 
 ## 2026-08-21 전면 무료화 Batch F 로컬 게이트 통과
 
@@ -1545,4 +1520,7 @@ Historical Goal & Pro Report implementation order (completed unless noted):
   리전 콘솔에서 `default/justdo-prod-billing-charge-daily`의 활성 상태와
   Lambda 대상 `justdo-prod-billing-cron`을 확인한 후 2026-08-24 23:20:16 KST에
   스케줄을 비활성화함. 리소스와 대상 설정은 삭제하지 않고 보존.
-- [ ] 대표 계정 상태 및 실제 기기 smoke 후 범위를 동결하고 build 14 준비.
+- [x] 범위를 동결하고 build 14를 준비·업로드한 뒤 현재 production 계정의
+  전면 무료 실기기 smoke를 통과. 이후 holiday 보정 build 15도 업로드·설치됨.
+- [ ] build 15 최종 App Review smoke를 완료하고 공개 심사 제출. H-016 알림과
+  약관 일치는 통과했으며 no-subscription-row는 자동화 근거로 확정.

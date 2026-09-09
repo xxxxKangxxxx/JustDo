@@ -6761,3 +6761,129 @@ checkpoint.
 - PASS: opening an ordinary Sunday shows the sheet date in red without an
   incorrect holiday label.
 - The targeted build 15 public-holiday work is complete.
+
+## 2026-09-08 Release documentation consolidation
+
+- Made `docs/next_steps.md` the single source of truth for current release
+  status and replaced its stale build 13/14 execution plan with the installed
+  TestFlight build 15 state and immediate App Review sequence.
+- Updated README, full-free plan, iOS Phase 6 status, App Store submission
+  steps, listing draft, and TestFlight checklist so completed build uploads,
+  production billing guards, AWS schedule disablement, and device results are
+  no longer described as pending.
+- Added a bounded build 15 final smoke checklist covering authentication,
+  Task/sync persistence, Goal/report, unrestricted Settings/export, widget and
+  offline recovery, H-016 notification delivery, Terms parity, a representative
+  no-subscription-row account when available, and App Review note replacement.
+- Kept earlier build timelines and issue records as historical evidence rather
+  than deleting them. The release decision is now `BUILD 15 READY FOR FINAL
+  SMOKE`, not `FIX REQUIRED` or `AWAITING NEXT BUILD`.
+- Verification refresh: Web Vitest 153/153, Web ESLint, Swift Package tests
+  98/98, and `git diff --check` pass. No product code changed.
+
+## 2026-09-08 TestFlight build 15 final smoke — intake and free access
+
+- PASS: TestFlight reports version 1.0 (15).
+- PASS: force-quit/relaunch completes without a crash or forced sign-out, and
+  the existing Task, Habit, and Goal data remains intact.
+- PASS: Settings → 목표 opens the complete report without blur, lock, plan
+  badge, price, purchase CTA, or external payment link.
+- PASS: Settings has no subscription/current-plan surface, Just Do Mode works,
+  and data export opens the share presentation immediately.
+- PASS: H-016 schedule-only notification arrived normally, and the user
+  confirmed the body used the actual Task time. All targeted build 15 fixes now
+  have real-device coverage.
+- PASS: a Home/Lock Screen widget Task or Habit mutation appeared in the app,
+  refreshed correctly, and remained after relaunch.
+- PASS: a low-risk offline Task/Habit change updated locally in Airplane Mode,
+  synchronized after network restoration/foregrounding, and remained correct
+  after force-quit/relaunch.
+- PASS: Sign in with Apple completed and loaded Home with synced account data.
+- PASS: Google demo sign-in completed and loaded Home with seeded data.
+- PASS: a disposable Google-account Task synced, completed, and retained its
+  completion after force-quit/relaunch.
+- PASS: the production Web Terms screenshot shows the deployed 2026-08-21
+  full-free policy. Its `무료 이용` text matches the build 15 in-app Terms source:
+  current features are free, with no payment-method registration, paid
+  subscription, automatic renewal, billing, cancellation, or refund flow.
+- Closed the optional no-subscription-row device check using deterministic
+  coverage. Repository migrations show ordinary signup automatically creates a
+  legacy trial/active subscription row even without a purchase; the production
+  audit likewise found only signup metadata and zero payment events or billing
+  keys. Creating another OAuth account would not exercise the no-row fixture.
+
+## 2026-09-08 App Store pre-submission source and metadata audit
+
+- Changed the submission decision from build 15 ready/PASS-path to **HOLD**.
+  The completed device smoke remains valid, but source inspection found that
+  Settings → 회원 탈퇴 only displays a future server-API message. Apple requires
+  account-creation apps, including automatically created OAuth accounts, to let
+  users initiate full deletion in the app; Sign in with Apple deletion also
+  requires token-revocation handling.
+- Found two additional new-binary corrections: Settings hard-codes version
+  `1.0.2` while Xcode marketing version is `1.0`, and the app lacks an explicit
+  easy-to-find support/contact route. The App Store Connect Support URL points
+  to the signed-in app root instead of a public support page.
+- Verified that application-data foreign keys cascade from `auth.users` through
+  `public.users`, which provides a sound deletion foundation, but no
+  authenticated Auth user-deletion server path exists yet.
+- Rechecked the App Store screenshot assets: all 6.9-inch files are
+  1320×2868 and all 6.5-inch files are 1242×2688, but `sips` reports an alpha
+  channel in every PNG. Apple specifies no alpha/transparency, so flatten and
+  reupload before submission.
+- App Store Connect screenshot review otherwise looks consistent: no IAP or
+  subscription item is attached, manual release is selected, listing copy and
+  privacy declarations align with full-free, and login credentials are in the
+  dedicated fields. The exposed demo password must be rotated and updated only
+  in the password field.
+- Recorded the full findings and build 16 exit gate in
+  `docs/app_store_pre_submission_audit_2026-09-08.md`. No product code or
+  external App Store state was changed during this audit.
+
+## 2026-09-09 In-app account deletion implementation
+
+- Replaced the Settings placeholder with an explicit destructive confirmation,
+  progress/error states, and a full-screen account sheet that keeps `회원 탈퇴`
+  immediately discoverable.
+- Added authenticated `POST /api/account/delete`. It validates the Supabase
+  bearer session, removes legacy `payment_events` payload rows, and hard-deletes
+  the Auth user; the audited foreign-key cascade removes the user's application
+  rows.
+- Apple-linked users must complete fresh native Apple authorization. The server
+  exchanges the one-time code, verifies its subject against the authenticated
+  Supabase Apple identity, and calls Apple's token-revocation endpoint before
+  deleting the account.
+- After server success, iOS clears the Keychain session, Core Data mirror,
+  offline mutation queues, widget snapshot/preferences, pending and delivered
+  notifications, app preferences, temporary exports, pending deep links, and
+  sync state. A deletion tombstone prevents a rare Keychain-clear failure from
+  resurrecting a deleted remote session after relaunch.
+- Updated hosted and in-app privacy copy and added
+  `docs/account_deletion_runbook.md` for the server credential, deployment, and
+  destructive disposable-account gates.
+- Verification passed: Web Vitest 161/161, Web ESLint, Web production build,
+  Swift Package tests 100/100, all iOS simulator UI tests 9/9, and the generic
+  iOS app/widget build. The UI suite also received a stable foreground-sheet
+  close-button selector after Xcode exposed both nested close buttons in its
+  accessibility tree. Production P0 remains open until Apple server credentials
+  are set, deployment completes, and Google/Apple disposable-account device
+  tests pass.
+
+## 2026-09-09 Public support path and bundle version correction
+
+- Added a signed-out static `/support` page with the Just Do support email,
+  email reply path, in-app account-deletion directions, and links to the hosted
+  Privacy Policy and Terms.
+- Added Settings → 앱 정보 → 고객지원 in iOS. It opens the HTTPS support URL
+  configured as `JUSTDO_SUPPORT_URL` in the app plist.
+- Replaced the hard-coded Settings version `1.0.2` with the bundle-derived
+  `CFBundleShortVersionString (CFBundleVersion)` display. Build 15 therefore
+  renders as `1.0 (15)`, and the later build-number bump will update it without
+  another source edit.
+- Added Web page coverage and an iOS UI regression for support discoverability
+  and version/build format.
+- Verification passed: Web Vitest 163/163, Web ESLint, Web production build
+  (static `/support` route), Swift Package tests 100/100, all iOS simulator UI
+  tests 10/10, generic iOS app/widget build, plist validation, and
+  `git diff --check`. Production deployment and real-device link verification
+  remain pending.

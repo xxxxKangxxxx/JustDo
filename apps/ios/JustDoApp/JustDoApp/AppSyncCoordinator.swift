@@ -78,6 +78,10 @@ final class AppSyncStatusStore: ObservableObject {
         status = count == 0 ? .synced : .pending(count)
     }
 
+    func reset() {
+        status = .unknown
+    }
+
     private func pendingMutationCount(snapshotStore: CoreDataAppSnapshotStore?) -> Int {
         guard let snapshotStore else {
             return 0
@@ -121,6 +125,7 @@ struct SupabaseAppConfigurationLoader {
     enum Key {
         static let projectURL = "JUSTDO_SUPABASE_URL"
         static let anonKey = "JUSTDO_SUPABASE_ANON_KEY"
+        static let accountDeletionURL = "JUSTDO_ACCOUNT_DELETE_URL"
     }
 
     var bundle: Bundle = .main
@@ -139,6 +144,13 @@ struct SupabaseAppConfigurationLoader {
             projectURL: projectURL,
             anonKey: anonKey
         )
+    }
+
+    func accountDeletionURL() -> URL? {
+        guard let value = value(for: Key.accountDeletionURL) else {
+            return nil
+        }
+        return URL(string: value)
     }
 
     private func value(for key: String) -> String? {

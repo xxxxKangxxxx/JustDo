@@ -1,6 +1,6 @@
 # App Store Connect 리스팅 초안 (iOS v1)
 
-> 2026-06-14 작성, 2026-08-21 전면 무료 구현·정적 감사 반영. App Store Connect
+> 2026-06-14 작성, 2026-09-08 전면 무료 구현·배포 상태 반영. App Store Connect
 > 제출 시 그대로 복사/조정해서 사용하고, 최종 Release Candidate 실기기 smoke에서
 > 한 번 더 확인한다.
 > 관련: `docs/next_steps.md` App Store prep, 메모리 `apple_signin_todo` /
@@ -13,14 +13,14 @@
 | 항목 | 상태 | 조치 |
 |---|---|---|
 | **개인정보처리방침 URL (공개 호스팅)** | ✅ LIVE (2026-06-16 확인) | 2026-06-14 `/privacy`·`/terms` 라우트 추가, 연락처 `kang071911@gmail.com`·시행일 2026-06-14 입력. main push → Amplify 배포 완료. **`https://www.justdo.co.kr/privacy`·`/terms` 둘 다 200 응답 확인.** App Store Connect 개인정보 URL에 그대로 입력 가능. |
-| **데모 계정 / 심사 메모** | ✅ 데모 계정 준비 | Google 데모 계정 `kangym071900@gmail.com` 사용. 비밀번호는 제출 시 App Store Connect 심사 메모에만 입력. §4 참고. |
+| **데모 계정 / 심사 메모** | ✅ 데모 계정 준비 | Google 데모 계정 `kangym071900@gmail.com` 사용. 비밀번호는 App Store Connect의 전용 심사 로그인 정보 칸에만 입력. §4 참고. |
 | **스크린샷** | ✅ 6.9" 포스터 PNG 생성 | `app-store-screenshots/01-calendar-flow.png` ~ `04-goals-flow.png` 생성 완료. §3 참고. |
 | **iPad 지원 여부 결정** | ✅ iPhone 전용 결정·적용 (2026-06-14) | `TARGETED_DEVICE_FAMILY` 전 타깃 `1`로 변경. iPad 스크린샷 불필요. |
 | **Export compliance 키** | ✅ 적용 (2026-06-14) | Info.plist에 `ITSAppUsesNonExemptEncryption = NO` 추가. |
 | **인앱 약관/방침 텍스트 stale** | ✅ 갱신 (2026-08-21) | Apple/Google 로그인과 전체 기능 무료·결제/구독 미제공 정책 반영. |
 
-> `/privacy`와 `/terms` 라우트는 운영 중이지만 2026-08-21의 전면 무료 Terms
-> 문구는 아직 로컬 변경입니다. Batch F Web 배포·운영 확인 후 제출합니다.
+> `/privacy`와 `/terms` 라우트 및 전면 무료 Terms는 운영 배포가 완료됐다.
+> 최종 build 15 smoke에서 인앱 약관과 운영 Web 문구가 일치하는지만 확인한다.
 
 ---
 
@@ -104,7 +104,8 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
 ```
 
 ### URLs
-- **Support URL**: `https://www.justdo.co.kr`
+- **Support URL**: `https://www.justdo.co.kr/support` — create and deploy this
+  public signed-out support page before submission.
 - **Marketing URL**: `https://www.justdo.co.kr`
 - **Privacy Policy URL**: `https://www.justdo.co.kr/privacy`
 
@@ -121,19 +122,24 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
   - `app-store-screenshots/03-review-flow.png` — 오늘/마감 기준으로 할 일 정리.
   - `app-store-screenshots/04-goals-flow.png` — 목표별 진행률과 실행 흐름.
 - 2026-08-21 6.9"/6.5" 8장 시각 감사 완료: Pro·Trial·가격·구매/구독 CTA
-  노출 없음. 무료화 사유로 재생성할 필요 없음.
+  노출 없음.
+- 2026-09-08 파일 감사: 크기는 올바르지만 모든 PNG가 alpha channel을 포함함.
+  Apple 규격에 맞게 RGB/no-alpha로 flatten한 뒤 ASC에 재업로드할 것.
 - 추가 후보가 필요하면 위젯 컷 1장을 5번째로 추가 가능.
 
 ---
 
-## 4. App Review 메모 (리뷰어용 — 리젝 예방 핵심)
+## 4. App Review 로그인 정보와 메모 (리뷰어용 — 리젝 예방 핵심)
+
+App Store Connect `앱 심사 정보`에서 `로그인 필요`를 선택하고 Google 데모
+계정 아이디와 비밀번호는 전용 `로그인 정보` 두 칸에 입력한다. 아래 내용은
+그 아래 `메모` 칸에 입력하며 비밀번호를 중복해서 쓰지 않는다.
 
 ```
 - 로그인은 Sign in with Apple 또는 Google OAuth만 제공합니다.
   심사 시 "Sign in with Apple"로 바로 로그인하실 수 있습니다.
-  별도 데모 계정이 필요하면 아래 Google 테스트 계정을 사용하세요.
-  Google demo account: kangym071900@gmail.com
-  Password: <App Store Connect 제출 시에만 입력>
+  별도 데모 계정이 필요하면 위 로그인 정보에 입력된 Google 테스트 계정을
+  사용하세요.
 
 - 무료 제공 안내: 현재 제공되는 모든 기능은 무료입니다.
   본 앱에는 IAP, 구독, 구매 흐름, 외부 결제 링크, 유료 계정 entitlement,
@@ -142,8 +148,8 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
 - 위젯: 홈/잠금 화면 위젯에서 할 일 완료·습관 체크가 가능합니다.
 ```
 
-> Google 데모 계정 비밀번호는 문서/저장소에 남기지 말고 App Store Connect 제출
-> 화면의 Review Notes에만 입력.
+> Google 데모 계정 비밀번호는 문서/저장소/스크린샷에 남기지 말고 App Store
+> Connect의 전용 로그인 정보 비밀번호 칸에만 입력.
 
 ---
 
@@ -189,6 +195,9 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
 
 ## 6. 빌드/제출 체크리스트 (요약)
 
+> 2026-09-08 audit: build 15 제출 HOLD. 계정 삭제, 고객지원 경로, 앱 내 버전
+> 표기를 수정한 build 16과 no-alpha 스크린샷이 필요함.
+
 - [x] iPad 지원 여부 결정 → iPhone 전용 `1` (2026-06-14)
 - [x] `ITSAppUsesNonExemptEncryption = NO` Info.plist 추가 (2026-06-14)
 - [x] 인앱 약관/방침 텍스트 Apple 로그인 반영 갱신 (2026-06-14)
@@ -196,10 +205,17 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
 - [x] 앱 아이콘 alpha 제거 (1024 PNG RGB)
 - [x] 스크린샷 6.9" 포스터 PNG 생성
 - [x] 데모 계정 발급 + seed data 동기화
-- [x] App Store Connect 심사 메모에 데모 계정 입력 (비밀번호는 App Store Connect에만 저장)
+- [x] App Store Connect 심사 로그인 정보에 데모 계정 입력 (비밀번호는 전용 비밀번호 칸에만 저장)
 - [x] Archive → App Store Connect 업로드 → TestFlight 내부 테스트 설치
 - [x] 외부 테스터 추가 + build 1 TestFlight Beta App Review 제출 (2026-06-20)
 - [ ] TestFlight Beta App Review 승인
 - [ ] TestFlight smoke + 수정 필요 항목 반영
+- [x] build 15 최종 실기기 smoke (인증·동기화·전면 무료·위젯·오프라인 포함)
+- [ ] 앱 내 완전한 계정 삭제 + Sign in with Apple token revoke 구현
+- [x] 공개 `/support` 페이지 및 iOS Settings 고객지원 경로 로컬 구현
+      (운영 배포·실기기 확인 전)
+- [x] Settings 버전 표기를 bundle version/build 기반으로 수정
+      (build 16 실기기 확인 전)
+- [ ] App Store 스크린샷 RGB/no-alpha 변환 및 재업로드
+- [ ] build 16 Archive/업로드/집중 smoke
 - [ ] Public App Review 제출
-- [ ] 최종 실기기 시각 smoke (전면 무료 설정·리포트·내보내기 포함)
