@@ -1,12 +1,13 @@
 # Account Deletion Deployment and Verification
 
-Updated: 2026-09-09
+Updated: 2026-09-12
 
 ## Current Status
 
-The account-deletion code and automated checks are complete locally. Production
-is not ready until the server-only Apple credentials are registered in AWS
-Amplify, the Web route is deployed, and destructive tests pass with disposable
+The account-deletion code, automated checks, server-only credentials, and Web
+deployment are complete. Production probes confirmed the public endpoint and
+server-side Supabase credential path without deleting data. The remaining gate
+is destructive real-device verification with disposable Google and Apple
 accounts.
 
 The endpoint is `POST https://www.justdo.co.kr/api/account/delete`. It accepts a
@@ -35,14 +36,16 @@ Paste the clipboard value directly into Amplify. If the `.p8` file is no longer
 available, create an appropriate replacement key in Apple Developer rather than
 putting another private key into the repository.
 
-## Safe Deployment Check
+## Safe Deployment Check — Passed 2026-09-09
 
-1. Deploy the Web changes through the normal Amplify production workflow.
-2. Open `https://www.justdo.co.kr/privacy` signed out and confirm the 시행일 is
+1. [x] Deploy the Web changes through the normal Amplify production workflow.
+2. [x] Open `https://www.justdo.co.kr/privacy` signed out and confirm the 시행일 is
    `2026-09-09` and section 5 describes in-app deletion.
-3. Send an unauthenticated `POST` to the endpoint. Expected response: HTTP 401
-   with `{ "error": "invalid_session" }`. This check deletes nothing.
-4. Confirm Amplify logs contain no credential, bearer-token, or Apple
+3. [x] Send unauthenticated and intentionally invalid-token `POST` requests to
+   the endpoint. Both returned HTTP 401 with `{ "error": "invalid_session" }`;
+   this also confirms the server-side Supabase credential is available before
+   Auth validation. These checks delete nothing.
+4. [ ] Confirm Amplify logs contain no credential, bearer-token, or Apple
    authorization-code values.
 
 ## Destructive Device Check

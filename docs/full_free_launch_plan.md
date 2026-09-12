@@ -1,7 +1,7 @@
 # Just Do Full-Free Launch Plan
 
 Decision date: 2026-08-19
-Status: IMPLEMENTED AND DEPLOYED — BUILD 15 FINAL SMOKE PENDING
+Status: IMPLEMENTED AND DEPLOYED — BUILD 15 SMOKE PASSED; BUILD 16 PENDING
 
 ## Launch Policy
 
@@ -26,7 +26,9 @@ Full-free behavior was the required exception to the otherwise low-risk Release
 Candidate scope. The implementation and automated gates pass, production Web is
 live, the billing schedule is disabled, and the candidate scope is frozen.
 Build 14 passed its current-account full-free device check; those changes are in
-installed TestFlight build 15. Only the final build 15 App Review smoke remains.
+TestFlight build 15, whose final App Review-visible smoke also passed. A later
+pre-submission audit requires build 16 for account deletion, support/version,
+and screenshot compliance work; this does not reopen the full-free gate.
 
 ## Locked Implementation Decisions
 
@@ -56,8 +58,8 @@ These decisions remove ambiguity before product-code edits begin.
    clients already tolerate and store the legacy value, and the row is inert.
 8. **Release rule:** the implementation gate is green, production Web is live,
    the AWS schedule is disabled, scope is frozen, and all Xcode configurations
-   are now build 15. The archive/upload succeeded; use the installed TestFlight
-   build for the remaining final smoke.
+   are now build 15. The archive/upload and final smoke succeeded. Preserve
+   this result as the baseline while the separate build 16 audit fixes proceed.
 
 ## Detailed Execution Plan
 
@@ -362,8 +364,8 @@ account-state matrix, and real-device smoke are all recorded as PASS.
   final App Review-visible smoke. A separate 2026-09-08 pre-submission audit
   placed submission on HOLD for account deletion, support/contact, in-app
   version display, and screenshot encoding corrections. The first three are
-  now implemented locally and await production/device gates; screenshot
-  flattening remains. See
+  implemented, and the Web account-deletion/support paths are deployed; their
+  real-device gates remain. Screenshot flattening also remains. See
   `docs/app_store_pre_submission_audit_2026-09-08.md`. These findings do not
   change the completed full-free billing-safety result.
 

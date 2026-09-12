@@ -12,7 +12,7 @@ This document tracks the next implementation steps for Codex and Claude Code cro
 - Create new implementation directories under `apps/` when development starts.
 - Record important implementation decisions and cross-check notes in `docs/worklog.md`.
 
-## Active Release Track (2026-09-09)
+## Active Release Track (2026-09-12)
 
 This section is the single source of truth for current release status and next
 actions. Completed implementation details remain in `docs/worklog.md` and
@@ -22,11 +22,10 @@ actions. Completed implementation details remain in `docs/worklog.md` and
 
 - **Submission decision: HOLD.** The 2026-09-08 pre-submission source audit
   found placeholder-only account deletion, an inadequate public support/contact
-  path, and a hard-coded in-app version mismatch. Account deletion is now
-  implemented locally, including Apple token revocation and local cleanup, but
-  needs server credentials, production deployment, and disposable-account
-  verification. Build 15 cannot be submitted; build 16 is required. The current
-  screenshot PNGs also contain alpha channels and should be flattened. See
+  path, and a hard-coded in-app version mismatch. The fixes are implemented;
+  Apple/Supabase server credentials and the account-deletion/support Web paths
+  are live. Disposable Google/Apple deletion, iOS support/version device checks,
+  screenshot flattening, and build 16 remain. Build 15 cannot be submitted. See
   `docs/app_store_pre_submission_audit_2026-09-08.md`.
 
 - iOS v1 Release Candidate is TestFlight **1.0 (15)**. It was uploaded on
@@ -42,22 +41,24 @@ actions. Completed implementation details remain in `docs/worklog.md` and
   schedule has been disabled since 2026-08-24. Toss live billing and merchant
   review remain paused and are not release blockers.
 - App Store listing copy, age rating, pricing, privacy declarations, and the
-  replacement full-free review-note draft are ready. Support URL and screenshot
-  file encoding require correction before submission. The Google demo password
-  must exist only in App Store Connect.
-- Verification refreshed on 2026-09-09: Web Vitest **161/161**, Web ESLint,
-  Web production build, Swift Package tests **100/100**, and all **9/9** iOS
+  replacement full-free review-note draft are ready. The public Support URL is
+  live but must still replace the root URL in App Store Connect; screenshot
+  encoding remains. The Google demo password must exist only in App Store Connect.
+- Verification refreshed on 2026-09-09: Web Vitest **163/163**, Web ESLint,
+  Web production build, Swift Package tests **100/100**, and all **10/10** iOS
   simulator UI tests pass. The signed build 15 app/widget archive was
   previously accepted without upload warnings or errors.
+- Production deployment passed on 2026-09-09: `/support` returns 200 without a
+  session, `/privacy` contains the new deletion policy, and account-delete
+  unauthenticated/invalid-token probes return `401 invalid_session`.
 
 ### Immediate Order
 
-1. Register the four server-only Apple deletion credentials in Amplify, deploy
-   the implemented account-deletion route, and verify Google/Apple deletion on
-   disposable accounts. Follow `docs/account_deletion_runbook.md`.
-2. Deploy the locally implemented public `/support`; verify signed-out access,
-   the iOS Settings customer-support route, and bundle-derived version/build on
-   a device.
+1. Prepare non-review disposable identities and verify Google/Apple deletion on
+   a real device against the deployed route. Follow
+   `docs/account_deletion_runbook.md`.
+2. Verify the iOS Settings customer-support route and bundle-derived
+   version/build on a device; signed-out `/support` access already passes.
 3. Flatten the 6.9-inch and 6.5-inch screenshots to RGB/no-alpha and reupload.
 4. Run automated verification, bump all iOS targets to build 16,
    archive/upload, and rerun the focused account-deletion/support/version smoke.
@@ -1522,5 +1523,6 @@ Historical Goal & Pro Report implementation order (completed unless noted):
   스케줄을 비활성화함. 리소스와 대상 설정은 삭제하지 않고 보존.
 - [x] 범위를 동결하고 build 14를 준비·업로드한 뒤 현재 production 계정의
   전면 무료 실기기 smoke를 통과. 이후 holiday 보정 build 15도 업로드·설치됨.
-- [ ] build 15 최종 App Review smoke를 완료하고 공개 심사 제출. H-016 알림과
-  약관 일치는 통과했으며 no-subscription-row는 자동화 근거로 확정.
+- [x] build 15 최종 App Review smoke 완료. H-016 알림과 약관 일치는
+  통과했고 no-subscription-row는 자동화 근거로 확정.
+- [ ] 별도 audit fix를 담은 build 16을 준비하고 집중 smoke 후 공개 심사 제출.

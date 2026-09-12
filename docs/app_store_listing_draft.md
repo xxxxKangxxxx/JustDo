@@ -1,6 +1,6 @@
 # App Store Connect 리스팅 초안 (iOS v1)
 
-> 2026-06-14 작성, 2026-09-08 전면 무료 구현·배포 상태 반영. App Store Connect
+> 2026-06-14 작성, 2026-09-12 계정 삭제·지원 경로 배포 상태 반영. App Store Connect
 > 제출 시 그대로 복사/조정해서 사용하고, 최종 Release Candidate 실기기 smoke에서
 > 한 번 더 확인한다.
 > 관련: `docs/next_steps.md` App Store prep, 메모리 `apple_signin_todo` /
@@ -12,15 +12,16 @@
 
 | 항목 | 상태 | 조치 |
 |---|---|---|
-| **개인정보처리방침 URL (공개 호스팅)** | ✅ LIVE (2026-06-16 확인) | 2026-06-14 `/privacy`·`/terms` 라우트 추가, 연락처 `kang071911@gmail.com`·시행일 2026-06-14 입력. main push → Amplify 배포 완료. **`https://www.justdo.co.kr/privacy`·`/terms` 둘 다 200 응답 확인.** App Store Connect 개인정보 URL에 그대로 입력 가능. |
-| **데모 계정 / 심사 메모** | ✅ 데모 계정 준비 | Google 데모 계정 `kangym071900@gmail.com` 사용. 비밀번호는 App Store Connect의 전용 심사 로그인 정보 칸에만 입력. §4 참고. |
-| **스크린샷** | ✅ 6.9" 포스터 PNG 생성 | `app-store-screenshots/01-calendar-flow.png` ~ `04-goals-flow.png` 생성 완료. §3 참고. |
+| **개인정보처리방침 URL (공개 호스팅)** | ✅ LIVE (2026-09-09 재확인) | `/privacy`·`/terms` 라우트와 연락처가 운영 중이며, 개인정보처리방침 시행일과 계정 삭제 고지를 2026-09-09로 갱신. **`https://www.justdo.co.kr/privacy`·`/terms` 200 응답 확인.** App Store Connect 개인정보 URL에 그대로 입력 가능. |
+| **데모 계정 / 심사 메모** | ⚠️ 재확인 필요 | Google 데모 계정 `kangym071900@gmail.com`의 로그인과 ASC 비밀번호 반영을 최종 확인. 비밀번호는 전용 심사 로그인 정보 칸에만 입력. §4 참고. |
+| **고객지원 URL** | ✅ LIVE (2026-09-09 확인) | `https://www.justdo.co.kr/support`가 로그아웃 상태에서 200 응답. ASC Support URL을 기존 루트에서 이 주소로 교체. |
+| **스크린샷** | ⚠️ no-alpha 변환 필요 | 6.9"·6.5" 포스터 원본은 준비됐지만 8개 PNG의 alpha 채널을 제거하고 재업로드해야 함. §3 참고. |
 | **iPad 지원 여부 결정** | ✅ iPhone 전용 결정·적용 (2026-06-14) | `TARGETED_DEVICE_FAMILY` 전 타깃 `1`로 변경. iPad 스크린샷 불필요. |
 | **Export compliance 키** | ✅ 적용 (2026-06-14) | Info.plist에 `ITSAppUsesNonExemptEncryption = NO` 추가. |
 | **인앱 약관/방침 텍스트 stale** | ✅ 갱신 (2026-08-21) | Apple/Google 로그인과 전체 기능 무료·결제/구독 미제공 정책 반영. |
 
-> `/privacy`와 `/terms` 라우트 및 전면 무료 Terms는 운영 배포가 완료됐다.
-> 최종 build 15 smoke에서 인앱 약관과 운영 Web 문구가 일치하는지만 확인한다.
+> `/privacy`, `/terms`, `/support`와 전면 무료 Terms는 운영 배포가 완료됐다.
+> build 16 집중 smoke에서 인앱 약관/방침과 운영 Web 문구를 다시 확인한다.
 
 ---
 
@@ -104,8 +105,8 @@ Just Do는 할 일, 습관, 목표를 한 곳에서 관리하는 개인 생산�
 ```
 
 ### URLs
-- **Support URL**: `https://www.justdo.co.kr/support` — create and deploy this
-  public signed-out support page before submission.
+- **Support URL**: `https://www.justdo.co.kr/support` — LIVE; enter this in App
+  Store Connect before submission.
 - **Marketing URL**: `https://www.justdo.co.kr`
 - **Privacy Policy URL**: `https://www.justdo.co.kr/privacy`
 
@@ -156,8 +157,9 @@ App Store Connect `앱 심사 정보`에서 `로그인 필요`를 선택하고 G
 ## 5. 개인정보처리방침 페이지 (web 호스팅 완료)
 
 > 2026-06-14 `apps/web`에 `/privacy` 및 `/terms` 라우트 추가 완료.
-> 2026-06-16 운영 배포 후 `https://www.justdo.co.kr/privacy` 및
-> `https://www.justdo.co.kr/terms` 200 응답 확인. App Store Connect에는
+> 2026-09-09 계정 삭제 고지를 갱신해 운영 배포했고
+> `https://www.justdo.co.kr/privacy` 및 `https://www.justdo.co.kr/terms`
+> 200 응답을 재확인. App Store Connect에는
 > `https://www.justdo.co.kr/privacy`를 입력하면 됨. 아래는 현재 hosted 페이지와
 > 일치하는 최소 고지 내용 — 제출 전 필요 시 법무 검토.
 
@@ -165,8 +167,9 @@ App Store Connect `앱 심사 정보`에서 `로그인 필요`를 선택하고 G
 개인정보처리방침 (Just Do)
 
 1. 수집 항목
-- 계정 정보: Apple 또는 Google 로그인 시 제공되는 이메일 주소, (Google의 경우)
-  프로필 이름, 서비스 내 사용자 식별자.
+- 계정 정보: Apple 또는 Google 로그인 시 제공되는 이메일 주소, 제공되는 경우
+  프로필 이름, 서비스 내 사용자 식별자. Apple의 이메일 가리기 사용 시 익명
+  릴레이 주소가 제공될 수 있습니다.
 - 서비스 데이터: 사용자가 입력한 할 일, 습관, 목표, 카테고리, 메모, 태그 및
   앱 설정.
 
@@ -183,12 +186,16 @@ App Store Connect `앱 심사 정보`에서 `로그인 필요`를 선택하고 G
   처리됩니다.
 
 5. 보관 및 삭제
-- 데이터는 서비스 이용 기간 동안 보관되며, 계정/데이터 삭제 요청 시 처리됩니다.
+- 데이터는 서비스 이용 기간 동안 보관됩니다. iOS 앱의 설정에서 계정 화면을
+  열고 회원 탈퇴를 선택하면 계정 삭제를 요청할 수 있습니다. 완료되면 인증
+  계정과 사용자가 입력한 할 일, 습관, 목표, 카테고리 및 설정 데이터가
+  삭제되며, Apple 로그인 계정은 연결된 로그인 토큰도 함께 철회됩니다.
+  법령상 별도의 보관 의무가 있는 정보는 해당 기간 동안 보관될 수 있습니다.
 
 6. 문의
 - 개인정보 관련 문의: kang071911@gmail.com
 
-시행일: 2026-06-14
+시행일: 2026-09-09
 ```
 
 ---
@@ -201,19 +208,22 @@ App Store Connect `앱 심사 정보`에서 `로그인 필요`를 선택하고 G
 - [x] iPad 지원 여부 결정 → iPhone 전용 `1` (2026-06-14)
 - [x] `ITSAppUsesNonExemptEncryption = NO` Info.plist 추가 (2026-06-14)
 - [x] 인앱 약관/방침 텍스트 Apple 로그인 반영 갱신 (2026-06-14)
-- [x] `/privacy` (+`/terms`) 페이지 생성·연락처 입력·운영 배포 완료 (2026-06-16)
+- [x] `/privacy` (+`/terms`) 페이지 생성·연락처 입력·계정 삭제 고지 운영 배포
+      완료 (2026-09-09 재확인)
 - [x] 앱 아이콘 alpha 제거 (1024 PNG RGB)
 - [x] 스크린샷 6.9" 포스터 PNG 생성
 - [x] 데모 계정 발급 + seed data 동기화
 - [x] App Store Connect 심사 로그인 정보에 데모 계정 입력 (비밀번호는 전용 비밀번호 칸에만 저장)
+- [ ] 데모 계정 변경 비밀번호 로그인 및 ASC 반영 최종 재확인
 - [x] Archive → App Store Connect 업로드 → TestFlight 내부 테스트 설치
 - [x] 외부 테스터 추가 + build 1 TestFlight Beta App Review 제출 (2026-06-20)
 - [ ] TestFlight Beta App Review 승인
 - [ ] TestFlight smoke + 수정 필요 항목 반영
 - [x] build 15 최종 실기기 smoke (인증·동기화·전면 무료·위젯·오프라인 포함)
-- [ ] 앱 내 완전한 계정 삭제 + Sign in with Apple token revoke 구현
-- [x] 공개 `/support` 페이지 및 iOS Settings 고객지원 경로 로컬 구현
-      (운영 배포·실기기 확인 전)
+- [x] 앱 내 완전한 계정 삭제 + Sign in with Apple token revoke 구현 및 운영
+      API 배포 (Google/Apple 폐기 계정 실기기 확인 전)
+- [x] 공개 `/support` 페이지 운영 배포 및 iOS Settings 고객지원 경로 구현
+      (실기기 링크 확인 전)
 - [x] Settings 버전 표기를 bundle version/build 기반으로 수정
       (build 16 실기기 확인 전)
 - [ ] App Store 스크린샷 RGB/no-alpha 변환 및 재업로드

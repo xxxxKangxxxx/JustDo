@@ -1,6 +1,6 @@
 # App Store Submission Next Steps
 
-Updated: 2026-09-09
+Updated: 2026-09-12
 
 ## Current Release Candidate Plan
 
@@ -11,6 +11,12 @@ Updated: 2026-09-09
 > fixes and a new build 16. The screenshot files also need RGB/no-alpha
 > flattening before submission. See
 > `docs/app_store_pre_submission_audit_2026-09-08.md`.
+
+> **2026-09-09 deployment update:** commit `c4430bd` is live. Apple/Supabase
+> server credentials are registered, `/support` returns 200 signed out,
+> `/privacy` shows the 2026-09-09 deletion copy, and safe account-delete probes
+> return `401 invalid_session`. Disposable-account and new-binary device gates
+> remain.
 
 - TestFlight build 15 was uploaded successfully at 2026-09-06 17:13 KST,
   processed, installed, and passed its targeted real-device verification on
@@ -31,9 +37,9 @@ Updated: 2026-09-09
   `docs/full_free_launch_plan.md` for the implementation record.
 - The candidate scope is frozen. Do not add unrelated product features,
   destructive schema changes, auth/sync redesign, or live-billing work.
-- Build 15 is the frozen candidate. H-016 notification delivery passed on
-  2026-09-08. Continue the final App Review-visible smoke on this installed
-  build; do not upload another build unless it finds a release-critical defect.
+- Build 15 is the verified historical baseline. Its final smoke and H-016
+  notification delivery passed on 2026-09-08, but the later audit requires a
+  new build 16; do not attach build 15 for public App Review.
 - 2026-08-21 post-conversion verification passed: 98 Swift tests, 148 Web tests,
   Web ESLint, Web production build, generic iOS Release app/widget build, and
   5/5 iOS simulator UI tests including Free Settings/export access.
@@ -47,11 +53,11 @@ Updated: 2026-09-09
 
 ## Remaining Submission Actions
 
-1. Configure the implemented account-deletion route with the server-only Apple
-   credentials, deploy it, and run disposable Google/Apple account deletion
-   checks plus the local-data verification in `docs/account_deletion_runbook.md`.
-2. Deploy the implemented public `/support` page and verify it signed out; on a
-   device, confirm the new iOS Settings customer-support row opens it.
+1. Run disposable Google/Apple account deletion checks plus the local-data
+   verification in `docs/account_deletion_runbook.md`; credentials and the
+   production route are already deployed.
+2. On a device, confirm the new iOS Settings customer-support row opens the
+   deployed public `/support` page.
 3. Confirm Settings shows the bundle-derived version/build in the build 16
    device smoke.
 4. Flatten the App Store screenshots to RGB/no-alpha and reupload them.
@@ -66,8 +72,8 @@ Updated: 2026-09-09
 - App name: `Just Do`
 - Subtitle: `할 일·습관·목표를 한 곳에`
 - Privacy Policy URL: `https://www.justdo.co.kr/privacy`
-- Support URL: `https://www.justdo.co.kr/support` after the new public page is
-  deployed; do not submit with the authenticated root URL.
+- Support URL: `https://www.justdo.co.kr/support` (LIVE); replace the current
+  authenticated root URL in App Store Connect before submission.
 - Marketing URL: `https://www.justdo.co.kr`
 - Demo Google account: `kangym071900@gmail.com`
 - Screenshot PNGs:
@@ -226,8 +232,9 @@ it only in the dedicated App Review login-information password field.
   all current features are free and there is no IAP, subscription, purchase
   flow, external payment link, paid entitlement, or purchase CTA.
 - Build 11 real-device regression checks passed.
-- Current next action is the required build 16 fix set described at the top of
-  this document. Build 15 must not be submitted for public App Review.
+- Current next action is the destructive account-deletion/device gate described
+  at the top of this document, followed by screenshots and build 16. Build 15
+  must not be submitted for public App Review.
 
 ## Build 15 Baseline Checks
 

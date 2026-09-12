@@ -6887,3 +6887,19 @@ checkpoint.
   tests 10/10, generic iOS app/widget build, plist validation, and
   `git diff --check`. Production deployment and real-device link verification
   remain pending.
+
+## 2026-09-09 Account deletion and support production deployment
+
+- Registered the four Apple server credentials and the Supabase elevated
+  server key in Amplify without storing their values in source control.
+- Pushed combined commit `c4430bd` to `origin/main`; Amplify deployed the
+  account-deletion endpoint, updated privacy copy, and public support page.
+- Production checks passed: `/support` returned 200 without a login session,
+  `/privacy` exposed the 2026-09-09 account-deletion policy, and both an
+  unauthenticated request and a deliberately invalid-token request to
+  `POST /api/account/delete` returned `401 invalid_session`. No destructive
+  request was made.
+- Built the current source for the paired iPhone 14 Pro, but did not install it
+  because the App Review demo identity and disposable deletion identities were
+  not ready. Real Google/Apple deletion, iOS support/version checks, screenshot
+  flattening, and build 16 remain.

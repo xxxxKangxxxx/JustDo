@@ -7,10 +7,12 @@ implementation gaps, and checks to run before testing or shipping.
 > Pro/Trial entries under Resolved Issues document old builds only and must not
 > be used as current product or test instructions.
 >
-> 2026-09-08 release audit: build 15 passed the device smoke but App Review
-> submission is on HOLD. Build 16 must implement full account deletion, add an
-> explicit support/contact route, and replace the hard-coded Settings version.
-> See `docs/app_store_pre_submission_audit_2026-09-08.md`.
+> 2026-09-12 release status: build 15 passed the device smoke but App Review
+> submission remains on HOLD. Full account deletion, the public support route,
+> the iOS support entry, and bundle-derived version are implemented; the Web
+> routes and credentials are deployed. Disposable-account/device checks,
+> no-alpha screenshots, and build 16 remain. See
+> `docs/app_store_pre_submission_audit_2026-09-08.md`.
 
 ## Current Implementation
 
@@ -255,12 +257,12 @@ implementation gaps, and checks to run before testing or shipping.
 ## Remaining App Gaps
 
 - App Store build 16 requirements:
-  - [ ] Replace the placeholder-only `회원 탈퇴` action with authenticated full
+  - [x] Replace the placeholder-only `회원 탈퇴` action with authenticated full
     account deletion, associated-data cleanup, confirmation states, local
-    cleanup, and Sign in with Apple token revocation.
+    cleanup, and Sign in with Apple token revocation. Production route and
+    credentials are live; destructive Google/Apple device checks remain.
   - [x] Add an easy-to-find Settings support/contact row backed by the public
-    signed-out Web support page. Implemented locally; production/device smoke
-    remains.
+    signed-out Web support page. The Web page is live; device smoke remains.
   - [x] Derive the Settings version/build label from the application bundle;
     the simulator UI regression verifies the version/build format.
 

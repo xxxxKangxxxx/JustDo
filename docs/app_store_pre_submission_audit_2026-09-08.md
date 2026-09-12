@@ -13,8 +13,8 @@ attach the build to iOS version 1.0.
 
 ### P0 — Implement account deletion
 
-Implementation status (2026-09-09): **implemented locally; production gate is
-still open.** The iOS app now provides a destructive confirmation and calls an
+Implementation status (2026-09-12): **implemented and deployed; destructive
+device gate is still open.** The iOS app now provides a destructive confirmation and calls an
 authenticated server route. The route validates the Supabase session, revokes
 the Apple authorization for Apple identities, removes legacy payment-event
 payloads, and hard-deletes the Auth user so the verified cascade removes owned
@@ -22,12 +22,14 @@ application data. After success the app clears Keychain, Core Data, queued
 mutations, widget state, notifications, preferences, and temporary exports.
 The in-app and hosted privacy text now describes the implemented behavior.
 
-Local verification passed: Web tests 161/161, Web ESLint, Web production build,
-Swift tests 100/100, and all iOS simulator UI tests 9/9, including
+Verification passed: Web tests 163/163, Web ESLint, Web production build,
+Swift tests 100/100, and all iOS simulator UI tests 10/10, including
 confirmation-to-signed-out account deletion.
-Production completion still requires Amplify Apple credentials, deployment, and
-destructive real-device tests using disposable Google and Apple accounts; do
-not use the App Review demo account for this check. See
+Apple/Supabase server credentials and commit `c4430bd` are live. Signed-out
+`/support` and `/privacy` checks pass, and safe account-delete probes return
+`401 invalid_session`. Production completion still requires destructive
+real-device tests using disposable Google and Apple accounts; do not use the
+App Review demo account for this check. See
 `docs/account_deletion_runbook.md`.
 
 Original finding:
@@ -57,10 +59,10 @@ Original evidence:
 
 ### P1 — Provide a real support path
 
-> 2026-09-09 local correction: `/support` now provides the support email,
+> 2026-09-12 status: `/support` now provides the support email,
 > email response path, account-deletion instructions, and policy links without
 > requiring authentication. iOS Settings includes a customer-support row that
-> opens this URL. Production deployment and device smoke remain open.
+> opens this URL. Production returns 200 signed out; device smoke remains open.
 
 - The App Store Connect Support URL currently points to the authenticated app
   root, `https://www.justdo.co.kr`, rather than a public support page with an
@@ -74,7 +76,7 @@ Original evidence:
 
 ### P1 — Correct the in-app version display
 
-> 2026-09-09 local correction: Settings now reads
+> 2026-09-12 status: Settings now reads
 > `CFBundleShortVersionString` and `CFBundleVersion`; the iOS UI regression
 > verifies the displayed version/build format. Build 16 device smoke remains.
 
@@ -138,9 +140,12 @@ Evidence: `apps/ios/JustDoApp/JustDoApp/ContentView.swift:3897`.
 - The 1024×1024 app icon is RGB with no alpha.
 - Build 15 upload completed successfully with app/widget dSYMs and no recorded
   upload warning or error.
-- 2026-09-09 local gate: Web tests 161/161, Web ESLint, Web production build,
-  Swift tests 100/100, all iOS simulator UI tests 9/9, generic iOS app/widget
+- 2026-09-09 gate: Web tests 163/163, Web ESLint, Web production build,
+  Swift tests 100/100, all iOS simulator UI tests 10/10, generic iOS app/widget
   build, plist validation, and `git diff --check` passed.
+- 2026-09-09 production gate: server credentials were registered, commit
+  `c4430bd` deployed, `/support` returned 200 signed out, `/privacy` showed the
+  updated policy, and safe account-delete probes returned `401 invalid_session`.
 - Build 15 real-device smoke passed authentication, sync and persistence,
   Goal/report access, full-free UI, export, widget mutation, offline recovery,
   notification delivery, and Terms parity.
@@ -152,8 +157,8 @@ Evidence: `apps/ios/JustDoApp/JustDoApp/ContentView.swift:3897`.
 - [ ] Sign in with Apple deletion includes token revocation.
 - [ ] Local session, Keychain, cached data, and widget snapshot are cleared
   after deletion.
-- [ ] Public `/support` works signed out and the iOS support row opens it or an
-  explicit support email.
+- [x] Public `/support` works signed out in production.
+- [ ] The iOS support row opens the production support page on a real device.
 - [ ] Settings displays the actual bundle version/build.
 - [ ] Privacy/Terms and Review Notes match implemented behavior.
 - [ ] RGB/no-alpha screenshots are uploaded.

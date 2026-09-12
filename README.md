@@ -19,17 +19,18 @@ Hosting + Next.js SSR + Route 53 + ACM TLS, hosted Supabase backend). apex
   passed real-device verification. 자세한 내용:
   `docs/full_free_launch_plan.md`, `docs/next_steps.md` Active Release Track,
   and `docs/testflight_smoke_checklist.md`.
-- **Current verification (2026-09-09)**: the account-deletion implementation
+- **Current verification (2026-09-12)**: the account-deletion implementation
   and support/version correction pass 100 Swift tests, 163 Web tests, Web
-  ESLint, Web production build, and all 10 iOS simulator UI tests. The signed iOS 1.0 (15)
-  app/widget archive remains the previously verified TestFlight build.
+  ESLint, Web production build, and all 10 iOS simulator UI tests. The account
+  deletion route and public support page are deployed, and their non-destructive
+  production probes pass. The signed iOS 1.0 (15) app/widget archive remains
+  the previously verified TestFlight build.
 - **App Store preparation**: build 15 passed the final real-device smoke, but a
   2026-09-08 source audit put submission on HOLD. Full account deletion is now
-  implemented locally but still needs Apple server credentials, deployment,
-  and disposable-account device verification. The public support/contact path
-  and bundle-derived in-app version display are also implemented locally and
-  await deployment/device verification. No-alpha screenshots still remain
-  before build 16 can be submitted. See
+  implemented and its server credentials/production route are deployed. The
+  public support/contact path is also live. Disposable Google/Apple deletion,
+  the iOS support/version device check, no-alpha screenshots, and build 16
+  still remain before submission. See
   `docs/app_store_pre_submission_audit_2026-09-08.md`.
 - **Phase 7 Web Desktop Redesign** is complete. The previous checkout track is
   retained only as compatibility/history and is disabled for the full-free v1

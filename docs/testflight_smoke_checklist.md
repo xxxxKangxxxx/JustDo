@@ -1,15 +1,15 @@
 # TestFlight Smoke Checklist
 
-Updated: 2026-09-08
+Updated: 2026-09-12
 
 Purpose: run the final App Review-visible smoke on installed TestFlight build
 15 and decide whether iOS v1 is ready for public App Review. Earlier build
 results and issue records remain below as historical evidence.
 
-> **2026-09-09 audit override: HOLD.** Build 15 smoke passed, but it must not be
+> **2026-09-12 audit override: HOLD.** Build 15 smoke passed, but it must not be
 > submitted. Account deletion, the public support path/iOS entry, and the
-> bundle-derived version display are implemented locally and pass automated
-> checks. Apple deletion credentials, production deployment, disposable-account
+> bundle-derived version display are implemented and pass automated checks.
+> Server credentials and the Web routes are deployed; disposable-account
 > deletion/device verification, no-alpha screenshots, and build 16 still remain;
 > use the focused exit gate in
 > `docs/app_store_pre_submission_audit_2026-09-08.md`.
@@ -769,7 +769,7 @@ Notes: Included in uploaded build 12. The shared offline calendar covers fixed, 
 Decision:
 
 ```text
-Status: HOLD — FIX SET AND BUILD 16 REQUIRED
-Reason: Build 15 completed the device smoke, but source inspection found that 회원 탈퇴 only displays a future-activation message, Settings hard-codes version 1.0.2 while the submitted marketing version is 1.0, and the current support path does not provide an easy public contact route. App Store screenshots also contain alpha channels and should be flattened.
-Next action: Implement the audit fix set, upload build 16, run the focused exit gate, then select build 16 for version 1.0 and submit only after PASS.
+Status: HOLD — BUILD 16 AND DESTRUCTIVE DEVICE GATE REQUIRED
+Reason: Build 15 completed its smoke. The audit fix set is implemented and its Web routes are deployed, but Google/Apple destructive deletion, iOS support/version verification, no-alpha screenshots, and the new binary are not yet complete.
+Next action: Prepare non-review disposable accounts, run the destructive device gate, flatten screenshots, upload build 16, and submit only after the focused smoke reaches PASS.
 ```
