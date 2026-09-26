@@ -4,6 +4,12 @@ Project: `cohkxnwsbhrsfmsjqdpa` (JustDo). All timestamps below are UTC;
 add nine hours for Korea time. Production mitigation applied at approximately
 13:28 (22:28 KST). No application rows or retained log rows were deleted.
 
+Latest status: the first full 24-hour check is complete. All 1,440 embedding
+cron runs and 25 maintenance runs succeeded. No recurrence of the observed
+cron-startup, database, Auth, or HTTP failures was found in that window.
+See the September 26 full-day follow-up below for remaining log noise and
+the limits of this conclusion.
+
 ## Evidence before mitigation
 
 - All 19 pre-existing repository migrations matched production.
@@ -125,7 +131,64 @@ Most of the prior morning failure interval has now passed without a new cron
 failure. This remains an interim result: the full 24-hour observation window
 ends around September 26 22:30 KST, and logs can have ingestion delay.
 
-## Follow-up checks
+## Full 24-hour follow-up — September 26, 23:15 KST
+
+Evaluated the fixed interval **September 25 13:29 UTC inclusive through
+September 26 13:29 UTC exclusive** (22:29–22:29 KST). The first scheduled
+post-change execution defines the start. Queried database run history and the
+Management API with the same explicit window, rather than comparing different
+rolling 24-hour periods. Production access was read-only.
+
+| Check | First 24-hour result |
+| --- | --- |
+| Embedding cron | 1,440 succeeded, zero failed |
+| Idle work skipped | 1,437 runs; mean 7.09 ms, maximum 85.89 ms |
+| Actual embedding invocations | 3; all Edge Function responses HTTP 200 |
+| Hourly HTTP-log vacuum | 24/24 succeeded |
+| Daily cron-history vacuum | 1/1 succeeded |
+| API Gateway requests | 575; all HTTP 2xx or WebSocket 101 |
+| Auth token requests (included above) | 22; all HTTP 200 |
+| Postgres ERROR/FATAL/PANIC | None found |
+| Auth error messages / API or function HTTP 4xx/5xx | None found |
+| Outstanding embeddings / HTTP queue | Zero at the follow-up snapshot |
+
+The previously affected morning interval (05:36–12:48 KST) is fully covered.
+Both scheduled maintenance jobs have executed successfully. The latest
+HTTP-log vacuum completed at 13:17 UTC; statistics showed one live response
+row and zero dead tuples at 14:10 UTC. The allocated table size remained
+81 MB, which is reusable space, not 81 MB of live response data. No additional
+vacuum, migration, restart, timeout adjustment, or production change was made.
+
+The latest retained HTTP response, at 10:59 UTC, returned `ok: true` and
+reported one task embedding completed, with `timed_out: false`. Older pg_net
+responses had expired, so the full-day HTTP assessment uses all three Edge
+Function access-log responses together with the earlier recorded response-body
+checks; it does not assume the current pg_net table retains a full day.
+
+Residual messages:
+
+- **94 PostgREST log events**, all with the same `Warp server error: Thread
+  killed by timeout manager` prefix. Some events contain multiple copies of
+  the message. None coincided with a recorded database or HTTP failure in the
+  window. These remain consistent with the upstream logging issue #4799
+  documented above; they are not counted as 94 proven failed API requests.
+- Four Realtime keyword matches were connection-initialization records, not
+  timeout failures.
+
+Also checked the period after the 24-hour boundary. Through the 14:12:57 UTC
+database snapshot, another **44 embedding cron runs succeeded**. The log query
+returned Postgres records through 14:14 UTC with no error matches; no new
+application/API traffic was recorded in that later interval, so it does not
+constitute an additional active-traffic test.
+
+Conclusion: **the 24-hour mitigation verification passed** for the observed
+cron-startup, database, Auth, and HTTP failures. Keep the maintenance workaround
+and routine monitoring. This verifies the observed period, not a guarantee
+against future failures or proof that the vacuum issue caused every original
+symptom. The hosted pg_net binary upgrade remains a separate follow-up; no
+upgrade availability check was repeated in this read-only verification.
+
+## Ongoing checks
 
 Run the credential-safe, read-only report:
 
@@ -133,8 +196,8 @@ Run the credential-safe, read-only report:
 supabase db query --linked --file supabase/scripts/check_background_jobs.sql
 ```
 
-Check a full 24-hour window, especially the previous failure period
-(05:36–12:48 KST). Check cron **and** HTTP response/Edge Function logs; old
+The first full 24-hour check above covered the previous failure period
+(05:36–12:48 KST). For later checks, inspect cron **and** HTTP response/Edge Function logs; old
 errors remain visible until they leave the dashboard's selected time range.
 New user edits should produce embeddings within the usual one-minute pickup
 interval. An empty HTTP response window is now normal when no work is pending.

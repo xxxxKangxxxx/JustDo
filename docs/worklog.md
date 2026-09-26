@@ -6941,3 +6941,25 @@ checkpoint.
   counts, observation limits, and the upstream reference. The full 24-hour
   follow-up remains due after September 26 22:30 KST. This was a read-only
   production check; no further production changes were made.
+
+## 2026-09-26 Supabase full 24-hour verification
+
+- Checked the fixed September 25 22:29 through September 26 22:29 KST window:
+  all 1,440 embedding cron runs succeeded (1,437 idle skips and three actual
+  invocations). All 24 hourly HTTP-log vacuums and the daily history vacuum
+  succeeded. No cron startup failures recurred during the prior morning
+  failure period.
+- All 575 recorded API Gateway requests returned HTTP 2xx or WebSocket 101,
+  including 22 successful Auth token requests. All three Edge Function
+  invocations returned HTTP 200. No Postgres ERROR/FATAL/PANIC, Auth errors,
+  or API/function HTTP 4xx/5xx was found; embedding and HTTP queues were empty.
+- The 94 remaining PostgREST error-text events were the known Warp timeout
+  message, without recorded HTTP/DB failures. Four Realtime keyword matches
+  were initialization messages. Preserved this distinction and observation
+  limits in [the incident report](supabase_incident_2026-09-25.md).
+- Another 44 embedding cron executions succeeded after the 24-hour boundary
+  through 23:12 KST. The latest response body confirmed one additional task
+  embedding completed successfully. No production changes were made.
+- Marked the 24-hour mitigation verification complete. Keep the maintenance
+  workaround and routine monitoring; the hosted pg_net upgrade remains a
+  separate follow-up.
