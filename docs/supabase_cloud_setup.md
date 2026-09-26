@@ -193,6 +193,14 @@ order by s.created_at desc;
 
 ## CLI Notes
 
+For background-job timeout diagnostics and the pg_net vacuum workaround applied
+on September 25, 2026, see [the incident report](supabase_incident_2026-09-25.md).
+The credential-safe read-only check is:
+
+```bash
+supabase db query --linked --file supabase/scripts/check_background_jobs.sql
+```
+
 Supabase link metadata lives under `supabase/.temp/` and is gitignored. A new
 machine should run:
 

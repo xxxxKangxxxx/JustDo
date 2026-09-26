@@ -6903,3 +6903,41 @@ checkpoint.
   because the App Review demo identity and disposable deletion identities were
   not ready. Real Google/Apple deletion, iOS support/version checks, screenshot
   flattening, and build 16 remain.
+
+
+## 2026-09-25 Supabase timeout investigation and production mitigation
+
+- Queried hosted cron, HTTP, Postgres, Auth, and Edge Function logs using the
+  existing CLI login. Found 405 cron startup failures in 24 hours, HTTP
+  timeouts, and widespread service timeout symptoms.
+- Confirmed stale vacuum statistics/dead tuples in pg_net 0.20.0. Ordinary
+  VACUUM ANALYZE reduced expiry-query buffer accesses from 10,381 to 6 without
+  deleting live records. Also vacuumed/analyzed cron execution history.
+- Applied `20260925133000_reduce_embedding_cron_load.sql`: hourly HTTP-log
+  vacuum, daily cron-history vacuum, skip embedding HTTP calls when there is
+  no pending work, and explicitly use a 30-second HTTP timeout. Preserved the
+  original one-minute pickup interval and stored credentials.
+- Verified the migration in a rolled-back transaction before pushing; actual
+  idle cron runs succeeded afterward. All 20 migrations match production.
+- Added `supabase/scripts/check_background_jobs.sql` and
+  `docs/supabase_incident_2026-09-25.md`. Full-day recurrence monitoring remains
+  necessary. The server does not yet offer the pg_net >=0.20.3 upstream fix;
+  no platform upgrade/restart, compute-plan change, or application deployment
+  was performed.
+
+## 2026-09-26 Supabase interim follow-up
+
+- Rechecked approximately 14 hours after mitigation, through 12:35 KST:
+  846 embedding cron runs succeeded with no failures; 14 hourly HTTP-log
+  vacuums and one daily cron-history vacuum all succeeded.
+- Two real embedding invocations returned HTTP 200 and `ok: true`, each
+  completing one task embedding. No pending embeddings or HTTP requests
+  remained. No new Postgres/Auth errors or API/Edge Function HTTP 4xx/5xx
+  responses were found in the queried interval.
+- Recorded 47 remaining PostgREST Warp timeout log events. These match the
+  upstream normal-operation logging issue #4799, with no corresponding
+  request failures observed; individual events are not proven harmless.
+- Updated [the incident report](supabase_incident_2026-09-25.md) with exact
+  counts, observation limits, and the upstream reference. The full 24-hour
+  follow-up remains due after September 26 22:30 KST. This was a read-only
+  production check; no further production changes were made.
