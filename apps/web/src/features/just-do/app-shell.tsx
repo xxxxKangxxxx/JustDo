@@ -41,6 +41,15 @@ import { JustDoProvider, useJustDo } from "./store";
 import { isTagCommitKey, mergeTags, parseTagInput } from "./tags";
 import { categoryStyle, sortedCategories, tokens, type ThemeMode } from "./tokens";
 import type { JustDoStorage } from "./persistence";
+import {
+  KNOWN_SOURCES,
+  createIntegrationToken,
+  integrationEndpoint,
+  listIntegrationTokens,
+  revokeIntegrationToken,
+  sourceName,
+  type IntegrationTokenInfo,
+} from "./integrations";
 
 type Page = "calendar" | "settings" | "search";
 type CalendarView = "month" | "week" | "list";
@@ -52,6 +61,7 @@ type SettingsSection =
   | "categories"
   | "habits"
   | "sync"
+  | "integrations"
   | "data";
 type NewTaskDraft = { date: string; range?: [string, string]; time?: string } | null;
 type GoalPromptTarget = { kind: "onboarding" | "monthly" | "yearly"; periodKey: string };
@@ -1856,6 +1866,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
     ["categories", "카테고리"],
     ["habits", "습관"],
     ["sync", "동기화"],
+    ["integrations", "외부 연동"],
     ["data", "데이터"],
   ];
   return (
@@ -1936,6 +1947,7 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
             {s.syncError ? <button type="button" onClick={s.clearSyncError} className="w-fit rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.text }}>오류 지우기</button> : null}
           </Panel>
           ) : null}
+          {section === "integrations" ? <IntegrationsPanel mode={mode} signedIn={Boolean(auth.user)} /> : null}
           {section === "data" ? (
           <Panel mode={mode} title="데이터">
             <button type="button" onClick={s.reset} className="w-fit rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.danger }}>모든 데이터 초기화</button>
@@ -1944,6 +1956,156 @@ function SettingsPage({ mode }: { mode: ThemeMode }) {
         </div>
       </div>
       <HabitEditModal mode={mode} habitId={editHabitId} onClose={() => setEditHabitId(null)} />
+    </div>
+  );
+}
+
+const shortDateTime = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+function IntegrationsPanel({ mode, signedIn }: { mode: ThemeMode; signedIn: boolean }) {
+  const t = webTokens(mode);
+  const [tokens, setTokens] = useState<IntegrationTokenInfo[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [source, setSource] = useState(KNOWN_SOURCES[0].id);
+  const [customSource, setCustomSource] = useState("");
+  const [label, setLabel] = useState("");
+  const [created, setCreated] = useState<{ token: string; name: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let active = true;
+    listIntegrationTokens()
+      .then((list) => { if (active) setTokens(list); })
+      .catch((err: unknown) => { if (active) setError(err instanceof Error ? err.message : String(err)); });
+    return () => { active = false; };
+  }, [signedIn]);
+
+  const inputStyle = { ...dateInputStyle(t), width: "100%" };
+  const buttonStyle = { borderColor: t.divider, color: t.text };
+
+  if (!signedIn) {
+    return (
+      <Panel mode={mode} title="외부 연동">
+        <div className="text-[12.5px]" style={{ color: t.textSecondary }}>로그인하면 다른 서비스와 연결할 수 있어요.</div>
+      </Panel>
+    );
+  }
+
+  const create = async () => {
+    const id = source === "custom" ? customSource.trim() : source;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createIntegrationToken(id, label);
+      setCreated({ token: res.token, name: res.info.label ?? sourceName(res.info.source) });
+      setCopied(false);
+      setTokens((list) => [res.info, ...(list ?? [])]);
+      setLabel("");
+      setCustomSource("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revoke = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await revokeIntegrationToken(id);
+      setTokens((list) => (list ?? []).filter((item) => item.id !== id));
+      setConfirmId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.token);
+      setCopied(true);
+    } catch {
+      setError("복사하지 못했어요. 토큰을 직접 선택해서 복사해 주세요.");
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {created ? (
+        <Panel mode={mode} title={`${created.name} 토큰이 만들어졌어요`} subtitle="이 화면을 벗어나면 다시 볼 수 없어요. 지금 복사해서 연결할 서비스에 붙여넣어 주세요.">
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 select-all break-all rounded-md border px-3 py-2 text-[12px]" style={{ borderColor: t.divider, background: t.bg2 }}>{created.token}</code>
+            <button type="button" onClick={() => void copy()} className="shrink-0 rounded-md px-3 py-2 text-[12px] font-semibold" style={{ background: t.me.solid, color: "#fff" }}>
+              {copied ? "복사했어요" : "복사"}
+            </button>
+          </div>
+          <div className="mt-3 text-[12px]" style={{ color: t.textSecondary }}>
+            보낼 주소 <code className="ml-1 select-all">{integrationEndpoint()}</code>
+          </div>
+          <button type="button" onClick={() => setCreated(null)} className="mt-3 rounded-md border px-3 py-1.5 text-[12px] font-semibold" style={buttonStyle}>확인</button>
+        </Panel>
+      ) : null}
+
+      <Panel mode={mode} title="외부 연동" subtitle="다른 서비스가 Just Do에 할 일을 넣을 수 있게 연결해요. 연결마다 토큰이 하나씩 필요해요.">
+        {error ? <div className="mb-2 text-[12px]" style={{ color: t.danger }}>{error}</div> : null}
+        {tokens === null && !error ? <div className="text-[12px]" style={{ color: t.textTertiary }}>불러오는 중…</div> : null}
+        {tokens && tokens.length === 0 ? <div className="text-[12px]" style={{ color: t.textTertiary }}>아직 연결한 서비스가 없어요.</div> : null}
+        {tokens?.map((item) => (
+          <div key={item.id} className="flex min-h-12 items-center gap-3 border-b py-2 last:border-b-0" style={{ borderColor: t.divider }}>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-semibold">{item.label ?? sourceName(item.source)}</div>
+              <div className="text-[11.5px]" style={{ color: t.textTertiary }}>
+                {item.label ? `${sourceName(item.source)} · ` : ""}만든 날 {shortDateTime(item.created_at)} · {item.last_used_at ? `마지막 사용 ${shortDateTime(item.last_used_at)}` : "아직 사용 안 함"}
+              </div>
+            </div>
+            {confirmId === item.id ? (
+              <>
+                <span className="text-[11.5px]" style={{ color: t.textSecondary }}>가져온 할 일은 남아요</span>
+                <button type="button" disabled={busy} onClick={() => void revoke(item.id)} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.danger }}>끊기</button>
+                <button type="button" onClick={() => setConfirmId(null)} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold" style={buttonStyle}>취소</button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setConfirmId(item.id)} className="rounded-md border px-2.5 py-1.5 text-[12px] font-semibold" style={{ borderColor: t.divider, color: t.danger }}>연결 끊기</button>
+            )}
+          </div>
+        ))}
+      </Panel>
+
+      <Panel mode={mode} title="새로 연결하기" subtitle="가져온 할 일은 연결한 서비스가 관리해요. 여기서 제목·날짜를 고치면 다음에 그 서비스 값으로 돌아가요.">
+        <div className="grid grid-cols-[110px_1fr] items-center gap-x-3 gap-y-2 text-[13px]">
+          <label htmlFor="integration-source" className="font-semibold">서비스</label>
+          <select id="integration-source" value={source} onChange={(event) => setSource(event.target.value)} style={inputStyle}>
+            {KNOWN_SOURCES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            <option value="custom">직접 입력</option>
+          </select>
+          {source === "custom" ? (
+            <>
+              <label htmlFor="integration-custom" className="font-semibold">서비스 ID</label>
+              <input id="integration-custom" value={customSource} onChange={(event) => setCustomSource(event.target.value)} placeholder="예: my_app (영문 소문자·숫자·-·_)" style={inputStyle} />
+            </>
+          ) : (
+            <>
+              <span />
+              <div className="text-[11.5px]" style={{ color: t.textTertiary }}>{KNOWN_SOURCES.find((item) => item.id === source)?.hint}</div>
+            </>
+          )}
+          <label htmlFor="integration-label" className="font-semibold">메모 (선택)</label>
+          <input id="integration-label" value={label} maxLength={60} onChange={(event) => setLabel(event.target.value)} placeholder="예: 내 취업 일정" style={inputStyle} />
+        </div>
+        <button type="button" disabled={busy || (source === "custom" && !customSource.trim())} onClick={() => void create()} className="mt-3 rounded-md px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50" style={{ background: t.me.solid, color: "#fff" }}>
+          토큰 만들기
+        </button>
+      </Panel>
     </div>
   );
 }

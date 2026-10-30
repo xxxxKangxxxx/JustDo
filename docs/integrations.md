@@ -49,7 +49,12 @@ Migration `20261030090000_integration_tokens.sql`:
 
 ## Tokens
 
-From `apps/web` with the hosted credentials in `.env.local`:
+Users create and revoke tokens themselves on the web: **설정 → 외부 연동**.
+The page calls `/api/integrations/tokens` with the user's Supabase access token
+(`GET` list, `POST { source, label }` create — token shown once, `DELETE ?id=` revoke).
+Max 10 active tokens per user. Revoking keeps the tasks already imported.
+
+Admin fallback, from `apps/web` with the hosted credentials in `.env.local`:
 
 ```bash
 node --env-file=.env.local scripts/issue-integration-token.mjs --email you@example.com --source get_a_job --label "취업 일정"
