@@ -31,6 +31,8 @@ const taskRow = (over: Partial<TaskRow> = {}): TaskRow => ({
   priority: null,
   start_date: "2026-04-29",
   end_date: "2026-04-29",
+  external_source: null,
+  external_id: null,
   scheduled_time: null,
   is_completed: false,
   completed_at: null,

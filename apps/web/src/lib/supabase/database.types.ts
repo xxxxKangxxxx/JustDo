@@ -275,6 +275,47 @@ export type Database = {
           },
         ]
       }
+      integration_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          last_used_at: string | null
+          revoked_at: string | null
+          source: string
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+          source: string
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+          source?: string
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_events: {
         Row: {
           created_at: string
@@ -495,6 +536,8 @@ export type Database = {
           completed_at: string | null
           created_at: string
           end_date: string | null
+          external_id: string | null
+          external_source: string | null
           id: string
           is_completed: boolean
           is_recurring: boolean
@@ -517,6 +560,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           end_date?: string | null
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_completed?: boolean
           is_recurring?: boolean
@@ -539,6 +584,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           end_date?: string | null
+          external_id?: string | null
+          external_source?: string | null
           id?: string
           is_completed?: boolean
           is_recurring?: boolean
